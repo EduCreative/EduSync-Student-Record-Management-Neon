@@ -1,15 +1,15 @@
 
 # Changelog
 
-## [3.1.1] - 2025-02-21
+## [3.2.1] - 2025-02-21
 
 ### Fixed
-- **Schema Update**: Added `password` column to the `profiles` table definition in `README.md` to support custom Neon authentication.
-- **Migration Documentation**: Clarified the step required to add the `password` column when importing from Supabase.
+- **Build Error**: Resolved `TS2307` error on Vercel by removing explicit `.tsx` extension from `UserLogsPage` import in `Layout.tsx`.
+- **Cleanup**: Completely removed Supabase from `index.html` importmap.
 
-## [3.1.0] - 2025-02-21
+## [3.2.0] - 2025-02-21
 
-### Optimized
-- **Arrears Calculation**: Re-engineered the "Previous Balance" logic to use efficient Map-based lookups during challan generation, significantly reducing "hanging" issues during bulk processing.
-- **Data Fetching**: Improved Neon query efficiency by optimizing `ANY` operator usage and reducing redundant data transformations.
-- **Bulk Operations**: Implemented optimized bulk student and user additions using asynchronous batching.
+### Changed
+- **Database Migration**: Fully moved to Neon Serverless Postgres.
+- **Image Storage**: Switched to Base64-in-Postgres for student photos and school logos, removing the need for Supabase Storage.
+- **Authentication**: Replaced Supabase Auth with custom Neon-based manual authentication.
