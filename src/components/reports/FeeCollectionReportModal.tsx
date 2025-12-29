@@ -21,6 +21,7 @@ const getTodayString = () => {
     const day = today.getDate().toString().padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
+
 const getFirstDayOfMonthString = () => {
     const today = new Date();
     const year = today.getFullYear();
@@ -28,11 +29,30 @@ const getFirstDayOfMonthString = () => {
     return `${year}-${month}-01`;
 }
 
+/**
+ * Normalizes any date string (ISO, Timestamp, YYYY-MM-DD) to a standard YYYY-MM-DD string.
+ * This is crucial for reliable string-based comparisons in reports.
+ */
+const normalizeDate = (dateStr?: string | null): string | null => {
+    if (!dateStr) return null;
+    try {
+        // Just take the first 10 characters if it looks like an ISO string
+        if (dateStr.includes('T') || dateStr.includes(' ')) {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return null;
+            return d.toISOString().split('T')[0];
+        }
+        return dateStr; // Assume already YYYY-MM-DD
+    } catch {
+        return null;
+    }
+};
+
 const availableColumns = {
     rollNumber: "Student ID",
     fatherName: "Father's Name",
     className: "Class",
-    challanMonth: "Challan Month", // Added to help identify which month the payment belongs to
+    challanMonth: "Challan Month",
     amountDue: "Total Payable",
     discount: "Discount",
     balance: "Remaining Balance"
@@ -46,7 +66,7 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
 
     const [startDate, setStartDate] = useState(getFirstDayOfMonthString());
     const [endDate, setEndDate] = useState(getTodayString());
-    const [sortBy, setSortBy] = useState('rollNumber'); // 'rollNumber', 'className'
+    const [sortBy, setSortBy] = useState('rollNumber'); 
 
     const [selectedColumns, setSelectedColumns] = useState<Record<ColumnKey, boolean>>({
         rollNumber: true,
@@ -94,19 +114,25 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
         const groupedByDate: Record<string, DateGroup> = {};
 
         // Helper to add a transaction to the grouped object
-        const addTransaction = (date: string, fee: any, amount: number) => {
+        const addTransaction = (dateStr: string, fee: any, amount: number) => {
+            const normalizedDate = normalizeDate(dateStr);
+            if (!normalizedDate) return;
+            
+            // Re-check range with normalized date to catch records with timestamps
+            if (normalizedDate < startDate || normalizedDate > endDate) return;
+
             const student = studentMap.get(fee.studentId);
             if (!student || student.schoolId !== effectiveSchoolId) return;
 
-            if (!groupedByDate[date]) {
-                groupedByDate[date] = {
-                    date: date,
+            if (!groupedByDate[normalizedDate]) {
+                groupedByDate[normalizedDate] = {
+                    date: normalizedDate,
                     transactions: [],
                     subtotals: { paid: 0 },
                 };
             }
 
-            groupedByDate[date].transactions.push({
+            groupedByDate[normalizedDate].transactions.push({
                 sr: 0, 
                 rollNumber: student.rollNumber,
                 studentName: student.name,
@@ -117,34 +143,35 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
                 discount: Number(fee.discount || 0),
                 paid: Number(amount),
                 balance: Number(fee.totalAmount || 0) - Number(fee.discount || 0) - Number(fee.paidAmount || 0),
-                date: date,
+                date: normalizedDate,
                 challanId: fee.id
             });
 
-            groupedByDate[date].subtotals.paid += Number(amount);
+            groupedByDate[normalizedDate].subtotals.paid += Number(amount);
         };
 
-        // Iterate through all fees to find relevant transactions in paymentHistory
+        // Iterate through all fees to find relevant transactions
         fees.forEach(fee => {
             const history = fee.paymentHistory || [];
             
             if (history.length > 0) {
-                // Check each individual payment in history
-                history.forEach(payment => {
-                    if (payment.date >= startDate && payment.date <= endDate) {
-                        addTransaction(payment.date, fee, payment.amount);
+                history.forEach((payment: any) => {
+                    // Migrated data might use 'date', 'paidDate', or 'paidAt'
+                    const pDate = payment.date || payment.paidDate || payment.paidAt || payment.timestamp;
+                    const pAmount = Number(payment.amount || 0);
+                    
+                    if (pDate && pAmount > 0) {
+                        addTransaction(pDate, fee, pAmount);
                     }
                 });
-            } else if (fee.paidAmount > 0 && fee.paidDate) {
-                // Fallback for legacy records or simple imports without history
-                if (fee.paidDate >= startDate && fee.paidDate <= endDate) {
-                    addTransaction(fee.paidDate, fee, fee.paidAmount);
-                }
+            } else if (Number(fee.paidAmount || 0) > 0 && fee.paidDate) {
+                // Fallback for simple records
+                addTransaction(fee.paidDate, fee, Number(fee.paidAmount));
             }
         });
         
         return Object.values(groupedByDate)
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .sort((a, b) => a.date.localeCompare(b.date))
             .map(dateGroup => {
                 let srCounter = 1;
                 dateGroup.transactions.sort((a, b) => {
@@ -161,7 +188,7 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
 
     }, [fees, studentMap, classMap, effectiveSchoolId, startDate, endDate, sortBy]);
     
-    const grandTotalPaid = useMemo(() => reportData.reduce((sum, group) => sum + group.subtotals.paid, 0), [reportData]);
+    const grandTotalPaid = useMemo(() => reportData.reduce((sum, group) => sum + Number(group.subtotals.paid), 0), [reportData]);
     const totalRecords = useMemo(() => reportData.reduce((sum, group) => sum + group.transactions.length, 0), [reportData]);
 
     const handleGenerate = () => {
