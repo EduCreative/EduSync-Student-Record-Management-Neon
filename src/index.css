@@ -1,0 +1,279 @@
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .skeleton-bg {
+    @apply bg-secondary-200 dark:bg-secondary-700 animate-shimmer;
+    background-image: linear-gradient(
+      90deg,
+      theme('colors.secondary.200') 25%,
+      theme('colors.secondary.300') 50%,
+      theme('colors.secondary.200') 75%
+    );
+    background-size: 200% 100%;
+  }
+
+  .dark .skeleton-bg {
+    background-image: linear-gradient(
+      90deg,
+      theme('colors.secondary.700') 25%,
+      theme('colors.secondary.600') 50%,
+      theme('colors.secondary.700') 75%
+    );
+  }
+
+  /* Centralized Input and Select Styles */
+  .input-field {
+    @apply w-full p-2 border rounded-md transition-colors duration-200 bg-secondary-50 dark:bg-secondary-700 border-secondary-300 dark:border-secondary-600 text-secondary-900 dark:text-secondary-200 placeholder:text-secondary-400 dark:placeholder:text-secondary-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-70 disabled:cursor-not-allowed;
+  }
+  
+  /* Centralized Label Styles */
+  .input-label {
+    @apply block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-1;
+  }
+
+  /* Centralized Button Styles */
+  .btn {
+    @apply px-4 py-2 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-secondary-800 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+  }
+  .btn-secondary {
+    @apply btn bg-secondary-100 text-secondary-700 hover:bg-secondary-200 dark:bg-secondary-700 dark:text-secondary-200 dark:hover:bg-secondary-600 focus:ring-primary-500;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+  }
+
+  /* Challan Print Styles */
+  .printable-challan-container {
+    display: block;
+  }
+
+  .challan-wrapper {
+    @apply w-full flex flex-row bg-white text-black;
+    page-break-inside: avoid;
+  }
+
+  .barcode-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .barcode-container svg {
+      max-width: 100%;
+  }
+
+
+  /* ID Card Styles */
+  .printable-id-card-container {
+    @apply grid grid-cols-2 gap-4;
+  }
+  .id-card {
+    @apply w-[3.375in] h-[2.125in] border-2 border-secondary-300 rounded-lg flex flex-col bg-white text-black p-2 shadow-lg;
+    page-break-inside: avoid;
+  }
+  .id-card-header {
+    @apply flex items-center gap-2 pb-1 border-b border-secondary-200;
+  }
+  .id-card-logo {
+    @apply h-10 w-10 object-contain;
+  }
+  .id-card-logo-placeholder {
+    @apply h-10 w-10 bg-secondary-200 rounded;
+  }
+  .id-card-school-name {
+    @apply font-bold text-sm leading-tight;
+  }
+  .id-card-school-address {
+    @apply text-[8px] leading-tight;
+  }
+  .id-card-body {
+    @apply flex items-center gap-2 pt-2 flex-1;
+  }
+  .id-card-photo-container {
+    @apply w-20 h-20 border-2 border-primary-500 rounded-md p-0.5 flex-shrink-0;
+  }
+  .id-card-photo {
+    @apply w-full h-full object-cover rounded-sm;
+  }
+  .id-card-info {
+    @apply text-[9px] leading-snug;
+  }
+  .id-card-info strong {
+    @apply font-semibold;
+  }
+  .id-card-student-name {
+    @apply font-extrabold text-base text-primary-700 -mt-1 mb-1;
+  }
+  .id-card-footer {
+    @apply bg-primary-700 text-white text-[8px] font-bold text-center py-0.5 rounded-b-md -m-2 mt-2;
+  }
+
+  /* Chart Enhancements */
+  .chart-tooltip {
+    @apply fixed bg-secondary-800 dark:bg-secondary-950 text-white text-xs font-semibold px-2 py-1 rounded-md shadow-lg pointer-events-none transition-opacity duration-200 z-[9999];
+  }
+
+  .bar-item {
+    @apply transition-all duration-300 ease-out;
+  }
+  .bar-item.cursor-pointer:hover {
+    filter: brightness(1.15);
+  }
+
+  .doughnut-segment {
+    transform-origin: 50px 50px;
+    transition: transform 0.2s ease-out;
+    stroke-linecap: round;
+  }
+  .doughnut-segment.cursor-pointer:hover {
+    transform: scale(1.02);
+  }
+
+  .line-point {
+    @apply transition-all duration-200 ease-out;
+  }
+  g:hover > .line-point {
+    r: 6;
+  }
+}
+
+/* --- ADVANCED PRINT STYLES --- */
+@media print {
+  @page {
+    size: A4;
+    margin: 0.5cm; /* Reduced margin */
+  }
+  
+  /* For specific landscape pages */
+  @page landscape-page {
+      size: A4 landscape;
+      margin: 0.5cm;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    print-color-adjust: exact;
+    counter-reset: page;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+
+  /* Layout for repeating headers/footers using table properties */
+  .printable-layout-table > thead > tr > td,
+  .printable-layout-table > tbody > tr > td,
+  .printable-layout-table > tfoot > tr > td {
+      padding: 0;
+      border: none;
+  }
+  .page-header-content {
+      padding-bottom: 20px;
+  }
+  .page-footer-content {
+      padding-top: 10px;
+  }
+  .page-footer-content .page-number::after {
+    content: counter(page);
+  }
+  .page-content {
+    counter-increment: page;
+  }
+
+  .printable-report {
+    padding: 0 !important;
+  }
+
+  /* General table print improvements */
+  .printable-report table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+  .printable-report th, .printable-report td {
+    border: none;
+    padding: 2px 4px;
+  }
+  .printable-report th {
+    background-color: #f1f5f9 !important; /* secondary-100 */
+    border-bottom: 2px solid #94a3b8; /* secondary-400 */
+  }
+  .printable-report td {
+    border-bottom: 1px solid #cbd5e1; /* secondary-300 */
+  }
+  /* Remove border from last row of a data section and all footer rows */
+  .printable-report tbody tr:last-of-type td,
+  .printable-report tfoot tr td {
+      border-bottom: none;
+  }
+
+  /* Repeating table headers */
+  thead {
+    display: table-header-group;
+  }
+  tfoot {
+    display: table-footer-group;
+  }
+
+  /* Page break control */
+  .printable-report > div, .printable-report table {
+    page-break-inside: auto;
+  }
+  .printable-report tr, .printable-report .class-group-container {
+    page-break-inside: avoid;
+  }
+  .printable-result-card, .id-card {
+    page-break-inside: avoid !important;
+  }
+  .printable-result-card {
+    page-break-after: always;
+  }
+
+  /* Hide print previewer scrollbars */
+  .print-preview-root main::-webkit-scrollbar {
+    display: none;
+  }
+  .print-preview-root main {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  /* Specific tweaks for better print appearance */
+  .challan-wrapper {
+    height: 94mm; /* Fits 3 per A4 page vertically */
+    overflow: hidden;
+    border-bottom: 1px dashed #666;
+    padding: 2mm 0;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    page-break-inside: avoid;
+  }
+  
+  .challan-wrapper:last-child {
+      border-bottom: none;
+  }
+  
+  /* Remove the old pseudo-element styles */
+  .challan-wrapper::after {
+    content: none;
+  }
+
+  /* Leaving Certificate Landscape Mode */
+  .leaving-certificate-container {
+      page: landscape-page;
+      width: 100%;
+      height: 190mm; /* Approx landscape height minus margins */
+      page-break-after: always;
+      page-break-inside: avoid;
+  }
+}

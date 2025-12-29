@@ -1,0 +1,7 @@
+{
+  "name": "EduSync-Student Record Management-Neon",
+  "description": "A comprehensive, responsive Student Record Management System for schools. It supports multiple user roles (Owner, Admin, Accountant, Teacher, Parent, Student) with role-based access and features dashboards with data visualization.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
