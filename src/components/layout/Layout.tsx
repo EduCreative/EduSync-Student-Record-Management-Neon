@@ -10,7 +10,7 @@ import SettingsPage from '../settings/SettingsPage';
 import AttendancePage from '../attendance/AttendancePage';
 import FeeManagementPage from '../fees/FeeManagementPage';
 import ResultsPage from '../results/ResultsPage';
-import UserLogsPage from '../logs/UserLogsPage';
+import UserLogsPage from '../user-logs/UserLogsPage';
 import SchoolManagementPage from '../schools/SchoolManagementPage';
 import CalendarPage from '../calendar/CalendarPage';
 import { useAuth } from '../../context/AuthContext';

@@ -1,6 +1,11 @@
 
 # Changelog
 
+## [3.2.2] - 2025-02-21
+
+### Fixed
+- **Module Resolution**: Renamed `logs` directory to `user-logs` to resolve Vercel build error `TS2307`.
+
 ## [3.2.1] - 2025-02-21
 
 ### Fixed
