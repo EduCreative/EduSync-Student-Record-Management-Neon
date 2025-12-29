@@ -142,19 +142,36 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 ]);
             }
 
+            // CRITICAL: Neon returns NUMERIC as strings. Cast them to numbers here to prevent concatenation bugs.
             const transformed = {
                 schools: toCamelCase(schoolsData),
                 users: toCamelCase(profilesData),
                 classes: toCamelCase(classesData),
                 subjects: toCamelCase(subjectsData),
                 exams: toCamelCase(examsData),
-                feeHeads: toCamelCase(feeHeadsData),
+                feeHeads: toCamelCase(feeHeadsData).map((fh: any) => ({ ...fh, defaultAmount: Number(fh.defaultAmount || 0) })),
                 events: toCamelCase(eventsData),
                 logs: toCamelCase(logsData),
-                students: toCamelCase(studentsData),
-                fees: toCamelCase(feesData),
+                students: toCamelCase(studentsData).map((s: any) => ({ 
+                    ...s, 
+                    openingBalance: Number(s.openingBalance || 0),
+                    feeStructure: (s.feeStructure || []).map((item: any) => ({ ...item, amount: Number(item.amount || 0) }))
+                })),
+                fees: toCamelCase(feesData).map((f: any) => ({
+                    ...f,
+                    previousBalance: Number(f.previousBalance || 0),
+                    totalAmount: Number(f.totalAmount || 0),
+                    discount: Number(f.discount || 0),
+                    paidAmount: Number(f.paidAmount || 0),
+                    fineAmount: Number(f.fineAmount || 0),
+                    paymentHistory: (f.paymentHistory || []).map((p: any) => ({ ...p, amount: Number(p.amount || 0) }))
+                })),
                 attendance: toCamelCase(attData),
-                results: toCamelCase(resData)
+                results: toCamelCase(resData).map((r: any) => ({
+                    ...r,
+                    marks: Number(r.marks || 0),
+                    totalMarks: Number(r.totalMarks || 100)
+                }))
             };
 
             setSchools(transformed.schools);

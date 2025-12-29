@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import Modal from '../common/Modal';
 import { useData } from '../../context/DataContext';
@@ -88,7 +89,8 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
     const reportData = useMemo(() => {
         const paidFeesInRange = fees.filter(fee => {
             const student = studentMap.get(fee.studentId);
-            if (student?.schoolId !== effectiveSchoolId) return false;
+            // Ensure student belongs to school and payment is in range
+            if (!student || student.schoolId !== effectiveSchoolId) return false;
             if (!fee.paidDate) return false;
             return fee.paidDate >= startDate && fee.paidDate <= endDate;
         });
@@ -112,14 +114,14 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
                 studentName: student.name,
                 fatherName: student.fatherName,
                 className: classMap.get(student.classId) || 'Unassigned',
-                amountDue: fee.totalAmount,
-                discount: fee.discount,
-                paid: fee.paidAmount,
-                balance: fee.totalAmount - fee.discount - fee.paidAmount,
+                amountDue: Number(fee.totalAmount || 0),
+                discount: Number(fee.discount || 0),
+                paid: Number(fee.paidAmount || 0),
+                balance: Number(fee.totalAmount || 0) - Number(fee.discount || 0) - Number(fee.paidAmount || 0),
                 date: fee.paidDate!,
             });
 
-            acc[date].subtotals.paid += fee.paidAmount;
+            acc[date].subtotals.paid += Number(fee.paidAmount || 0);
 
             return acc;
         }, {} as Record<string, DateGroup>);
@@ -132,10 +134,8 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
                     if (sortBy === 'className') {
                         const classCompare = a.className.localeCompare(b.className);
                         if (classCompare !== 0) return classCompare;
-                        // Secondary sort by roll number within the same class
                         return a.rollNumber.localeCompare(b.rollNumber, undefined, { numeric: true });
                     }
-                    // Default to rollNumber
                     return a.rollNumber.localeCompare(b.rollNumber, undefined, { numeric: true });
                 });
                 dateGroup.transactions.forEach((t) => { t.sr = srCounter++; });
@@ -165,44 +165,46 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
                 {reportData.map(dateGroup => (
                     <div key={dateGroup.date} className="class-group-container mb-6">
                         <h3 className="text-lg font-bold bg-secondary-100 p-2 my-2">{formatDate(dateGroup.date)}</h3>
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr>
-                                    <th className="py-0 px-1 text-left">Sr.</th>
-                                    {activeColumns.includes('rollNumber') && <th className="py-0 px-1 text-left">Student ID</th>}
-                                    <th className="py-0 px-1 text-left">Student Name</th>
-                                    {activeColumns.includes('fatherName') && <th className="py-0 px-1 text-left">Father Name</th>}
-                                    {activeColumns.includes('className') && <th className="py-0 px-1 text-left">Class</th>}
-                                    {activeColumns.includes('amountDue') && <th className="py-0 px-1 text-right">Amount Due</th>}
-                                    <th className="py-0 px-1 text-right">Paid</th>
-                                    {activeColumns.includes('discount') && <th className="py-0 px-1 text-right">Discount</th>}
-                                    {activeColumns.includes('balance') && <th className="py-0 px-1 text-right">Balance</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {dateGroup.transactions.map(t => (
-                                    <tr key={t.sr}>
-                                        <td className="py-0 px-1">{t.sr}</td>
-                                        {activeColumns.includes('rollNumber') && <td className="py-0 px-1">{t.rollNumber}</td>}
-                                        <td className="py-0 px-1">{t.studentName}</td>
-                                        {activeColumns.includes('fatherName') && <td className="py-0 px-1">{t.fatherName}</td>}
-                                        {activeColumns.includes('className') && <td className="py-0 px-1">{t.className}</td>}
-                                        {activeColumns.includes('amountDue') && <td className="py-0 px-1 text-right">{t.amountDue.toLocaleString()}</td>}
-                                        <td className="py-0 px-1 text-right">{t.paid.toLocaleString()}</td>
-                                        {activeColumns.includes('discount') && <td className="py-0 px-1 text-right">{t.discount.toLocaleString()}</td>}
-                                        {activeColumns.includes('balance') && <td className="py-0 px-1 text-right">{t.balance.toLocaleString()}</td>}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr>
+                                        <th className="py-1 px-1 text-left">Sr.</th>
+                                        {activeColumns.includes('rollNumber') && <th className="py-1 px-1 text-left">Student ID</th>}
+                                        <th className="py-1 px-1 text-left">Student Name</th>
+                                        {activeColumns.includes('fatherName') && <th className="py-1 px-1 text-left">Father Name</th>}
+                                        {activeColumns.includes('className') && <th className="py-1 px-1 text-left">Class</th>}
+                                        {activeColumns.includes('amountDue') && <th className="py-1 px-1 text-right">Amount Due</th>}
+                                        <th className="py-1 px-1 text-right">Paid</th>
+                                        {activeColumns.includes('discount') && <th className="py-1 px-1 text-right">Discount</th>}
+                                        {activeColumns.includes('balance') && <th className="py-1 px-1 text-right">Balance</th>}
                                     </tr>
-                                ))}
-                            </tbody>
-                            <tfoot>
-                                <tr className="font-bold bg-secondary-100">
-                                    <td colSpan={subtotalColspan} className="py-1 px-1 text-right">Daily Total:</td>
-                                    <td className="py-1 px-1 text-right">{dateGroup.subtotals.paid.toLocaleString()}</td>
-                                    {activeColumns.includes('discount') && <td className="py-1 px-1"></td>}
-                                    {activeColumns.includes('balance') && <td className="py-1 px-1"></td>}
-                                </tr>
-                            </tfoot>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {dateGroup.transactions.map(t => (
+                                        <tr key={t.sr}>
+                                            <td className="py-1 px-1">{t.sr}</td>
+                                            {activeColumns.includes('rollNumber') && <td className="py-1 px-1">{t.rollNumber}</td>}
+                                            <td className="py-1 px-1 font-medium">{t.studentName}</td>
+                                            {activeColumns.includes('fatherName') && <td className="py-1 px-1">{t.fatherName}</td>}
+                                            {activeColumns.includes('className') && <td className="py-1 px-1">{t.className}</td>}
+                                            {activeColumns.includes('amountDue') && <td className="py-1 px-1 text-right">{t.amountDue.toLocaleString()}</td>}
+                                            <td className="py-1 px-1 text-right font-bold">{t.paid.toLocaleString()}</td>
+                                            {activeColumns.includes('discount') && <td className="py-1 px-1 text-right">{t.discount.toLocaleString()}</td>}
+                                            {activeColumns.includes('balance') && <td className="py-1 px-1 text-right">{t.balance.toLocaleString()}</td>}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot>
+                                    <tr className="font-bold bg-secondary-100">
+                                        <td colSpan={subtotalColspan} className="py-2 px-1 text-right">Daily Total:</td>
+                                        <td className="py-2 px-1 text-right">{dateGroup.subtotals.paid.toLocaleString()}</td>
+                                        {activeColumns.includes('discount') && <td className="py-2 px-1"></td>}
+                                        {activeColumns.includes('balance') && <td className="py-2 px-1"></td>}
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
                     </div>
                 ))}
                 
@@ -211,10 +213,10 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
                         <table className="w-full text-sm">
                             <tbody>
                                 <tr className="font-bold text-lg bg-secondary-200">
-                                    <td colSpan={subtotalColspan} className="py-1 px-2 text-right">Grand Total Paid:</td>
-                                    <td className="py-1 px-2 text-right">Rs. {grandTotalPaid.toLocaleString()}</td>
-                                    {activeColumns.includes('discount') && <td className="py-1 px-2"></td>}
-                                    {activeColumns.includes('balance') && <td className="py-1 px-2"></td>}
+                                    <td colSpan={subtotalColspan} className="py-2 px-2 text-right">Grand Total Paid:</td>
+                                    <td className="py-2 px-2 text-right">Rs. {grandTotalPaid.toLocaleString()}</td>
+                                    {activeColumns.includes('discount') && <td className="py-2 px-2"></td>}
+                                    {activeColumns.includes('balance') && <td className="py-2 px-2"></td>}
                                 </tr>
                             </tbody>
                         </table>

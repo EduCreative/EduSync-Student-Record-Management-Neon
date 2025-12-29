@@ -97,12 +97,12 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
                 // Formula: Sum(Challan Total - Previous Balance) + Student Opening Balance
                 const totalFeeCharged = studentFees.reduce((sum, f) => {
                     // Determine the net fee for this specific month (removing carry-over)
-                    const currentMonthFee = f.totalAmount - (f.previousBalance || 0);
+                    const currentMonthFee = Number(f.totalAmount) - (Number(f.previousBalance) || 0);
                     return sum + currentMonthFee;
-                }, 0) + (student.openingBalance || 0);
+                }, 0) + (Number(student.openingBalance) || 0);
 
-                const totalPaid = studentFees.reduce((sum, f) => sum + f.paidAmount, 0);
-                const totalDiscount = studentFees.reduce((sum, f) => sum + f.discount, 0);
+                const totalPaid = studentFees.reduce((sum, f) => sum + Number(f.paidAmount || 0), 0);
+                const totalDiscount = studentFees.reduce((sum, f) => sum + Number(f.discount || 0), 0);
                 
                 // Ledger Balance
                 const netBalance = totalFeeCharged - totalPaid - totalDiscount;
@@ -135,9 +135,9 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
                 // We consider them a defaulter for this month if the challan exists and is not 'Paid'
                 if (challan && challan.status !== 'Paid') {
                     // Calculate "Current Month Only" figures
-                    const currentDues = challan.totalAmount - (challan.previousBalance || 0);
-                    const netPayable = currentDues - (challan.discount || 0);
-                    const paid = challan.paidAmount;
+                    const currentDues = Number(challan.totalAmount) - (Number(challan.previousBalance) || 0);
+                    const netPayable = currentDues - (Number(challan.discount) || 0);
+                    const paid = Number(challan.paidAmount || 0);
                     
                     // Simple balance for this view: Payable - Paid. 
                     const balance = netPayable - paid;
@@ -169,9 +169,9 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
                 };
             }
             acc[cid].students.push(summary);
-            acc[cid].subtotals.amountDue += summary.amountDue;
-            acc[cid].subtotals.paid += summary.paid;
-            acc[cid].subtotals.balance += summary.balance;
+            acc[cid].subtotals.amountDue += Number(summary.amountDue);
+            acc[cid].subtotals.paid += Number(summary.paid);
+            acc[cid].subtotals.balance += Number(summary.balance);
             return acc;
         }, {} as Record<string, ClassDefaulterGroup>);
 
@@ -183,7 +183,8 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
                 const classA = schoolClassesMapForSort.get(a.classId);
                 const classB = schoolClassesMapForSort.get(b.classId);
                 if (!classA || !classB) return a.className.localeCompare(b.className);
-                return (classA.sortOrder ?? Infinity) - (classB.sortOrder ?? Infinity) || getClassLevel(classA.name) - getClassLevel(classB.name);
+                // FIX: Property 'name' does not exist on type 'ClassDefaulterGroup'. Replaced 'a.name' with 'a.className' and 'b.name' with 'b.className'.
+                return (classA.sortOrder ?? Infinity) - (classB.sortOrder ?? Infinity) || getClassLevel(a.className) - getClassLevel(b.className);
             })
             .map(classGroup => {
                 classGroup.students.sort((a, b) => {
@@ -201,9 +202,9 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
     
     const grandTotal = useMemo(() => {
         return reportData.reduce((acc, classGroup) => {
-            acc.amountDue += classGroup.subtotals.amountDue;
-            acc.paid += classGroup.subtotals.paid;
-            acc.balance += classGroup.subtotals.balance;
+            acc.amountDue += Number(classGroup.subtotals.amountDue);
+            acc.paid += Number(classGroup.subtotals.paid);
+            acc.balance += Number(classGroup.subtotals.balance);
             return acc;
         }, { amountDue: 0, paid: 0, balance: 0 });
     }, [reportData]);
@@ -229,34 +230,34 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
                         <table className="w-full text-sm">
                             <thead>
                                 <tr>
-                                    <th className="py-0 px-1 text-left">Sr.</th>
-                                    <th className="py-0 px-1 text-left">Student ID</th>
-                                    <th className="py-0 px-1 text-left">Student Name</th>
-                                    {activeColumns.includes('fatherName') && <th className="py-0 px-1 text-left">Father Name</th>}
-                                    {activeColumns.includes('amountDue') && <th className="py-0 px-1 text-right">{reportType === 'monthly' ? 'Current Payable' : 'Total Payable'}</th>}
-                                    {activeColumns.includes('paid') && <th className="py-0 px-1 text-right">{reportType === 'monthly' ? 'Paid (This Month)' : 'Total Paid'}</th>}
-                                    <th className="py-0 px-1 text-right">Balance</th>
+                                    <th className="py-1 px-1 text-left">Sr.</th>
+                                    <th className="py-1 px-1 text-left">Student ID</th>
+                                    <th className="py-1 px-1 text-left">Student Name</th>
+                                    {activeColumns.includes('fatherName') && <th className="py-1 px-1 text-left">Father Name</th>}
+                                    {activeColumns.includes('amountDue') && <th className="py-1 px-1 text-right">{reportType === 'monthly' ? 'Current Payable' : 'Total Payable'}</th>}
+                                    {activeColumns.includes('paid') && <th className="py-1 px-1 text-right">{reportType === 'monthly' ? 'Paid (This Month)' : 'Total Paid'}</th>}
+                                    <th className="py-1 px-1 text-right">Balance</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {classGroup.students.map((student, index) => (
                                     <tr key={student.studentId}>
-                                        <td className="py-0 px-1">{index + 1}</td>
-                                        <td className="py-0 px-1">{student.rollNumber}</td>
-                                        <td className="py-0 px-1">{student.studentName}</td>
-                                        {activeColumns.includes('fatherName') && <td className="py-0 px-1">{student.fatherName}</td>}
-                                        {activeColumns.includes('amountDue') && <td className="py-0 px-1 text-right">{student.amountDue.toLocaleString()}</td>}
-                                        {activeColumns.includes('paid') && <td className="py-0 px-1 text-right">{student.paid.toLocaleString()}</td>}
-                                        <td className="py-0 px-1 text-right font-bold">{student.balance.toLocaleString()}</td>
+                                        <td className="py-1 px-1">{index + 1}</td>
+                                        <td className="py-1 px-1">{student.rollNumber}</td>
+                                        <td className="py-1 px-1">{student.studentName}</td>
+                                        {activeColumns.includes('fatherName') && <td className="py-1 px-1">{student.fatherName}</td>}
+                                        {activeColumns.includes('amountDue') && <td className="py-1 px-1 text-right">{student.amountDue.toLocaleString()}</td>}
+                                        {activeColumns.includes('paid') && <td className="py-1 px-1 text-right">{student.paid.toLocaleString()}</td>}
+                                        <td className="py-1 px-1 text-right font-bold">{student.balance.toLocaleString()}</td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
                                 <tr className="font-bold bg-secondary-100">
-                                    <td colSpan={subtotalColspan} className="py-1 px-1 text-right">Sub Total:</td>
-                                    {activeColumns.includes('amountDue') && <td className="py-1 px-1 text-right">{classGroup.subtotals.amountDue.toLocaleString()}</td>}
-                                    {activeColumns.includes('paid') && <td className="py-1 px-1 text-right">{classGroup.subtotals.paid.toLocaleString()}</td>}
-                                    <td className="py-1 px-1 text-right">{classGroup.subtotals.balance.toLocaleString()}</td>
+                                    <td colSpan={subtotalColspan} className="py-2 px-1 text-right">Sub Total:</td>
+                                    {activeColumns.includes('amountDue') && <td className="py-2 px-1 text-right">{classGroup.subtotals.amountDue.toLocaleString()}</td>}
+                                    {activeColumns.includes('paid') && <td className="py-2 px-1 text-right">{classGroup.subtotals.paid.toLocaleString()}</td>}
+                                    <td className="py-2 px-1 text-right">{classGroup.subtotals.balance.toLocaleString()}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -268,10 +269,10 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
                         <table className="w-full text-sm">
                             <tbody>
                                 <tr className="font-bold text-lg bg-secondary-200">
-                                    <td colSpan={subtotalColspan} className="py-1 px-2 text-right">Grand Total:</td>
-                                    {activeColumns.includes('amountDue') && <td className="py-1 px-2 text-right">Rs. {grandTotal.amountDue.toLocaleString()}</td>}
-                                    {activeColumns.includes('paid') && <td className="py-1 px-2 text-right">Rs. {grandTotal.paid.toLocaleString()}</td>}
-                                    <td className="py-1 px-2 text-right">Rs. {grandTotal.balance.toLocaleString()}</td>
+                                    <td colSpan={subtotalColspan} className="py-2 px-2 text-right">Grand Total:</td>
+                                    {activeColumns.includes('amountDue') && <td className="py-2 px-2 text-right">Rs. {grandTotal.amountDue.toLocaleString()}</td>}
+                                    {activeColumns.includes('paid') && <td className="py-2 px-2 text-right">Rs. {grandTotal.paid.toLocaleString()}</td>}
+                                    <td className="py-2 px-2 text-right">Rs. {grandTotal.balance.toLocaleString()}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -283,10 +284,12 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
     };
 
     const handleExport = () => {
+        const payHeader = reportType === 'monthly' ? 'Current Payable' : 'Total Payable';
+        const paidHeader = reportType === 'monthly' ? 'Paid' : 'Total Paid';
         const headers: string[] = ['Sr.', 'Student ID', 'Student Name'];
         if (selectedColumns.fatherName) headers.push("Father's Name");
-        if (selectedColumns.amountDue) headers.push(reportType === 'monthly' ? 'Current Payable' : 'Total Payable');
-        if (selectedColumns.paid) headers.push(reportType === 'monthly' ? 'Paid' : 'Total Paid');
+        if (selectedColumns.amountDue) headers.push(payHeader);
+        if (selectedColumns.paid) headers.push(paidHeader);
         headers.push('Balance');
 
         const csvRows = [headers.join(',')];
@@ -307,10 +310,6 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
                 subtotalRow[studentNameIndex] = 'Sub Total';
             }
     
-            // FIX: Using generic search for header names to handle dynamic labels
-            const payHeader = reportType === 'monthly' ? 'Current Payable' : 'Total Payable';
-            const paidHeader = reportType === 'monthly' ? 'Paid' : 'Total Paid';
-
             if (headers.includes(payHeader)) subtotalRow[headers.indexOf(payHeader)] = classGroup.subtotals.amountDue;
             if (headers.includes(paidHeader)) subtotalRow[headers.indexOf(paidHeader)] = classGroup.subtotals.paid;
             if (headers.includes('Balance')) subtotalRow[headers.indexOf('Balance')] = classGroup.subtotals.balance;
@@ -325,8 +324,6 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
             if(studentNameIndex !== -1) {
                 grandTotalRow[studentNameIndex] = 'Grand Total';
             }
-            const payHeader = reportType === 'monthly' ? 'Current Payable' : 'Total Payable';
-            const paidHeader = reportType === 'monthly' ? 'Paid' : 'Total Paid';
 
             if (headers.includes(payHeader)) grandTotalRow[headers.indexOf(payHeader)] = grandTotal.amountDue;
             if (headers.includes(paidHeader)) grandTotalRow[headers.indexOf(paidHeader)] = grandTotal.paid;
