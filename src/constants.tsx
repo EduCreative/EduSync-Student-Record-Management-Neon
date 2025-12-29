@@ -1,3 +1,4 @@
+
 import type { SVGProps, ReactElement } from 'react';
 import { UserRole } from './types';
 
@@ -10,11 +11,11 @@ export function EduSyncLogo(props: SVGProps<SVGSVGElement>) {
       {/* Tilted Graduation Cap */}
       <g transform="rotate(-15 12 11)">
         {/* Cap top */}
-        <path d="M4 10l8-4 8 4-8 4-8-4z" stroke="#0f172a" fill="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+        <path d="M4 10l8-4 8 4-8 4-8-4z" stroke="#00f3ff" fill="#475569" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="animate-neon-pulse"></path>
         {/* Cap body */}
-        <path d="M8 12v4c2 2 6 2 8 0v-4" stroke="#0f172a" fill="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+        <path d="M8 12v4c2 2 6 2 8 0v-4" stroke="#00f3ff" fill="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
         {/* Tassel */}
-        <path d="M17.5 10V8" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+        <path d="M17.5 10V8" stroke="#00f3ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
       </g>
     </svg>
   );

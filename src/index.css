@@ -1,5 +1,4 @@
 
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -25,9 +24,17 @@
     );
   }
 
+  .neon-glow-primary {
+    filter: drop-shadow(0 0 8px theme('colors.neon.glow'));
+  }
+
+  .neon-border-active {
+    @apply border-l-4 border-neon-glow shadow-[inset_4px_0_10px_-4px_rgba(0,243,255,0.5)];
+  }
+
   /* Centralized Input and Select Styles */
   .input-field {
-    @apply w-full p-2 border rounded-md transition-colors duration-200 bg-secondary-50 dark:bg-secondary-700 border-secondary-300 dark:border-secondary-600 text-secondary-900 dark:text-secondary-200 placeholder:text-secondary-400 dark:placeholder:text-secondary-500 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:opacity-70 disabled:cursor-not-allowed;
+    @apply w-full p-2 border rounded-md transition-colors duration-200 bg-secondary-50 dark:bg-secondary-700 border-secondary-300 dark:border-secondary-600 text-secondary-900 dark:text-secondary-200 placeholder:text-secondary-400 dark:placeholder:text-secondary-500 focus:ring-2 focus:ring-neon-accent focus:border-neon-accent disabled:opacity-70 disabled:cursor-not-allowed;
   }
   
   /* Centralized Label Styles */
@@ -40,7 +47,10 @@
     @apply px-4 py-2 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-secondary-800 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-primary {
-    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 shadow-sm hover:shadow-neon-glow/20;
+  }
+  .btn-neon {
+    @apply btn bg-neon-accent text-secondary-900 hover:bg-neon-glow focus:ring-neon-glow font-bold;
   }
   .btn-secondary {
     @apply btn bg-secondary-100 text-secondary-700 hover:bg-secondary-200 dark:bg-secondary-700 dark:text-secondary-200 dark:hover:bg-secondary-600 focus:ring-primary-500;

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -156,10 +157,13 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAbou
                                     {school?.logoUrl ? (
                                         <img src={school.logoUrl} alt={`${school.name} Logo`} className="h-8 w-auto max-w-[100px] object-contain" />
                                     ) : (
-                                        <EduSyncLogo className="h-8 w-auto text-primary-600 dark:text-primary-400" />
+                                        <EduSyncLogo className="h-8 w-auto text-primary-600 dark:text-primary-400 neon-glow-primary" />
                                     )}
                                     <div className="flex flex-col">
-                                        <h1 className="text-lg font-semibold leading-tight">{school?.name}</h1>
+                                        <div className="flex items-center gap-2">
+                                            <h1 className="text-lg font-semibold leading-tight">{school?.name}</h1>
+                                            <span className="bg-neon-accent/20 text-neon-accent text-[10px] px-1.5 py-0.5 rounded font-bold border border-neon-accent/30 hidden sm:inline-block">NEON</span>
+                                        </div>
                                         <button onClick={handleReturnToOwnerView} className="text-xs text-primary-600 hover:underline text-left">
                                             &larr; Owner View
                                         </button>
@@ -172,6 +176,7 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAbou
                                         onClick={() => setSchoolSwitcherOpen(prev => !prev)}
                                     >
                                         <span>Owner Overview</span>
+                                        <span className="bg-neon-accent text-secondary-900 text-[10px] px-1.5 py-0.5 rounded font-bold">NEON</span>
                                         <ChevronDownIcon className={`h-5 w-5 transition-transform ${schoolSwitcherOpen ? 'rotate-180' : ''}`} />
                                     </button>
                                     {schoolSwitcherOpen && (
@@ -196,9 +201,12 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAbou
                                 {school?.logoUrl ? (
                                     <img src={school.logoUrl} alt={`${school.name} Logo`} className="h-8 w-auto max-w-[100px] object-contain" />
                                  ) : (
-                                    <EduSyncLogo className="h-8 w-auto text-primary-600 dark:text-primary-400" />
+                                    <EduSyncLogo className="h-8 w-auto text-primary-600 dark:text-primary-400 neon-glow-primary" />
                                 )}
-                                <h1 className="text-lg font-semibold">{school?.name || 'EduSync'}</h1>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="text-lg font-semibold">{school?.name || 'EduSync'}</h1>
+                                    <span className="bg-neon-accent/20 text-neon-accent text-[10px] px-1.5 py-0.5 rounded font-bold border border-neon-accent/30">NEON</span>
+                                </div>
                             </>
                         )}
                     </div>
@@ -208,7 +216,7 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAbou
                 <div className="flex items-center gap-3 md:gap-4">
                     <SyncStatus />
                     <div className="flex items-center gap-2 text-xs font-medium text-secondary-600 dark:text-secondary-400">
-                        <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                        <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-neon-accent animate-pulse shadow-[0_0_8px_#00f3ff]' : 'bg-red-500'}`}></span>
                         <span>{isOnline ? 'Online' : 'Offline'}</span>
                     </div>
 
