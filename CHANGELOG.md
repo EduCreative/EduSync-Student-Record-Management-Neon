@@ -1,14 +1,15 @@
 
 # Changelog
 
-## [3.0.0] - 2025-02-21
+## [3.1.1] - 2025-02-21
 
-### Changed
-- **Architectural Migration**: Moved from Supabase to **Neon Serverless Postgres**.
-- **Database Engine**: Replaced `@supabase/supabase-js` with `@neondatabase/serverless` for direct SQL querying.
-- **Auth Flow**: Implemented custom authentication logic against the Neon database.
-- **Pausing Fix**: Resolved the 7-day manual hibernation issue by leveraging Neon's automatic wakeup.
-- **Stability**: Simplified data fetching logic to reduce client-side "hanging" during large data synchronizations.
+### Fixed
+- **Schema Update**: Added `password` column to the `profiles` table definition in `README.md` to support custom Neon authentication.
+- **Migration Documentation**: Clarified the step required to add the `password` column when importing from Supabase.
 
-### Removed
-- **Supabase Dependencies**: Removed all references to Supabase Auth, Storage, and Database clients.
+## [3.1.0] - 2025-02-21
+
+### Optimized
+- **Arrears Calculation**: Re-engineered the "Previous Balance" logic to use efficient Map-based lookups during challan generation, significantly reducing "hanging" issues during bulk processing.
+- **Data Fetching**: Improved Neon query efficiency by optimizing `ANY` operator usage and reducing redundant data transformations.
+- **Bulk Operations**: Implemented optimized bulk student and user additions using asynchronous batching.

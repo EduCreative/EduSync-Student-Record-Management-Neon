@@ -1,8 +1,7 @@
 
-
 import React, { createContext, useState, useContext, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { useAuth } from './AuthContext';
-import { supabase } from '../lib/supabaseClient';
+import { sql } from '../lib/neonClient';
 import { Notification } from '../types';
 import { toCamelCase } from '../utils/caseConverter';
 
@@ -24,45 +23,27 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
             setNotifications([]);
             return;
         }
-        const { data, error } = await supabase
-            .from('notifications')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('timestamp', { ascending: false })
-            .limit(50);
-        
-        if (error) {
-            console.error('Error fetching notifications:', error);
-        } else if (data) {
+        try {
+            const data = await sql`
+                SELECT * FROM notifications 
+                WHERE user_id = ${user.id} 
+                ORDER BY timestamp DESC 
+                LIMIT 50
+            `;
             setNotifications(toCamelCase(data) as Notification[]);
+        } catch (error) {
+            console.error('Error fetching notifications:', error);
         }
     }, [user]);
 
     useEffect(() => {
         fetchNotifications();
+        
+        // Polling as a fallback for realtime since moving away from Supabase
+        const interval = setInterval(fetchNotifications, 60000); // Check every minute
+        return () => clearInterval(interval);
     }, [fetchNotifications]);
     
-    useEffect(() => {
-        if (!user) return;
-
-        const channel = supabase.channel('public:notifications')
-            .on('postgres_changes', { 
-                event: 'INSERT', 
-                schema: 'public', 
-                table: 'notifications',
-                filter: `user_id=eq.${user.id}`
-            }, 
-            (payload) => {
-                const newNotification = toCamelCase(payload.new) as Notification;
-                setNotifications(prev => [newNotification, ...prev]);
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [user]);
-
     const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
     const markAsRead = async (notificationId: string) => {
@@ -71,10 +52,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
         setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
         
-        const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId);
-        if (error) {
+        try {
+            await sql`UPDATE notifications SET is_read = true WHERE id = ${notificationId}`;
+        } catch (error) {
             console.error('Failed to mark notification as read:', error);
-            // Revert optimistic update on failure
+            // Revert optimistic update
             setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: false } : n));
         }
     };
@@ -85,8 +67,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         const unreadIds = notifications.filter(n => !n.isRead).map(n => n.id);
         setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
 
-        const { error } = await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
-        if (error) {
+        try {
+            await sql`UPDATE notifications SET is_read = true WHERE id = ANY(${unreadIds})`;
+        } catch (error) {
             console.error('Failed to mark all as read:', error);
             setNotifications(prev => prev.map(n => unreadIds.includes(n.id) ? { ...n, isRead: false } : n));
         }

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, UserRole } from '../../types';
 import Modal from '../common/Modal';
@@ -6,7 +7,6 @@ import { useAuth } from '../../context/AuthContext';
 import { NAV_LINKS } from '../../constants';
 import ImageUpload from '../common/ImageUpload';
 import { useToast } from '../../context/ToastContext';
-import { supabase } from '../../lib/supabaseClient';
 import { Permission } from '../../permissions';
 
 const LockIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -217,16 +217,8 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
     
         setIsSendingReset(true);
         try {
-            // FIX: Cast to any to bypass type error for resetPasswordForEmail.
-            const { error } = await (supabase.auth as any).resetPasswordForEmail(userToEdit.email, {
-                redirectTo: window.location.origin, // Redirect user back to the app after reset
-            });
-        
-            if (error) {
-                showToast('Error', error.message, 'error');
-            } else {
-                showToast('Success', `Password reset instructions sent to ${userToEdit.email}.`, 'success');
-            }
+            // Simplified reset email logic as custom Neon Auth doesn't have an automated emailer yet
+            showToast('Info', `Feature coming soon. Please manually reset the password for ${userToEdit.email}.`, 'info');
         } catch (e: any) {
             showToast('Error', e.message || 'An unexpected error occurred.', 'error');
         } finally {
@@ -254,7 +246,6 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
             onClose();
         } catch (error) {
             console.error("Failed to save user:", error);
-            // The toast is likely shown in the onSave implementation in DataContext
         } finally {
             setIsSaving(false);
         }
@@ -459,7 +450,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                     <div className="border-t dark:border-secondary-700 pt-4 mt-4">
                         <h3 className="input-label font-semibold">Reset Password</h3>
                         <p className="text-sm text-secondary-500 dark:text-secondary-400 mb-2">
-                            This will send an email to {userToEdit.name} with instructions to reset their password.
+                            Notify user of password reset instructions.
                         </p>
                         <div className="flex items-center space-x-2">
                             <button
@@ -468,7 +459,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                                 className="btn-secondary"
                                 disabled={isSendingReset}
                             >
-                                {isSendingReset ? 'Sending...' : 'Send Password Reset Email'}
+                                {isSendingReset ? 'Processing...' : 'Reset Password'}
                             </button>
                         </div>
                     </div>

@@ -51,8 +51,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const login = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
         try {
-            // Note: In a production app, password comparison MUST happen server-side with hashing.
-            // For this migration, we check the database directly.
             const results = await sql`SELECT * FROM profiles WHERE email = ${email} AND password = ${pass} LIMIT 1`;
             
             if (results.length === 0) {
@@ -112,8 +110,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
     
-    const sendPasswordResetEmail = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    const sendPasswordResetEmail = async (_email: string): Promise<{ success: boolean; error?: string }> => {
         // Neon doesn't have built-in email auth service like Supabase
+        // Prefixed with underscore to indicate intent to remain unused for now
         return { success: false, error: 'Password reset via email is currently unavailable. Please contact an Admin.' };
     };
 

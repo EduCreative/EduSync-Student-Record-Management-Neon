@@ -1,5 +1,5 @@
+
 import React, { useState, useRef } from 'react';
-import { supabase } from '../../lib/supabaseClient';
 import { useToast } from '../../context/ToastContext';
 
 interface ImageUploadProps {
@@ -8,7 +8,7 @@ interface ImageUploadProps {
   bucketName?: 'avatars' | 'logos';
 }
 
-const compressImage = (file: File, quality = 0.7, maxWidth = 1024, maxHeight = 1024): Promise<File> => {
+const compressImageToBase64 = (file: File, quality = 0.6, maxWidth = 400, maxHeight = 400): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -39,21 +39,8 @@ const compressImage = (file: File, quality = 0.7, maxWidth = 1024, maxHeight = 1
                 }
                 ctx.drawImage(img, 0, 0, width, height);
 
-                canvas.toBlob(
-                    (blob) => {
-                        if (!blob) {
-                            return reject(new Error('Image compression failed.'));
-                        }
-                        const outputFileName = file.name.replace(/\.[^/.]+$/, ".jpeg");
-                        const newFile = new File([blob], outputFileName, {
-                            type: 'image/jpeg',
-                            lastModified: Date.now(),
-                        });
-                        resolve(newFile);
-                    },
-                    'image/jpeg',
-                    quality
-                );
+                const base64 = canvas.toDataURL('image/jpeg', quality);
+                resolve(base64);
             };
             img.onerror = (error) => reject(error);
         };
@@ -68,62 +55,28 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ imageUrl, onChange, bucketNam
     const { showToast } = useToast();
 
     const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        let filePath = '';
         try {
             setUploading(true);
             if (!event.target.files || event.target.files.length === 0) {
-                throw new Error('You must select an image to upload.');
+                return;
             }
 
             const originalFile = event.target.files[0];
-            const file = await compressImage(originalFile);
             
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${crypto.randomUUID()}.${fileExt}`;
-            filePath = `${fileName}`;
-
-            // Create a timeout promise to reject after 30 seconds
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error("Upload timed out. Please check your connection.")), 30000)
+            // For logos, we might want slightly higher quality or different dimensions
+            const isLogo = bucketName === 'logos';
+            const base64 = await compressImageToBase64(
+                originalFile, 
+                isLogo ? 0.8 : 0.6, 
+                isLogo ? 600 : 300, 
+                isLogo ? 600 : 300
             );
-
-            // Execute the upload operation or timeout
-            const uploadPromise = supabase.storage.from(bucketName).upload(filePath, file);
             
-            const { data: uploadData, error: uploadError } = await Promise.race([
-                uploadPromise, 
-                timeoutPromise
-            ]) as any;
-
-            if (uploadError) {
-                throw uploadError;
-            }
-
-            if (!uploadData) {
-                throw new Error("Upload completed but no data was returned from Supabase.");
-            }
-
-            const { data: publicUrlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
-            
-            if (!publicUrlData.publicUrl) {
-                // Attempt to remove the uploaded file if we can't get a URL, to avoid orphans.
-                await supabase.storage.from(bucketName).remove([filePath]);
-                throw new Error('Could not get public URL for the uploaded image.');
-            }
-            
-            onChange(publicUrlData.publicUrl);
-            showToast('Success', 'Image uploaded successfully.');
+            onChange(base64);
+            showToast('Success', 'Image processed successfully.');
 
         } catch (error: any) {
-            // If an error occurred and a file was potentially uploaded, try to clean it up.
-            if (filePath) {
-                try {
-                    await supabase.storage.from(bucketName).remove([filePath]);
-                } catch (e) {
-                    console.error("Failed to cleanup file after error:", e);
-                }
-            }
-            showToast('Upload Error', error.message || 'Image upload failed.', 'error');
+            showToast('Upload Error', error.message || 'Image processing failed.', 'error');
         } finally {
             setUploading(false);
         }
@@ -139,7 +92,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ imageUrl, onChange, bucketNam
 
     return (
         <div className="flex flex-col items-center space-y-4">
-            <div className="w-24 h-24 rounded-full bg-secondary-200 dark:bg-secondary-700 flex items-center justify-center overflow-hidden">
+            <div className="w-24 h-24 rounded-full bg-secondary-200 dark:bg-secondary-700 flex items-center justify-center overflow-hidden border-2 border-secondary-300 dark:border-secondary-600">
                 {imageUrl ? (
                     <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
                 ) : (
@@ -150,9 +103,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ imageUrl, onChange, bucketNam
                 type="button"
                 onClick={triggerFileInput}
                 disabled={uploading}
-                className="px-4 py-2 text-sm font-medium text-secondary-700 bg-secondary-100 hover:bg-secondary-200 dark:bg-secondary-700 dark:text-secondary-200 dark:hover:bg-secondary-600 rounded-lg disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-secondary-700 bg-secondary-100 hover:bg-secondary-200 dark:bg-secondary-700 dark:text-secondary-200 dark:hover:bg-secondary-600 rounded-lg disabled:opacity-50 transition-all border border-secondary-300 dark:border-secondary-500 shadow-sm"
             >
-                {uploading ? 'Uploading...' : (bucketName === 'logos' ? 'Upload Logo' : 'Upload Photo')}
+                {uploading ? 'Processing...' : (bucketName === 'logos' ? 'Upload Logo' : 'Upload Photo')}
             </button>
             <input
                 ref={fileInputRef}
@@ -178,6 +131,5 @@ const BuildingIcon: React.FC<{className?: string}> = ({className}) => (
         <rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/>
     </svg>
 );
-
 
 export default ImageUpload;
