@@ -30,22 +30,41 @@ const getFirstDayOfMonthString = () => {
 }
 
 /**
- * Normalizes any date string (ISO, Timestamp, YYYY-MM-DD) to a standard YYYY-MM-DD string.
- * This is crucial for reliable string-based comparisons in reports.
+ * Robust date normalization for inconsistent transfer data.
+ * Supports ISO, Timestamp, YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, etc.
  */
 const normalizeDate = (dateStr?: string | null): string | null => {
-    if (!dateStr) return null;
+    if (!dateStr || String(dateStr).trim() === '') return null;
+    
+    const input = String(dateStr).trim();
+    
+    // 1. Check for standard YYYY-MM-DD (length 10 with hyphens)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
+
+    // 2. Truncate ISO strings or timestamps with space
+    if (input.includes('T') || input.includes(' ')) {
+        const parts = input.split(/[T ]/);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(parts[0])) return parts[0];
+    }
+
+    // 3. Try standard Javascript parsing as fallback
     try {
-        // Just take the first 10 characters if it looks like an ISO string
-        if (dateStr.includes('T') || dateStr.includes(' ')) {
-            const d = new Date(dateStr);
-            if (isNaN(d.getTime())) return null;
+        const d = new Date(input);
+        if (!isNaN(d.getTime())) {
             return d.toISOString().split('T')[0];
         }
-        return dateStr; // Assume already YYYY-MM-DD
     } catch {
-        return null;
+        // Fall through to pattern matching
     }
+
+    // 4. Pattern match DD/MM/YYYY or DD.MM.YYYY (very common in manual data)
+    const dmY = input.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (dmY) {
+        const [, d, m, y] = dmY;
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+
+    return null;
 };
 
 const availableColumns = {
@@ -100,6 +119,7 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
         balance: number;
         date: string;
         challanId: string;
+        isUntrackedDate?: boolean;
     }
 
     interface DateGroup {
@@ -114,11 +134,11 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
         const groupedByDate: Record<string, DateGroup> = {};
 
         // Helper to add a transaction to the grouped object
-        const addTransaction = (dateStr: string, fee: any, amount: number) => {
+        const addTransaction = (dateStr: string, fee: any, amount: number, isUntracked = false) => {
             const normalizedDate = normalizeDate(dateStr);
             if (!normalizedDate) return;
             
-            // Re-check range with normalized date to catch records with timestamps
+            // Re-check range with normalized date
             if (normalizedDate < startDate || normalizedDate > endDate) return;
 
             const student = studentMap.get(fee.studentId);
@@ -144,7 +164,8 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
                 paid: Number(amount),
                 balance: Number(fee.totalAmount || 0) - Number(fee.discount || 0) - Number(fee.paidAmount || 0),
                 date: normalizedDate,
-                challanId: fee.id
+                challanId: fee.id,
+                isUntrackedDate: isUntracked
             });
 
             groupedByDate[normalizedDate].subtotals.paid += Number(amount);
@@ -156,17 +177,29 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
             
             if (history.length > 0) {
                 history.forEach((payment: any) => {
-                    // Migrated data might use 'date', 'paidDate', or 'paidAt'
                     const pDate = payment.date || payment.paidDate || payment.paidAt || payment.timestamp;
                     const pAmount = Number(payment.amount || 0);
                     
                     if (pDate && pAmount > 0) {
                         addTransaction(pDate, fee, pAmount);
+                    } else if (pAmount > 0) {
+                        // History entry exists but has no date key - fallback to due_date or paid_date
+                        addTransaction(fee.paidDate || fee.dueDate, fee, pAmount, true);
                     }
                 });
-            } else if (Number(fee.paidAmount || 0) > 0 && fee.paidDate) {
-                // Fallback for simple records
-                addTransaction(fee.paidDate, fee, Number(fee.paidAmount));
+            } else {
+                const paidAmt = Number(fee.paidAmount || 0);
+                if (paidAmt > 0) {
+                    // Fallback for simple records or transfers with total paid but no history
+                    const actualPaidDate = normalizeDate(fee.paidDate);
+                    if (actualPaidDate) {
+                        addTransaction(actualPaidDate, fee, paidAmt);
+                    } else {
+                        // NO PAID DATE FOUND: Use Due Date as fallback to ensure record visibility in reports
+                        // We mark this as "Untracked" so users know why it's appearing on this date.
+                        addTransaction(fee.dueDate, fee, paidAmt, true);
+                    }
+                }
             }
         });
         
@@ -188,8 +221,10 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
 
     }, [fees, studentMap, classMap, effectiveSchoolId, startDate, endDate, sortBy]);
     
+    // Aggregates for UI feedback
     const grandTotalPaid = useMemo(() => reportData.reduce((sum, group) => sum + Number(group.subtotals.paid), 0), [reportData]);
     const totalRecords = useMemo(() => reportData.reduce((sum, group) => sum + group.transactions.length, 0), [reportData]);
+    const untrackedCount = useMemo(() => reportData.reduce((sum, g) => sum + g.transactions.filter(t => t.isUntrackedDate).length, 0), [reportData]);
 
     const handleGenerate = () => {
         const activeColumns = Object.keys(selectedColumns).filter(k => selectedColumns[k as ColumnKey]) as ColumnKey[];
@@ -231,7 +266,10 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
                                         <tr key={`${t.challanId}-${t.sr}`}>
                                             <td className="py-1 px-1">{t.sr}</td>
                                             {activeColumns.includes('rollNumber') && <td className="py-1 px-1">{t.rollNumber}</td>}
-                                            <td className="py-1 px-1 font-medium">{t.studentName}</td>
+                                            <td className="py-1 px-1 font-medium">
+                                                {t.studentName}
+                                                {t.isUntrackedDate && <span className="text-[9px] block text-orange-600 font-normal italic">Historical Balance (Untracked Date)</span>}
+                                            </td>
                                             {activeColumns.includes('fatherName') && <td className="py-1 px-1">{t.fatherName}</td>}
                                             {activeColumns.includes('className') && <td className="py-1 px-1">{t.className}</td>}
                                             {activeColumns.includes('challanMonth') && <td className="py-1 px-1">{t.challanMonth}</td>}
@@ -285,6 +323,7 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
         activeHeaders.push("Paid Amount");
         if (selectedColumns.discount) activeHeaders.push("Discount");
         if (selectedColumns.balance) activeHeaders.push("Balance");
+        activeHeaders.push("Is Estimated Date");
 
         const csvRows = [activeHeaders.join(',')];
 
@@ -301,6 +340,7 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
                 row.push(t.paid);
                 if (selectedColumns.discount) row.push(t.discount);
                 if (selectedColumns.balance) row.push(t.balance);
+                row.push(t.isUntrackedDate ? "Yes" : "No");
                 csvRows.push(row.map(escapeCsvCell).join(','));
             });
 
@@ -348,6 +388,7 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
                         </select>
                     </div>
                 </div>
+
                  <div>
                     <label className="input-label">Include Columns</label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 border rounded-md dark:border-secondary-600">
@@ -359,9 +400,31 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
                         ))}
                     </div>
                 </div>
-                <div className="p-4 bg-secondary-50 dark:bg-secondary-700 rounded-md text-center">
-                    <p className="text-sm">Found <strong className="text-lg">{totalRecords}</strong> transaction records totaling <strong className="text-lg">Rs. {grandTotalPaid.toLocaleString()}</strong> for the selected period.</p>
+
+                <div className="p-4 bg-secondary-50 dark:bg-secondary-700 rounded-md">
+                    <div className="text-center mb-3 border-b dark:border-secondary-600 pb-2">
+                        <p className="text-xs text-secondary-500 uppercase tracking-widest font-bold">Filtered Results</p>
+                        <p className="text-sm mt-1">Found <strong className="text-lg text-primary-600 dark:text-primary-400">{totalRecords}</strong> transaction records totaling <strong className="text-lg text-primary-600 dark:text-primary-400">Rs. {grandTotalPaid.toLocaleString()}</strong></p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-white dark:bg-secondary-800 p-2 rounded border border-secondary-200 dark:border-secondary-600">
+                            <p className="text-secondary-500">Normal Records:</p>
+                            <p className="font-bold text-green-600">{totalRecords - untrackedCount}</p>
+                        </div>
+                        <div className="bg-white dark:bg-secondary-800 p-2 rounded border border-secondary-200 dark:border-secondary-600">
+                            <p className="text-secondary-500" title="Payments that had no tracked date in the transfer but have been included via fallbacks.">Historical (No Date):</p>
+                            <p className={`font-bold ${untrackedCount > 0 ? 'text-orange-600' : 'text-secondary-400'}`}>{untrackedCount}</p>
+                        </div>
+                    </div>
+                    
+                    {untrackedCount > 0 && (
+                        <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-2 text-center italic">
+                            * Historical payments without a specific "Paid Date" are appearing on their Challan Due Dates.
+                        </p>
+                    )}
                 </div>
+
                 <div className="flex justify-end space-x-3 pt-2">
                     <button onClick={handleExport} className="btn-secondary" disabled={reportData.length === 0}>Export CSV</button>
                     <button onClick={handleGenerate} className="btn-primary" disabled={reportData.length === 0}>Print Preview</button>

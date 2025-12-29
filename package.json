@@ -2,7 +2,7 @@
 {
   "name": "edusync-student-record-management-neon",
   "private": true,
-  "version": "3.2.6",
+  "version": "3.2.7",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -142,7 +142,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 ]);
             }
 
-            // CRITICAL: Neon returns NUMERIC as strings. Cast them to numbers here to prevent concatenation bugs.
+            // Transform data: Cast NUMERIC to numbers and handle JSON fields robustly
             const transformed = {
                 schools: toCamelCase(schoolsData),
                 users: toCamelCase(profilesData),
@@ -157,15 +157,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     openingBalance: Number(s.openingBalance || 0),
                     feeStructure: (s.feeStructure || []).map((item: any) => ({ ...item, amount: Number(item.amount || 0) }))
                 })),
-                fees: toCamelCase(feesData).map((f: any) => ({
-                    ...f,
-                    previousBalance: Number(f.previousBalance || 0),
-                    totalAmount: Number(f.totalAmount || 0),
-                    discount: Number(f.discount || 0),
-                    paidAmount: Number(f.paidAmount || 0),
-                    fineAmount: Number(f.fineAmount || 0),
-                    paymentHistory: (f.paymentHistory || []).map((p: any) => ({ ...p, amount: Number(p.amount || 0) }))
-                })),
+                fees: toCamelCase(feesData).map((f: any) => {
+                    // Safety for paymentHistory being a string in some transfer scenarios
+                    let history = f.paymentHistory;
+                    if (typeof history === 'string') {
+                        try { history = JSON.parse(history); } catch { history = []; }
+                    }
+                    if (!Array.isArray(history)) history = [];
+
+                    return {
+                        ...f,
+                        previousBalance: Number(f.previousBalance || 0),
+                        totalAmount: Number(f.totalAmount || 0),
+                        discount: Number(f.discount || 0),
+                        paidAmount: Number(f.paidAmount || 0),
+                        fineAmount: Number(f.fineAmount || 0),
+                        paymentHistory: history.map((p: any) => ({ ...p, amount: Number(p.amount || 0) }))
+                    };
+                }),
                 attendance: toCamelCase(attData),
                 results: toCamelCase(resData).map((r: any) => ({
                     ...r,
