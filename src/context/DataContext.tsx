@@ -8,6 +8,11 @@ import { db } from '../lib/db';
 import { toCamelCase, toSnakeCase } from '../utils/caseConverter';
 import { useTheme } from './ThemeContext';
 
+interface SyncProgress {
+    percentage: number;
+    status: string;
+}
+
 interface DataContextType {
     schools: School[];
     users: User[];
@@ -25,6 +30,7 @@ interface DataContextType {
     isInitialLoad: boolean;
     lastSyncTime: Date | null;
     syncError: string | null;
+    syncProgress: SyncProgress;
     fetchData: () => Promise<void>;
     getSchoolById: (schoolId: string) => School | undefined;
     updateUser: (updatedUser: User) => Promise<void>;
@@ -89,6 +95,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [isInitialLoad, setIsInitialLoad] = useState(true);
     const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
     const [syncError, setSyncError] = useState<string | null>(null);
+    const [syncProgress, setSyncProgress] = useState<SyncProgress>({ percentage: 0, status: '' });
+
     const [schools, setSchools] = useState<School[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [classes, setClasses] = useState<Class[]>([]);
@@ -110,111 +118,115 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         setLoading(true);
         setSyncError(null);
+        setSyncProgress({ percentage: 5, status: 'Establishing connection...' });
 
         try {
             const effectiveSchoolId = user.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user.schoolId;
 
-            // Use parallel queries for base tables
-            const [
-                schoolsData, profilesData, classesData, subjectsData, examsData, feeHeadsData, eventsData, logsData, studentsData
-            ] = await Promise.all([
+            // STEP 1: Core Configuration (15%)
+            setSyncProgress({ percentage: 10, status: 'Loading configuration...' });
+            const [schoolsData, classesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
                 sql`SELECT * FROM schools`,
-                effectiveSchoolId ? sql`SELECT * FROM profiles WHERE school_id = ${effectiveSchoolId} OR school_id IS NULL` : sql`SELECT * FROM profiles`,
                 effectiveSchoolId ? sql`SELECT * FROM classes WHERE school_id = ${effectiveSchoolId}` : sql`SELECT * FROM classes`,
                 effectiveSchoolId ? sql`SELECT * FROM subjects WHERE school_id = ${effectiveSchoolId}` : sql`SELECT * FROM subjects`,
                 effectiveSchoolId ? sql`SELECT * FROM exams WHERE school_id = ${effectiveSchoolId}` : sql`SELECT * FROM exams`,
                 effectiveSchoolId ? sql`SELECT * FROM fee_heads WHERE school_id = ${effectiveSchoolId}` : sql`SELECT * FROM fee_heads`,
                 effectiveSchoolId ? sql`SELECT * FROM school_events WHERE school_id = ${effectiveSchoolId}` : sql`SELECT * FROM school_events`,
-                effectiveSchoolId ? sql`SELECT * FROM activity_logs WHERE school_id = ${effectiveSchoolId} ORDER BY timestamp DESC LIMIT 100` : sql`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 100`,
-                effectiveSchoolId ? sql`SELECT * FROM students WHERE school_id = ${effectiveSchoolId}` : sql`SELECT * FROM students`
             ]);
 
-            const sIds = studentsData.map(s => s.id);
-            let feesData: any[] = [];
-            let attData: any[] = [];
-            let resData: any[] = [];
+            setSchools(toCamelCase(schoolsData));
+            setClasses(toCamelCase(classesData));
+            setSubjects(toCamelCase(subjectsData));
+            setExams(toCamelCase(examsData));
+            setFeeHeads(toCamelCase(feeHeadsData).map((fh: any) => ({ ...fh, defaultAmount: Number(fh.defaultAmount || 0) })));
+            setEvents(toCamelCase(eventsData));
+            setSyncProgress({ percentage: 25, status: 'Setting up users...' });
 
-            if (sIds.length > 0) {
-                [feesData, attData, resData] = await Promise.all([
-                    sql`SELECT * FROM fee_challans WHERE student_id = ANY(${sIds})`,
-                    sql`SELECT * FROM attendance WHERE student_id = ANY(${sIds})`,
-                    sql`SELECT * FROM results WHERE student_id = ANY(${sIds})`,
-                ]);
+            // STEP 2: Profiles (35%)
+            const profilesData = effectiveSchoolId 
+                ? await sql`SELECT * FROM profiles WHERE school_id = ${effectiveSchoolId} OR school_id IS NULL` 
+                : await sql`SELECT * FROM profiles`;
+            setUsers(toCamelCase(profilesData));
+            setSyncProgress({ percentage: 40, status: 'Fetching students...' });
+
+            // STEP 3: Students (Crucial for next steps) (50%)
+            const studentsData = effectiveSchoolId 
+                ? await sql`SELECT * FROM students WHERE school_id = ${effectiveSchoolId}` 
+                : await sql`SELECT * FROM students`;
+            
+            const transformedStudents = toCamelCase(studentsData).map((s: any) => ({ 
+                ...s, 
+                openingBalance: Number(s.openingBalance || 0),
+                feeStructure: (s.feeStructure || []).map((item: any) => ({ ...item, amount: Number(item.amount || 0) }))
+            }));
+            setStudents(transformedStudents);
+            
+            const sIds = studentsData.map(s => s.id);
+            if (sIds.length === 0) {
+                setSyncProgress({ percentage: 100, status: 'Complete' });
+                setLoading(false);
+                if (isInitialLoad) setIsInitialLoad(false);
+                setLastSyncTime(new Date());
+                return;
             }
 
-            // Transform data: Cast NUMERIC to numbers and handle JSON fields robustly
-            const transformed = {
-                schools: toCamelCase(schoolsData),
-                users: toCamelCase(profilesData),
-                classes: toCamelCase(classesData),
-                subjects: toCamelCase(subjectsData),
-                exams: toCamelCase(examsData),
-                feeHeads: toCamelCase(feeHeadsData).map((fh: any) => ({ ...fh, defaultAmount: Number(fh.defaultAmount || 0) })),
-                events: toCamelCase(eventsData),
-                logs: toCamelCase(logsData),
-                students: toCamelCase(studentsData).map((s: any) => ({ 
-                    ...s, 
-                    openingBalance: Number(s.openingBalance || 0),
-                    feeStructure: (s.feeStructure || []).map((item: any) => ({ ...item, amount: Number(item.amount || 0) }))
-                })),
-                fees: toCamelCase(feesData).map((f: any) => {
-                    // Safety for paymentHistory being a string in some transfer scenarios
-                    let history = f.paymentHistory;
-                    if (typeof history === 'string') {
-                        try { history = JSON.parse(history); } catch { history = []; }
-                    }
-                    if (!Array.isArray(history)) history = [];
+            // STEP 4: Historical Data (Streamed for responsive feel)
+            setSyncProgress({ percentage: 60, status: 'Syncing fee ledgers...' });
+            const feesData = await sql`SELECT * FROM fee_challans WHERE student_id = ANY(${sIds})`;
+            setFees(toCamelCase(feesData).map((f: any) => {
+                let history = f.paymentHistory;
+                if (typeof history === 'string') { try { history = JSON.parse(history); } catch { history = []; } }
+                if (!Array.isArray(history)) history = [];
+                return {
+                    ...f,
+                    previousBalance: Number(f.previousBalance || 0),
+                    totalAmount: Number(f.totalAmount || 0),
+                    discount: Number(f.discount || 0),
+                    paidAmount: Number(f.paidAmount || 0),
+                    fineAmount: Number(f.fineAmount || 0),
+                    paymentHistory: history.map((p: any) => ({ ...p, amount: Number(p.amount || 0) }))
+                };
+            }));
 
-                    return {
-                        ...f,
-                        previousBalance: Number(f.previousBalance || 0),
-                        totalAmount: Number(f.totalAmount || 0),
-                        discount: Number(f.discount || 0),
-                        paidAmount: Number(f.paidAmount || 0),
-                        fineAmount: Number(f.fineAmount || 0),
-                        paymentHistory: history.map((p: any) => ({ ...p, amount: Number(p.amount || 0) }))
-                    };
-                }),
-                attendance: toCamelCase(attData),
-                results: toCamelCase(resData).map((r: any) => ({
-                    ...r,
-                    marks: Number(r.marks || 0),
-                    totalMarks: Number(r.totalMarks || 100)
-                }))
-            };
+            setSyncProgress({ percentage: 75, status: 'Loading results and attendance...' });
+            const [attData, resData] = await Promise.all([
+                sql`SELECT * FROM attendance WHERE student_id = ANY(${sIds})`,
+                sql`SELECT * FROM results WHERE student_id = ANY(${sIds})`,
+            ]);
+            setAttendanceState(toCamelCase(attData));
+            setResults(toCamelCase(resData).map((r: any) => ({
+                ...r,
+                marks: Number(r.marks || 0),
+                totalMarks: Number(r.totalMarks || 100)
+            })));
 
-            setSchools(transformed.schools);
-            setUsers(transformed.users);
-            setClasses(transformed.classes);
-            setSubjects(transformed.subjects);
-            setExams(transformed.exams);
-            setFeeHeads(transformed.feeHeads);
-            setEvents(transformed.events);
-            setLogs(transformed.logs);
-            setStudents(transformed.students);
-            setFees(transformed.fees);
-            setAttendanceState(transformed.attendance);
-            setResults(transformed.results);
+            setSyncProgress({ percentage: 90, status: 'Finalizing sync...' });
+            const logsData = effectiveSchoolId 
+                ? await sql`SELECT * FROM activity_logs WHERE school_id = ${effectiveSchoolId} ORDER BY timestamp DESC LIMIT 100` 
+                : await sql`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 100`;
+            setLogs(toCamelCase(logsData));
 
+            // FINAL STEP: Cache locally if offline mode
             if (syncMode === 'offline') {
                 await db.transaction('rw', db.tables, async () => {
                     await Promise.all([
-                        db.schools.bulkPut(transformed.schools),
-                        db.users.bulkPut(transformed.users),
-                        db.classes.bulkPut(transformed.classes),
-                        db.students.bulkPut(transformed.students),
-                        db.fees.bulkPut(transformed.fees),
-                        db.attendance.bulkPut(transformed.attendance),
-                        db.results.bulkPut(transformed.results),
-                        db.logs.bulkPut(transformed.logs),
-                        db.feeHeads.bulkPut(transformed.feeHeads),
-                        db.events.bulkPut(transformed.events),
-                        db.subjects.bulkPut(transformed.subjects),
-                        db.exams.bulkPut(transformed.exams),
+                        db.schools.bulkPut(schools),
+                        db.users.bulkPut(users),
+                        db.classes.bulkPut(classes),
+                        db.students.bulkPut(transformedStudents),
+                        db.fees.bulkPut(fees),
+                        db.attendance.bulkPut(attendance),
+                        db.results.bulkPut(results),
+                        db.logs.bulkPut(logs),
+                        db.feeHeads.bulkPut(feeHeads),
+                        db.events.bulkPut(events),
+                        db.subjects.bulkPut(subjects),
+                        db.exams.bulkPut(exams),
                     ]);
                 });
             }
 
+            setSyncProgress({ percentage: 100, status: 'Synchronized' });
             setLastSyncTime(new Date());
         } catch (error: any) {
             console.error("Sync Error:", error);
@@ -222,10 +234,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setLoading(false);
             if (isInitialLoad) setIsInitialLoad(false);
+            // Clear status after a delay
+            setTimeout(() => setSyncProgress({ percentage: 0, status: '' }), 3000);
         }
-    }, [user, activeSchoolId, isInitialLoad, syncMode]);
+    }, [user, activeSchoolId, isInitialLoad, syncMode, schools, users, classes, fees, attendance, results, logs, feeHeads, events, subjects, exams]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => { fetchData(); }, [user, activeSchoolId]); // Only fetch when user or school context changes
 
     const addLog = useCallback(async (action: string, details: string) => {
         if (!user) return;
@@ -387,12 +401,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const arrears = Math.max(0, totalCharged - totalCollected);
 
             const feeStructureMap = new Map((student.feeStructure || []).map(item => [item.feeHeadId, item.amount]));
-            const items = selectedHeads.map(h => ({
+            const items = selectedHeads.map((h: any) => ({
                 description: feeHeads.find(fh => fh.id === h.feeHeadId)?.name || 'Fee',
                 amount: feeStructureMap.get(h.feeHeadId) ?? h.amount
             }));
 
-            const subtotal = items.reduce((sum, i) => sum + i.amount, 0);
+            const subtotal = items.reduce((sum: number, i: any) => sum + i.amount, 0);
             const total = subtotal + arrears;
             const cNum = `${year}${month.substring(0, 3)}-${student.rollNumber}`;
 
@@ -576,7 +590,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const value: DataContextType = {
         schools, users, classes, subjects, exams, students, attendance, fees, results, logs, feeHeads, events,
-        loading, isInitialLoad, lastSyncTime, syncError, fetchData,
+        loading, isInitialLoad, lastSyncTime, syncError, syncProgress, fetchData,
         getSchoolById: (id) => schools.find(s => s.id === id),
         updateUser, deleteUser, addUserByAdmin, addStudent, updateStudent, deleteStudent,
         addClass, updateClass, deleteClass, addSubject, updateSubject, deleteSubject,

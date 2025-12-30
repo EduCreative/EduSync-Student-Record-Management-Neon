@@ -34,8 +34,7 @@ const timeAgo = (date: Date | null): string => {
 };
 
 const SyncStatus: React.FC = () => {
-    // FIX: Destructure `syncError` from useData to display non-critical sync failures in the UI.
-    const { loading, isInitialLoad, lastSyncTime, schools, syncError } = useData();
+    const { loading, isInitialLoad, lastSyncTime, schools, syncError, syncProgress } = useData();
     const { isOnline } = useSync();
 
     const isSyncing = loading && !isInitialLoad;
@@ -49,11 +48,14 @@ const SyncStatus: React.FC = () => {
         );
     }
 
-    if (isSyncing) {
+    if (isSyncing || (syncProgress.percentage > 0 && syncProgress.percentage < 100)) {
         return (
-            <div className="flex items-center gap-1 text-xs font-medium text-primary-600 dark:text-primary-400">
+            <div className="flex items-center gap-2 text-xs font-medium text-primary-600 dark:text-primary-400">
                 <SyncIcon className="w-3.5 h-3.5 animate-spin" />
-                <span>Syncing...</span>
+                <div className="flex flex-col">
+                    <span className="leading-none">{syncProgress.status || 'Syncing...'}</span>
+                    <span className="text-[10px] opacity-75">{syncProgress.percentage}% complete</span>
+                </div>
             </div>
         );
     }
@@ -88,7 +90,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAboutModal }) => {
     const { user, logout, activeSchoolId, switchSchoolContext } = useAuth();
     const { theme, toggleTheme } = useTheme();
-    const { schools, getSchoolById, fetchData, loading, isInitialLoad } = useData();
+    const { schools, getSchoolById, fetchData, loading, isInitialLoad, syncProgress } = useData();
     const { isOnline } = useSync();
     const [profileOpen, setProfileOpen] = useState(false);
     const [schoolSwitcherOpen, setSchoolSwitcherOpen] = useState(false);
@@ -128,6 +130,11 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAbou
 
     return (
         <header className="sticky top-0 z-30 border-b border-secondary-200 bg-white dark:border-secondary-700 dark:bg-secondary-800 no-print transition-colors duration-300">
+            {/* Sync Progress Bar */}
+            {syncProgress.percentage > 0 && syncProgress.percentage < 100 && (
+                <div className="absolute top-0 left-0 h-0.5 bg-neon-accent transition-all duration-500 ease-out z-[60]" style={{ width: `${syncProgress.percentage}%` }}></div>
+            )}
+            
             <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
                 {/* Header: Left side */}
                 <div className="flex items-center gap-4">
