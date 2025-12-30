@@ -7,6 +7,7 @@ import { usePrint } from '../../context/PrintContext';
 import { UserRole } from '../../types';
 import PrintableChallan from './PrintableChallan';
 import { getClassLevel } from '../../utils/sorting';
+import { formatMonthDisplay } from '../../constants';
 
 const months = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" ];
 const currentYear = new Date().getFullYear();
@@ -68,7 +69,7 @@ const BulkChallanReportModal: React.FC<BulkChallanReportModalProps> = ({ isOpen,
                 })}
             </div>
         );
-        showPrintPreview(content, `EduSync - Fee Challans - ${classId === 'all' ? 'All Classes' : classMap.get(classId)} - ${month} ${year}`);
+        showPrintPreview(content, `EduSync - Fee Challans - ${classId === 'all' ? 'All Classes' : classMap.get(classId)} - ${formatMonthDisplay(month, year)}`);
     };
 
     return (
@@ -86,7 +87,7 @@ const BulkChallanReportModal: React.FC<BulkChallanReportModalProps> = ({ isOpen,
                     <div>
                         <label htmlFor="month-select" className="input-label">Month</label>
                         <select id="month-select" value={month} onChange={e => setMonth(e.target.value)} className="input-field">
-                            {months.map(m => <option key={m} value={m}>{m}</option>)}
+                            {months.map(m => <option key={m} value={m}>{m.substring(0,3)}</option>)}
                         </select>
                     </div>
                     <div>

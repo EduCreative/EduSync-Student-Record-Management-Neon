@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
@@ -12,6 +13,7 @@ import RequestPasswordResetPage from './components/auth/RequestPasswordResetPage
 import ResetPasswordPage from './components/auth/ResetPasswordPage';
 import { PWAInstallProvider } from './context/PWAInstallContext';
 import { SyncProvider } from './context/SyncContext';
+import { NotificationProvider } from './context/NotificationContext';
 
 type AuthView = 'login' | 'register' | 'requestReset';
 
@@ -68,11 +70,13 @@ const App: React.FC = () => {
         <AuthProvider>
             <ToastProvider>
                 <DataProvider>
-                    <PrintProvider>
-                        <PWAInstallProvider>
-                            <AppContent />
-                        </PWAInstallProvider>
-                    </PrintProvider>
+                    <NotificationProvider>
+                        <PrintProvider>
+                            <PWAInstallProvider>
+                                <AppContent />
+                            </PWAInstallProvider>
+                        </PrintProvider>
+                    </NotificationProvider>
                 </DataProvider>
             </ToastProvider>
         </AuthProvider>

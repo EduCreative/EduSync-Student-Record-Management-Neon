@@ -1,15 +1,20 @@
 
 # Changelog
 
-## [3.2.9] - 2025-02-21
+## [3.3.2] - 2025-02-21
+
+### Added
+- **Announcement Broadcasting**: Teachers and Admins can now send custom announcements to targeted groups (e.g., all Parents, or specific classes).
+- **Notification Center**: A new bell icon in the header with a real-time unread badge and dropdown feed for all system alerts and custom announcements.
+- **Recipient Targeting**: Broadcast engine resolves recipients based on roles and class assignments automatically.
+
+## [3.3.1] - 2025-02-21
+
+### Added
+- **Sidebar Mode Configuration**: Added a new setting to choose between a "Fixed" (always expanded) and "Collapsible" (mini version with hover expansion) sidebar on desktop. This allows users to customize their navigation experience and workspace density.
+
+## [3.3.0] - 2025-02-21
 
 ### Improved
-- **Incremental Data Synchronization**: Refactored the data fetching engine to load data in weighted batches. Critical records (Classes, Schools) now appear immediately, while larger historical data (Fees, Attendance) syncs in the background.
-- **Sync Progress Tracking**: Added a visual progress bar in the header and real-time status updates with percentages to provide better feedback during the initial synchronization process.
-- **Non-Blocking Dashboard**: Users can now access the dashboard and reports as soon as the core data is ready, significantly reducing perceived wait times after login.
-
-## [3.2.8] - 2025-02-21
-
-### Improved
-- **Fee Defaulter Report (Monthly Mode)**: Updated logic to show total outstanding dues as of the selected month (Arrears + Month Fees) rather than just the month's isolated portion. This provides a true "statement of account" for that month.
-- **Enhanced Column Selection**: Added "Arrears" and "Month Fees" as separate toggleable columns in the Defaulter Report for better financial transparency.
+- **Standardized Month Formatting**: Implemented a more compact date convention ("Dec, 2025" instead of "December 2025") across all tables, reports, and subtitles. This saves significant space in financial ledgers and improves mobile visibility.
+- **Enhanced Dropdowns**: Month selection dropdowns now show abbreviated labels ("Jan", "Feb") while preserving full names internally for database stability.

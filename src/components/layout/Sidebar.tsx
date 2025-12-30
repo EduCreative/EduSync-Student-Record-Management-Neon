@@ -7,6 +7,7 @@ import { UserRole } from '../../types';
 import { version } from '../../../package.json';
 import { useToast } from '../../context/ToastContext';
 import { usePWAInstall } from '../../context/PWAInstallContext';
+import { useTheme } from '../../context/ThemeContext';
 
 interface SidebarProps {
     sidebarOpen: boolean;
@@ -28,6 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, activeVi
     const { user } = useAuth();
     const { showToast } = useToast();
     const { installPrompt, clearInstallPrompt } = usePWAInstall();
+    const { sidebarMode } = useTheme();
     const sidebar = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -89,6 +91,10 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, activeVi
         }
     };
 
+    const isFixed = sidebarMode === 'fixed';
+    const sidebarWidthClass = isFixed ? 'lg:w-64' : 'lg:w-20 lg:hover:w-64';
+    const labelVisibilityClass = isFixed ? 'opacity-100' : 'lg:opacity-0 group-hover:opacity-100';
+
     return (
         <div className="no-print">
             {/* Sidebar backdrop (mobile) */}
@@ -96,15 +102,15 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, activeVi
 
             <div
                 ref={sidebar}
-                className={`flex flex-col absolute z-40 left-0 top-0 lg:static lg:left-auto lg:top-auto lg:translate-x-0 h-screen overflow-y-auto w-64 lg:w-20 lg:hover:w-64 shrink-0 bg-primary-800 dark:bg-secondary-950 p-4 transition-all duration-300 ease-in-out group ${sidebarOpen ? 'translate-x-0' : '-translate-x-64'}`}
+                className={`flex flex-col absolute z-40 left-0 top-0 lg:static lg:left-auto lg:top-auto lg:translate-x-0 h-screen overflow-y-auto w-64 ${sidebarWidthClass} shrink-0 bg-primary-800 dark:bg-secondary-950 p-4 transition-all duration-300 ease-in-out group ${sidebarOpen ? 'translate-x-0' : '-translate-x-64'}`}
             >
                 {/* Sidebar header */}
                 <div className="flex justify-between mb-10 pr-3 sm:px-2">
                      <a href="/" className="flex items-center space-x-2">
                         <EduSyncLogo className="w-8 h-8 text-white neon-glow-primary" />
-                        <div className="flex flex-col">
-                            <h1 className="text-2xl font-bold text-white lg:opacity-0 group-hover:opacity-100 transition-opacity duration-200 leading-none">EduSync</h1>
-                            <span className="text-[10px] text-neon-glow font-bold tracking-widest lg:opacity-0 group-hover:opacity-100 transition-opacity duration-200 mt-0.5">NEON EDITION</span>
+                        <div className={`flex flex-col ${labelVisibilityClass} transition-opacity duration-200`}>
+                            <h1 className="text-2xl font-bold text-white leading-none">EduSync</h1>
+                            <span className="text-[10px] text-neon-glow font-bold tracking-widest mt-0.5">NEON EDITION</span>
                         </div>
                     </a>
                 </div>
@@ -123,9 +129,9 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, activeVi
                                 {React.cloneElement(link.icon as React.ReactElement<any>, { 
                                     className: `w-6 h-6 shrink-0 transition-colors ${isActive ? 'text-neon-glow' : 'text-secondary-300 group-hover:text-white'}` 
                                 })}
-                                <span className="ml-3 lg:opacity-0 group-hover:opacity-100 transition-opacity duration-200 font-medium">{link.name}</span>
+                                <span className={`ml-3 ${labelVisibilityClass} transition-opacity duration-200 font-medium whitespace-nowrap`}>{link.name}</span>
                                 {isActive && (
-                                    <div className="absolute right-2 w-1.5 h-1.5 rounded-full bg-neon-glow shadow-[0_0_8px_#00f3ff] lg:hidden group-hover:block"></div>
+                                    <div className={`absolute right-2 w-1.5 h-1.5 rounded-full bg-neon-glow shadow-[0_0_8px_#00f3ff] ${isFixed ? 'block' : 'lg:hidden group-hover:block'}`}></div>
                                 )}
                             </button>
                         );
@@ -139,7 +145,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, activeVi
                             className="w-full flex items-center p-2 rounded-lg transition-colors group text-secondary-200 hover:bg-primary-700/30 dark:hover:bg-secondary-800/50 mb-2"
                         >
                             <DownloadCloudIcon className="w-6 h-6 shrink-0 text-neon-glow" />
-                            <span className="ml-3 lg:opacity-0 group-hover:opacity-100 transition-opacity duration-200">Install App</span>
+                            <span className={`ml-3 ${labelVisibilityClass} transition-opacity duration-200`}>Install App</span>
                         </button>
                     )}
                     <button
@@ -147,9 +153,9 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, activeVi
                         className="w-full flex items-center p-2 rounded-lg transition-colors group text-secondary-200 hover:bg-primary-700/30 dark:hover:bg-secondary-800/50 mb-2"
                     >
                         <ShareIcon className="w-6 h-6 shrink-0 text-secondary-400 group-hover:text-neon-glow" />
-                        <span className="ml-3 lg:opacity-0 group-hover:opacity-100 transition-opacity duration-200">Share App</span>
+                        <span className={`ml-3 ${labelVisibilityClass} transition-opacity duration-200`}>Share App</span>
                     </button>
-                    <div className="p-4 rounded-lg bg-primary-900/50 dark:bg-secondary-900/50 border border-white/5 lg:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <div className={`p-4 rounded-lg bg-primary-900/50 dark:bg-secondary-900/50 border border-white/5 ${labelVisibilityClass} transition-opacity duration-200`}>
                         <p className="text-center text-[10px] text-secondary-400 uppercase tracking-tighter">
                             Neon Engine <span className="text-neon-glow">v{version}</span>
                         </p>

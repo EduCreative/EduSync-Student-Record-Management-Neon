@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import Modal from '../common/Modal';
 import { useData } from '../../context/DataContext';
 import { Student, FeeHead } from '../../types';
 import { useToast } from '../../context/ToastContext';
+import { formatMonthDisplay } from '../../constants';
 
 interface SingleChallanGenerationModalProps {
     isOpen: boolean;
@@ -103,13 +105,13 @@ const SingleChallanGenerationModal: React.FC<SingleChallanGenerationModalProps> 
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Generate Single Challan for ${student.name}`}>
+        <Modal isOpen={isOpen} onClose={onClose} title={`New Challan (${formatMonthDisplay(month, year)}) for ${student.name}`}>
             <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="input-label">For Month</label>
                         <select value={month} onChange={e => setMonth(e.target.value)} className="input-field">
-                            {months.map(m => <option key={m} value={m}>{m}</option>)}
+                            {months.map(m => <option key={m} value={m}>{m.substring(0,3)}</option>)}
                         </select>
                     </div>
                     <div>

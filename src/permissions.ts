@@ -1,3 +1,4 @@
+
 import { UserRole } from './types';
 
 export enum Permission {
@@ -13,6 +14,8 @@ export enum Permission {
   CAN_VIEW_STUDENTS = 'CAN_VIEW_STUDENTS',
   CAN_EDIT_STUDENTS = 'CAN_EDIT_STUDENTS',
   CAN_DELETE_STUDENTS = 'CAN_DELETE_STUDENTS',
+  CAN_PROMOTE_STUDENTS = 'CAN_PROMOTE_STUDENTS',
+  CAN_GENERATE_ID_CARDS = 'CAN_GENERATE_ID_CARDS',
 
   // Class Management
   CAN_VIEW_CLASSES = 'CAN_VIEW_CLASSES',
@@ -29,8 +32,9 @@ export enum Permission {
   CAN_MANAGE_ATTENDANCE = 'CAN_MANAGE_ATTENDANCE',
   CAN_MANAGE_RESULTS = 'CAN_MANAGE_RESULTS',
   CAN_VIEW_ACADEMIC_REPORTS = 'CAN_VIEW_ACADEMIC_REPORTS',
-  CAN_GENERATE_ID_CARDS = 'CAN_GENERATE_ID_CARDS',
-  CAN_PROMOTE_STUDENTS = 'CAN_PROMOTE_STUDENTS',
+
+  // Communication
+  CAN_SEND_ANNOUNCEMENTS = 'CAN_SEND_ANNOUNCEMENTS',
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -54,6 +58,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.CAN_VIEW_ACADEMIC_REPORTS,
     Permission.CAN_GENERATE_ID_CARDS,
     Permission.CAN_PROMOTE_STUDENTS,
+    Permission.CAN_SEND_ANNOUNCEMENTS,
   ],
 
   [UserRole.Accountant]: [
@@ -68,6 +73,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.CAN_MANAGE_RESULTS,
     Permission.CAN_VIEW_STUDENTS, // To see students in their class
     Permission.CAN_VIEW_CLASSES,
+    Permission.CAN_SEND_ANNOUNCEMENTS,
   ],
 
   [UserRole.Parent]: [], // View-only logic is handled by data filtering

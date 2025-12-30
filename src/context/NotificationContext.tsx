@@ -10,6 +10,8 @@ interface NotificationContextType {
     unreadCount: number;
     markAsRead: (notificationId: string) => Promise<void>;
     markAllAsRead: () => Promise<void>;
+    sendAnnouncement: (userIds: string[], title: string, message: string, link?: string) => Promise<void>;
+    refreshNotifications: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -39,8 +41,8 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     useEffect(() => {
         fetchNotifications();
         
-        // Polling as a fallback for realtime since moving away from Supabase
-        const interval = setInterval(fetchNotifications, 60000); // Check every minute
+        // Polling as a fallback for realtime
+        const interval = setInterval(fetchNotifications, 60000); 
         return () => clearInterval(interval);
     }, [fetchNotifications]);
     
@@ -56,7 +58,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
             await sql`UPDATE notifications SET is_read = true WHERE id = ${notificationId}`;
         } catch (error) {
             console.error('Failed to mark notification as read:', error);
-            // Revert optimistic update
             setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: false } : n));
         }
     };
@@ -75,11 +76,31 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
     };
 
+    const sendAnnouncement = async (userIds: string[], title: string, message: string, link?: string) => {
+        if (userIds.length === 0) return;
+
+        try {
+            // Batch insert using values
+            // We use a manual string construction for simple SQL compatibility here since userIds are validated
+            for (const id of userIds) {
+                await sql`
+                    INSERT INTO notifications (id, user_id, title, message, link, is_read, timestamp)
+                    VALUES (${crypto.randomUUID()}, ${id}, ${title}, ${message}, ${link || null}, false, NOW())
+                `;
+            }
+        } catch (error) {
+            console.error('Failed to send announcements:', error);
+            throw error;
+        }
+    };
+
     const value = {
         notifications,
         unreadCount,
         markAsRead,
         markAllAsRead,
+        sendAnnouncement,
+        refreshNotifications: fetchNotifications
     };
 
     return (

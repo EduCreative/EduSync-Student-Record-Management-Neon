@@ -25,8 +25,9 @@ import UserProfilePage from '../users/UserProfilePage';
 import SchoolDetailsPage from '../schools/SchoolDetailsPage';
 import ChallanScannerPage from '../challan-scanner/ChallanScannerPage';
 import AboutModal from '../common/AboutModal';
+import AnnouncementsPage from '../announcements/AnnouncementsPage';
 
-export type ViewType = 'dashboard' | 'overview' | 'users' | 'students' | 'studentProfile' | 'teachers' | 'accountants' | 'classes' | 'schools' | 'schoolDetails' | 'settings' | 'results' | 'logs' | 'attendance' | 'fees' | 'calendar' | 'leavingCertificate' | 'reports' | 'userProfile' | 'scan-pay' | string;
+export type ViewType = 'dashboard' | 'overview' | 'users' | 'students' | 'studentProfile' | 'teachers' | 'accountants' | 'classes' | 'schools' | 'schoolDetails' | 'settings' | 'results' | 'logs' | 'attendance' | 'fees' | 'calendar' | 'leavingCertificate' | 'reports' | 'userProfile' | 'scan-pay' | 'announcements' | string;
 
 export interface ActiveView {
     view: ViewType;
@@ -121,6 +122,8 @@ const Layout: React.FC = () => {
                     return <UserLogsPage />;
                 }
                 return <Dashboard setActiveView={setActiveView} />;
+            case 'announcements':
+                return <AnnouncementsPage />;
             case 'settings':
                 return <SettingsPage />;
             case 'userProfile':

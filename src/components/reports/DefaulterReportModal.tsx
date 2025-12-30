@@ -8,6 +8,7 @@ import { downloadCsvString, escapeCsvCell } from '../../utils/csvHelper';
 import { UserRole, Class } from '../../types';
 import { getClassLevel } from '../../utils/sorting';
 import PrintableReportLayout from './PrintableReportLayout';
+import { formatMonthDisplay } from '../../constants';
 
 interface DefaulterReportModalProps {
     isOpen: boolean;
@@ -125,8 +126,6 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
                 }
             });
         } else {
-            // --- UPDATED SPECIFIC MONTH LOGIC ---
-            // Now shows data as of that month's challan (Arrears + Month Fees)
             relevantStudents.forEach(student => {
                 const challan = fees.find(f => 
                     f.studentId === student.id && 
@@ -222,7 +221,7 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
         
         const subtitle = reportType === 'cumulative' 
             ? `Cumulative Defaulters (All Time) - Class: ${classId === 'all' ? 'All Classes' : classMap.get(classId) || ''}`
-            : `Monthly Defaulters Summary (Incl. Arrears) for ${month} ${year} - Class: ${classId === 'all' ? 'All Classes' : classMap.get(classId) || ''}`;
+            : `Monthly Defaulters Summary (Incl. Arrears) for ${formatMonthDisplay(month, year)} - Class: ${classId === 'all' ? 'All Classes' : classMap.get(classId) || ''}`;
 
         const content = (
             <PrintableReportLayout
@@ -407,7 +406,7 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
                             <div>
                                 <label className="input-label text-xs">Month</label>
                                 <select value={month} onChange={e => setMonth(e.target.value)} className="input-field py-1 text-sm">
-                                    {months.map(m => <option key={m} value={m}>{m}</option>)}
+                                    {months.map(m => <option key={m} value={m}>{m.substring(0,3)}</option>)}
                                 </select>
                             </div>
                             <div>

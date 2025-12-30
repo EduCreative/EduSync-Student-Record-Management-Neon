@@ -8,6 +8,7 @@ import { ActiveView } from './Layout';
 import Avatar from '../common/Avatar';
 import { EduSyncLogo } from '../../constants';
 import { useSync } from '../../context/SyncContext';
+import NotificationBell from './NotificationBell';
 
 const SyncIcon: React.FC<{className?: string}> = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>;
 const CheckCircleIcon: React.FC<{className?: string}> = ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
@@ -226,6 +227,8 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAbou
                         <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-neon-accent animate-pulse shadow-[0_0_8px_#00f3ff]' : 'bg-red-500'}`}></span>
                         <span>{isOnline ? 'Online' : 'Offline'}</span>
                     </div>
+
+                    <NotificationBell />
 
                     <button
                         onClick={() => fetchData()}

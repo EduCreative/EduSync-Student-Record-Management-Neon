@@ -1,6 +1,7 @@
+
 import React, { useMemo } from 'react';
 import { useData } from '../../context/DataContext';
-import { formatDate } from '../../constants';
+import { formatDate, formatMonthDisplay } from '../../constants';
 import Badge from '../common/Badge';
 import { FeeChallan } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -58,7 +59,7 @@ const StudentFeeHistory: React.FC<StudentFeeHistoryProps> = ({ studentId, onEdit
                             const balance = totalDue - challan.paidAmount;
                             return (
                                 <tr key={challan.id} className="hover:bg-secondary-50 dark:hover:bg-secondary-700/50">
-                                    <td className="px-4 py-3 font-medium">{challan.month} {challan.year}</td>
+                                    <td className="px-4 py-3 font-medium whitespace-nowrap">{formatMonthDisplay(challan.month, challan.year)}</td>
                                     <td className="px-4 py-3">{challan.challanNumber}</td>
                                     <td className="px-4 py-3 text-right">Rs. {totalDue.toLocaleString()}</td>
                                     <td className="px-4 py-3 text-right">Rs. {challan.paidAmount.toLocaleString()}</td>

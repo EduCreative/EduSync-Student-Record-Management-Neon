@@ -10,7 +10,7 @@ import Modal from '../common/Modal';
 import { Permission } from '../../permissions';
 import SingleChallanGenerationModal from './SingleChallanGenerationModal';
 import { getClassLevel } from '../../utils/sorting';
-import { formatDate } from '../../constants';
+import { formatDate, formatMonthDisplay } from '../../constants';
 import StudentFeeHistory from '../students/StudentFeeHistory';
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -245,7 +245,7 @@ const FeeCollectionPage: React.FC = () => {
                     onClose={() => setChallanToCancel(null)}
                     title="Confirm Challan Cancellation"
                 >
-                    <p>Are you sure you want to cancel the challan for <strong>{challanToCancel.month} {challanToCancel.year}</strong>? This action cannot be undone.</p>
+                    <p>Are you sure you want to cancel the challan for <strong>{formatMonthDisplay(challanToCancel.month, challanToCancel.year)}</strong>? This action cannot be undone.</p>
                     <div className="mt-6 flex justify-end space-x-3">
                         <button type="button" onClick={() => setChallanToCancel(null)} className="btn-secondary">Back</button>
                         <button type="button" onClick={handleConfirmCancel} className="btn-danger">Confirm Cancel</button>
@@ -399,7 +399,7 @@ const FeeCollectionPage: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3 text-secondary-600 dark:text-secondary-400">{classMap.get(student.classId)}</td>
-                                            <td className="px-4 py-3 font-medium">{challan.month} {challan.year}</td>
+                                            <td className="px-4 py-3 font-medium">{formatMonthDisplay(challan.month, challan.year)}</td>
                                             <td className={`px-4 py-3 text-sm ${isOverdue ? 'text-red-600 dark:text-red-400 font-medium' : ''}`}>
                                                 {formatDate(challan.dueDate)}
                                             </td>

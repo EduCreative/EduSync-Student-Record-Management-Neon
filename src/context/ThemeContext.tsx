@@ -1,10 +1,10 @@
 
-
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 
 type Theme = 'light' | 'dark';
 type FontSize = 'sm' | 'base' | 'lg';
 type SyncMode = 'offline' | 'online';
+type SidebarMode = 'fixed' | 'collapsible';
 const FONT_SIZES: FontSize[] = ['sm', 'base', 'lg'];
 
 interface ThemeContextType {
@@ -18,6 +18,8 @@ interface ThemeContextType {
     toggleHighlightMissingData: () => void;
     syncMode: SyncMode;
     setSyncMode: (mode: SyncMode) => void;
+    sidebarMode: SidebarMode;
+    setSidebarMode: (mode: SidebarMode) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -27,6 +29,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const [fontSize, setFontSizeState] = useState<FontSize>('base');
     const [highlightMissingData, setHighlightMissingData] = useState<boolean>(true);
     const [syncMode, setSyncModeState] = useState<SyncMode>('offline');
+    const [sidebarMode, setSidebarModeState] = useState<SidebarMode>('collapsible');
 
     useEffect(() => {
         // Theme initialization
@@ -51,6 +54,10 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         // Sync mode initialization
         const storedSyncMode = localStorage.getItem('syncMode') as SyncMode | null;
         setSyncModeState(storedSyncMode || 'offline');
+
+        // Sidebar mode initialization
+        const storedSidebarMode = localStorage.getItem('sidebarMode') as SidebarMode | null;
+        setSidebarModeState(storedSidebarMode || 'collapsible');
     }, []);
 
     // Effect to apply theme class to <html> element
@@ -114,8 +121,13 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setSyncModeState(mode);
     };
 
+    const setSidebarMode = (mode: SidebarMode) => {
+        localStorage.setItem('sidebarMode', mode);
+        setSidebarModeState(mode);
+    }
+
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme, fontSize, increaseFontSize, decreaseFontSize, resetFontSize, highlightMissingData, toggleHighlightMissingData, syncMode, setSyncMode }}>
+        <ThemeContext.Provider value={{ theme, toggleTheme, fontSize, increaseFontSize, decreaseFontSize, resetFontSize, highlightMissingData, toggleHighlightMissingData, syncMode, setSyncMode, sidebarMode, setSidebarMode }}>
             {children}
         </ThemeContext.Provider>
     );

@@ -5,6 +5,8 @@ import { UserRole, FeeHead, Student } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import ChallanPreviewModal from './ChallanPreviewModal';
 import Modal from '../common/Modal';
+// FIX: Added missing import for formatMonthDisplay
+import { formatMonthDisplay } from '../../constants';
 
 const months = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" ];
 const currentYear = new Date().getFullYear();
@@ -91,7 +93,6 @@ const ChallanGenerationPage: React.FC = () => {
     };
 
     const handlePreview = async () => {
-        // FIX: Added explicit type to the filter callback parameter to resolve 'unknown' type error.
         const feeHeadsToGenerate = Array.from(selectedFeeHeads.entries())
             .filter((entry: [string, { selected: boolean, amount: number }]) => entry[1].selected)
             .map(([feeHeadId, { amount }]) => ({
@@ -228,7 +229,7 @@ const ChallanGenerationPage: React.FC = () => {
                     <div>
                         <label htmlFor="month-select" className="input-label">For Month</label>
                         <select id="month-select" value={month} onChange={e => setMonth(e.target.value)} className="input-field">
-                            {months.map(m => <option key={m} value={m}>{m}</option>)}
+                            {months.map(m => <option key={m} value={m}>{m.substring(0,3)}</option>)}
                         </select>
                     </div>
                     <div>
@@ -294,7 +295,7 @@ const ChallanGenerationPage: React.FC = () => {
                             className="btn-danger w-full sm:w-auto"
                             title="Delete unpaid challans for this month to regenerate"
                         >
-                            Delete {month} Challans ({existingChallansCount})
+                            Delete {formatMonthDisplay(month)} Challans ({existingChallansCount})
                         </button>
                     )}
                     <button

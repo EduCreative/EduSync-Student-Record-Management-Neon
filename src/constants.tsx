@@ -13,7 +13,7 @@ export function EduSyncLogo(props: SVGProps<SVGSVGElement>) {
         {/* Cap top */}
         <path d="M4 10l8-4 8 4-8 4-8-4z" stroke="#00f3ff" fill="#475569" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="animate-neon-pulse"></path>
         {/* Cap body */}
-        <path d="M8 12v4c2 2 6 2 8 0v-4" stroke="#00f3ff" fill="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+        <path d="M8 12v4c2 2 6 2 8 0v-4" stroke="#00f3ff" fill="#475569" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"></path>
         {/* Tassel */}
         <path d="M17.5 10V8" stroke="#00f3ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
       </g>
@@ -59,6 +59,10 @@ function BellIcon(props: SVGProps<SVGSVGElement>) {
     return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
 }
 
+function MegaphoneIcon(props: SVGProps<SVGSVGElement>) {
+    return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 13v-2Z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-0.8"/></svg>
+}
+
 function FileTextIcon(props: SVGProps<SVGSVGElement>) {
     return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" x2="8" y1="13" y2="13" /><line x1="16" x2="8" y1="17" y2="17" /><line x1="10" x2="8" y1="9" y2="9" /></svg>;
 }
@@ -92,6 +96,7 @@ export const NAV_LINKS: Record<UserRole, { name: string; path: string; icon: Rea
         { name: 'Overview', path: '/overview', icon: <DashboardIcon /> },
         { name: 'Schools', path: '/schools', icon: <SchoolIcon /> },
         { name: 'Users', path: '/users', icon: <UsersIcon /> },
+        { name: 'Announcements', path: '/announcements', icon: <MegaphoneIcon /> },
         { name: 'Settings', path: '/settings', icon: <SettingsIcon /> },
     ],
     [UserRole.Admin]: [
@@ -103,6 +108,7 @@ export const NAV_LINKS: Record<UserRole, { name: string; path: string; icon: Rea
         { name: 'Attendance', path: '/attendance', icon: <CheckCircleIcon /> },
         { name: 'Results', path: '/results', icon: <BarChartIcon /> },
         { name: 'Reports', path: '/reports', icon: <FileTextIcon /> },
+        { name: 'Announcements', path: '/announcements', icon: <MegaphoneIcon /> },
         { name: 'User Accounts', path: '/users', icon: <UsersIcon /> },
         { name: 'User Logs', path: '/logs', icon: <FileCheckIcon /> },
         { name: 'Settings', path: '/settings', icon: <SettingsIcon /> },
@@ -112,6 +118,7 @@ export const NAV_LINKS: Record<UserRole, { name: string; path: string; icon: Rea
         { name: 'Fee Management', path: '/fees', icon: <DollarSignIcon /> },
         { name: 'Scan & Pay', path: '/scan-pay', icon: <ScanIcon /> },
         { name: 'Reports', path: '/reports', icon: <FileTextIcon /> },
+        { name: 'Announcements', path: '/announcements', icon: <MegaphoneIcon /> },
         { name: 'Students', path: '/students', icon: <UsersIcon /> },
     ],
     [UserRole.Teacher]: [
@@ -120,6 +127,7 @@ export const NAV_LINKS: Record<UserRole, { name: string; path: string; icon: Rea
         { name: 'Attendance', path: '/attendance', icon: <CheckCircleIcon /> },
         { name: 'Enter Results', path: '/results', icon: <EditIcon /> },
         { name: 'Students', path: '/students', icon: <UsersIcon /> },
+        { name: 'Announcements', path: '/announcements', icon: <MegaphoneIcon /> },
         { name: 'Calendar', path: '/calendar', icon: <CalendarIcon /> },
     ],
     [UserRole.Parent]: [
@@ -127,14 +135,15 @@ export const NAV_LINKS: Record<UserRole, { name: string; path: string; icon: Rea
         { name: 'Fee Status', path: '/fees', icon: <DollarSignIcon /> },
         { name: 'Attendance', path: '/attendance', icon: <CheckCircleIcon /> },
         { name: 'Results', path: '/results', icon: <BarChartIcon /> },
+        { name: 'Announcements', path: '/announcements', icon: <MegaphoneIcon /> },
         { name: 'Calendar', path: '/calendar', icon: <CalendarIcon /> },
-        { name: 'Announcements', path: '/announcements', icon: <BellIcon /> },
     ],
     [UserRole.Student]: [
         { name: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
         { name: 'My Attendance', path: '/attendance', icon: <CheckCircleIcon /> },
         { name: 'My Results', path: '/results', icon: <BarChartIcon /> },
         { name: 'Fee Status', path: '/fees', icon: <DollarSignIcon /> },
+        { name: 'Announcements', path: '/announcements', icon: <MegaphoneIcon /> },
         { name: 'Calendar', path: '/calendar', icon: <CalendarIcon /> },
     ],
 };
@@ -149,6 +158,16 @@ export const formatDate = (dateString?: string | Date | null): string => {
     } catch (error) {
         return 'Invalid Date';
     }
+};
+
+/**
+ * Standardizes month display to save space (e.g., "December" -> "Dec, 2025")
+ */
+export const formatMonthDisplay = (month: string, year?: number | string): string => {
+    if (!month) return 'N/A';
+    // Get first 3 letters of month
+    const shortMonth = month.length > 3 ? month.substring(0, 3) : month;
+    return year ? `${shortMonth}, ${year}` : shortMonth;
 };
 
 export const formatDateTime = (isoString?: string): string => {
