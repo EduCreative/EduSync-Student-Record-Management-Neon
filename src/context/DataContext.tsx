@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { School, User, UserRole, Class, Student, Attendance, FeeChallan, Result, ActivityLog, FeeHead, SchoolEvent, Subject, Exam } from '../types';
 import { useAuth } from './AuthContext';
@@ -50,7 +49,7 @@ interface DataContextType {
     deleteExam: (examId: string) => Promise<void>;
     setAttendance: (date: string, attendanceData: { studentId: string; status: 'Present' | 'Absent' | 'Leave' }[]) => Promise<void>;
     recordFeePayment: (challanId: string, amount: number, discount: number, paidDate: string) => Promise<void>;
-    updateFeePayment: (challanId: string, paidAmount: number, discount: number, paidDate: string) => Promise<void>;
+    updateFeePayment: (challanId: string, paidAmount: number, discount: number, paidDate: string, paymentHistory?: any[]) => Promise<void>;
     cancelChallan: (challanId: string) => Promise<void>;
     generateChallansForMonth: (month: string, year: number, selectedFeeHeads: { feeHeadId: string, amount: number }[], studentIds: string[], dueDate?: string) => Promise<number>;
     deleteChallansForMonth: (month: string, year: number) => Promise<number>;
@@ -367,12 +366,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         showToast('Payment Recorded', `Amount: Rs. ${amount.toLocaleString()} for ${challan.month}`, 'success');
     };
 
-    const updateFeePayment = async (challanId: string, paidAmount: number, discount: number, paidDate: string) => {
+    const updateFeePayment = async (challanId: string, paidAmount: number, discount: number, paidDate: string, paymentHistory?: any[]) => {
         const challan = fees.find(f => f.id === challanId);
         if (!challan) return;
         const status = paidAmount >= (challan.totalAmount - discount) ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Unpaid');
-        await sql`UPDATE fee_challans SET paid_amount = ${paidAmount}, discount = ${discount}, status = ${status}, paid_date = ${paidDate} WHERE id = ${challanId}`;
+        
+        // Use provided history or maintain current
+        const historyToSave = paymentHistory || challan.paymentHistory || [];
+
+        await sql`
+            UPDATE fee_challans 
+            SET paid_amount = ${paidAmount}, discount = ${discount}, status = ${status}, paid_date = ${paidDate}, payment_history = ${JSON.stringify(historyToSave)}
+            WHERE id = ${challanId}
+        `;
         await fetchData();
+        showToast('Success', 'Payment record updated successfully.', 'success');
     };
 
     const cancelChallan = async (challanId: string) => {
