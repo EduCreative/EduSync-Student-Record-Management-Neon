@@ -13,7 +13,7 @@ const MegaphoneIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 const AnnouncementsPage: React.FC = () => {
-    const { user, hasPermission, effectiveRole, activeSchoolId } = useAuth();
+    const { user, hasPermission, activeSchoolId } = useAuth();
     const { users, students, classes } = useData();
     const { sendAnnouncement, notifications } = useNotification();
     const { showToast } = useToast();
@@ -45,15 +45,13 @@ const AnnouncementsPage: React.FC = () => {
             }
 
             if (targetClassId !== 'All') {
-                // Find all student user IDs and parent user IDs associated with this class
                 const classStudents = students.filter(s => s.classId === targetClassId);
                 const classUserIds = new Set<string>();
                 
                 classStudents.forEach(s => {
                     if (s.userId) classUserIds.add(s.userId);
-                    // For parents, we need to find the parent user linked to the student
-                    // Current schema: student.userId is either student account OR parent account.
-                    // Assuming parents are linked via student.userId for notifications
+                    // Resolution logic for finding associated parents could be added here
+                    // if parents are stored in a different linkage table.
                 });
                 
                 targetUsers = targetUsers.filter(u => classUserIds.has(u.id));
