@@ -399,31 +399,40 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
 
         let count = 0;
-        for (const sId of studentIds) {
-            const student = students.find(s => s.id === sId);
-            if (!student) continue;
+        const BATCH_SIZE = 40; // Optimize for network but prevent large payload errors
+        const currentStudentIds = [...studentIds];
+        
+        while (currentStudentIds.length > 0) {
+            const batchIds = currentStudentIds.splice(0, BATCH_SIZE);
+            const batchPromises = batchIds.map(async (sId) => {
+                const student = students.find(s => s.id === sId);
+                if (!student) return null;
 
-            const studentChallans = studentFeesMap.get(sId) || [];
-            const totalCharged = studentChallans.reduce((sum, f) => sum + (f.totalAmount - f.previousBalance), 0) + (student.openingBalance || 0);
-            const totalCollected = studentChallans.reduce((sum, f) => sum + f.paidAmount + f.discount, 0);
-            const arrears = Math.max(0, totalCharged - totalCollected);
+                const studentChallans = studentFeesMap.get(sId) || [];
+                const totalCharged = studentChallans.reduce((sum, f) => sum + (f.totalAmount - f.previousBalance), 0) + (student.openingBalance || 0);
+                const totalCollected = studentChallans.reduce((sum, f) => sum + f.paidAmount + f.discount, 0);
+                const arrears = Math.max(0, totalCharged - totalCollected);
 
-            const feeStructureMap = new Map((student.feeStructure || []).map(item => [item.feeHeadId, item.amount]));
-            const items = selectedHeads.map((h: any) => ({
-                description: feeHeads.find(fh => fh.id === h.feeHeadId)?.name || 'Fee',
-                amount: feeStructureMap.get(h.feeHeadId) ?? h.amount
-            }));
+                const feeStructureMap = new Map((student.feeStructure || []).map(item => [item.feeHeadId, item.amount]));
+                const items = selectedHeads.map((h: any) => ({
+                    description: feeHeads.find(fh => fh.id === h.feeHeadId)?.name || 'Fee',
+                    amount: feeStructureMap.get(h.feeHeadId) ?? h.amount
+                }));
 
-            const subtotal = items.reduce((sum: number, i: any) => sum + i.amount, 0);
-            const total = subtotal + arrears;
-            const cNum = `${year}${month.substring(0, 3)}-${student.rollNumber}`;
+                const subtotal = items.reduce((sum: number, i: any) => sum + i.amount, 0);
+                const total = subtotal + arrears;
+                const cNum = `${year}${month.substring(0, 3)}-${student.rollNumber}`;
 
-            await sql`
-                INSERT INTO fee_challans (id, challan_number, student_id, class_id, month, year, due_date, status, fee_items, previous_balance, total_amount, discount, paid_amount)
-                VALUES (${crypto.randomUUID()}, ${cNum}, ${sId}, ${student.classId}, ${month}, ${year}, ${dueDate}, 'Unpaid', ${JSON.stringify(items)}, ${arrears}, ${total}, 0, 0)
-            `;
-            count++;
+                return sql`
+                    INSERT INTO fee_challans (id, challan_number, student_id, class_id, month, year, due_date, status, fee_items, previous_balance, total_amount, discount, paid_amount)
+                    VALUES (${crypto.randomUUID()}, ${cNum}, ${sId}, ${student.classId}, ${month}, ${year}, ${dueDate}, 'Unpaid', ${JSON.stringify(items)}, ${arrears}, ${total}, 0, 0)
+                `;
+            });
+
+            await Promise.all(batchPromises);
+            count += batchIds.length;
         }
+
         await fetchData();
         showToast('Success', `${count} challans generated.`, 'success');
         return count;

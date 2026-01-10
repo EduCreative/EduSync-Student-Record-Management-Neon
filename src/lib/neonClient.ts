@@ -1,4 +1,5 @@
 
+
 import { neon } from '@neondatabase/serverless';
 
 const databaseUrl = import.meta.env.VITE_NEON_DATABASE_URL;
@@ -13,7 +14,9 @@ export const sql = neon(databaseUrl);
 // Helper to execute queries and return camelCase results
 export const query = async <T = any>(sqlString: string, params: any[] = []): Promise<T[]> => {
     try {
-        const result = await sql(sqlString, params);
+        // FIX: The neon sql client supports both tagged templates and regular function calls with (string, params).
+        // We cast to any here to satisfy the compiler and avoid the TemplateStringsArray type mismatch.
+        const result = await (sql as any)(sqlString, params);
         // Neon returns rows as objects, we just need to ensure the calling context handles the case conversion if needed
         return result as unknown as T[];
     } catch (error) {

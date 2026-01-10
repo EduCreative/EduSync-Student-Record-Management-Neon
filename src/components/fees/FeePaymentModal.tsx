@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Modal from '../common/Modal';
 import { FeeChallan, Student } from '../../types';
 import { useData } from '../../context/DataContext';
@@ -34,6 +34,7 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
     const [tempHistory, setTempHistory] = useState<any[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const submissionLock = useRef(false);
 
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -45,10 +46,11 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
             const fDate = new Date(f.year, months.indexOf(f.month));
             return fDate > currentChallanDate;
         });
-    }, [challan, fees]);
+    }, [challan, fees, months]);
 
     useEffect(() => {
         if (isOpen) {
+            submissionLock.current = false;
             setTempHistory([...(challan.paymentHistory || [])]);
             if (editMode) {
                 setAmount(challan.paidAmount);
@@ -82,6 +84,8 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (submissionLock.current) return;
+        
         setError('');
 
         if (amount < 0) {
@@ -100,10 +104,12 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
         }
 
         setIsSubmitting(true);
+        submissionLock.current = true;
         
         try {
+            // Increased timeout to 40s to allow for background completion on slow networks
             const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error("Request timed out. Please check your connection.")), 15000)
+                setTimeout(() => reject(new Error("Request timed out. The server may still be processing your payment. Please wait a moment and refresh your view.")), 40000)
             );
 
             if (editMode) {
@@ -121,6 +127,7 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
         } catch (error: any) {
             console.error("Failed to process payment:", error);
             setError(error.message || 'An error occurred while processing payment.');
+            submissionLock.current = false;
         } finally {
             setIsSubmitting(false);
         }
@@ -181,8 +188,9 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
                                             <td className="p-1 text-center">
                                                 <button 
                                                     type="button"
+                                                    disabled={isSubmitting}
                                                     onClick={() => handleRemoveHistoryItem(index)}
-                                                    className="text-red-500 hover:text-red-700 p-1"
+                                                    className="text-red-500 hover:text-red-700 p-1 disabled:opacity-50"
                                                     title="Remove this entry"
                                                 >
                                                     <TrashIcon className="w-3.5 h-3.5" />
@@ -197,7 +205,7 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
                 )}
                 
                 {error && (
-                    <div className="p-3 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200 rounded-md text-sm">
+                    <div className="p-3 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200 rounded-md text-sm border-l-4 border-red-500">
                         {error}
                     </div>
                 )}
@@ -253,8 +261,13 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
 
                     <div className="flex justify-end space-x-3 pt-2">
                         <button type="button" onClick={onClose} className="btn-secondary" disabled={isSubmitting}>Cancel</button>
-                        <button type="submit" disabled={isSubmitting} className="btn-primary flex items-center gap-2">
-                            {isSubmitting ? 'Processing...' : (editMode ? 'Update Record' : 'Record Payment')}
+                        <button type="submit" disabled={isSubmitting} className="btn-primary flex items-center gap-2 min-w-[140px] justify-center">
+                            {isSubmitting ? (
+                                <>
+                                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                    Recording...
+                                </>
+                            ) : (editMode ? 'Update Record' : 'Record Payment')}
                         </button>
                     </div>
                 </form>

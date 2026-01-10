@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import ReportCardModal from './ReportCardModal';
 import BulkChallanReportModal from './BulkChallanReportModal';
@@ -10,8 +11,9 @@ import ChallanRangeReportModal from './ChallanRangeReportModal';
 import StudentIdCardModal from './StudentIdCardModal';
 import AttendanceReportModal from './AttendanceReportModal';
 import MissingDataReportModal from './MissingDataReportModal';
+import DiscountReportModal from './DiscountReportModal';
 
-type ReportType = 'feeCollection' | 'defaulter' | 'classList' | 'bulkChallan' | 'reportCard' | 'challanRange' | 'studentIdCard' | 'attendance' | 'missingData';
+type ReportType = 'feeCollection' | 'defaulter' | 'classList' | 'bulkChallan' | 'reportCard' | 'challanRange' | 'studentIdCard' | 'attendance' | 'missingData' | 'discount';
 
 interface ReportsPageProps {}
 
@@ -43,6 +45,12 @@ const ReportsPage: React.FC<ReportsPageProps> = () => {
             title: "Fee Collection Report", 
             description: "View total fees collected within a specific date range.", 
             icon: <DollarSignIcon className="w-6 h-6" />,
+        },
+        { 
+            id: 'discount' as ReportType,
+            title: "Discount Summary Report", 
+            description: "View all fee discounts given to students by class and date.", 
+            icon: <PercentIcon className="w-6 h-6" />,
         },
         { 
             id: 'defaulter' as ReportType,
@@ -97,6 +105,7 @@ const ReportsPage: React.FC<ReportsPageProps> = () => {
     const availableReports = allReports.filter(report => {
         switch (report.id) {
             case 'feeCollection':
+            case 'discount':
             case 'defaulter':
                 return hasPermission(Permission.CAN_VIEW_FINANCIAL_REPORTS);
             case 'classList':
@@ -118,6 +127,7 @@ const ReportsPage: React.FC<ReportsPageProps> = () => {
     return (
         <>
             <FeeCollectionReportModal isOpen={activeReport === 'feeCollection'} onClose={() => setActiveReport(null)} />
+            <DiscountReportModal isOpen={activeReport === 'discount'} onClose={() => setActiveReport(null)} />
             <DefaulterReportModal isOpen={activeReport === 'defaulter'} onClose={() => setActiveReport(null)} />
             <ClassListReportModal isOpen={activeReport === 'classList'} onClose={() => setActiveReport(null)} />
             <BulkChallanReportModal isOpen={activeReport === 'bulkChallan'} onClose={() => setActiveReport(null)} />
@@ -143,7 +153,8 @@ const ReportsPage: React.FC<ReportsPageProps> = () => {
 };
 
 // Icons
-const DollarSignIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
+const DollarSignIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
+const PercentIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>;
 const AlertTriangleIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
 const UsersIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 const FileTextIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>;

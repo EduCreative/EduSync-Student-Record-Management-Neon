@@ -50,7 +50,7 @@ const ChallanPreviewModal: React.FC<ChallanPreviewModalProps> = ({ isOpen, onClo
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Challan Generation Preview (${previewData.length} Students)`}>
+        <Modal isOpen={isOpen} onClose={isGenerating ? () => {} : onClose} title={`Challan Generation Preview (${previewData.length} Students)`}>
             <div className="space-y-4">
                 <p className="text-sm text-secondary-500">
                     Review the challans to be generated. Uncheck any students you wish to exclude. Click a row to see a fee breakdown.
@@ -63,6 +63,7 @@ const ChallanPreviewModal: React.FC<ChallanPreviewModalProps> = ({ isOpen, onClo
                                 <th className="p-2 w-12 text-center">
                                     <input type="checkbox"
                                         className="rounded"
+                                        disabled={isGenerating}
                                         checked={previewData.length > 0 && selectedStudentIds.size === previewData.length}
                                         onChange={handleToggleAll}
                                         aria-label="Select all students"
@@ -76,12 +77,13 @@ const ChallanPreviewModal: React.FC<ChallanPreviewModalProps> = ({ isOpen, onClo
                             {previewData.map(item => (
                                 <React.Fragment key={item.student.id}>
                                     <tr 
-                                        className="hover:bg-secondary-50 dark:hover:bg-secondary-700/50 cursor-pointer"
+                                        className={`hover:bg-secondary-50 dark:hover:bg-secondary-700/50 cursor-pointer ${isGenerating ? 'opacity-50 pointer-events-none' : ''}`}
                                         onClick={() => setExpandedRow(prev => prev === item.student.id ? null : item.student.id)}
                                     >
                                         <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                                             <input type="checkbox"
                                                 className="rounded"
+                                                disabled={isGenerating}
                                                 checked={selectedStudentIds.has(item.student.id)}
                                                 onChange={() => handleToggleStudent(item.student.id)}
                                                 aria-label={`Select ${item.student.name}`}
@@ -136,10 +138,21 @@ const ChallanPreviewModal: React.FC<ChallanPreviewModalProps> = ({ isOpen, onClo
                     {selectedStudentIds.size} of {previewData.length} challans selected for generation.
                 </p>
 
+                {isGenerating && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md text-blue-700 dark:text-blue-300 text-xs text-center animate-pulse">
+                        Generating data in optimized chunks. Please do not close this window or refresh the page.
+                    </div>
+                )}
+
                 <div className="flex justify-end space-x-3 pt-4 border-t dark:border-secondary-700">
                     <button type="button" onClick={onClose} className="btn-secondary" disabled={isGenerating}>Cancel</button>
-                    <button type="button" onClick={handleConfirmClick} className="btn-primary" disabled={isGenerating || selectedStudentIds.size === 0}>
-                        {isGenerating ? 'Generating...' : `Generate ${selectedStudentIds.size} Challans`}
+                    <button type="button" onClick={handleConfirmClick} className="btn-primary min-w-[160px] justify-center" disabled={isGenerating || selectedStudentIds.size === 0}>
+                        {isGenerating ? (
+                            <>
+                                <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                Working...
+                            </>
+                        ) : `Generate ${selectedStudentIds.size} Challans`}
                     </button>
                 </div>
             </div>
