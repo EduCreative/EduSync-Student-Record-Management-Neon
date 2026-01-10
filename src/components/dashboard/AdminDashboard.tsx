@@ -14,6 +14,8 @@ import Avatar from '../common/Avatar';
 import { getClassLevel } from '../../utils/sorting';
 import DivergingBarChart, { DivergingBarChartData } from '../charts/DivergingBarChart';
 
+const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
 const QuickAction: React.FC<{ title: string; icon: React.ReactElement; onClick?: () => void; }> = ({ title, icon, onClick }) => (
      <button 
         onClick={onClick} 
@@ -141,7 +143,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
     const stats = useMemo(() => {
         const now = new Date();
         const todayStr = now.toISOString().split('T')[0];
-        const currentMonth = now.getMonth();
+        const currentMonthIdx = now.getMonth();
+        const currentMonthName = months[currentMonthIdx];
         const currentYear = now.getFullYear();
 
         const schoolFees = fees.filter(fee => {
@@ -154,7 +157,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
             .reduce((sum, f) => sum + f.paidAmount, 0);
 
         const collectedThisMonth = schoolFees
-            .filter(f => f.paidDate && new Date(f.paidDate).getMonth() === currentMonth && new Date(f.paidDate).getFullYear() === currentYear)
+            .filter(f => f.paidDate && new Date(f.paidDate).getMonth() === currentMonthIdx && new Date(f.paidDate).getFullYear() === currentYear)
             .reduce((sum, f) => sum + f.paidAmount, 0);
 
         const outstandingChallans = schoolFees.filter(f => f.status === 'Unpaid' || f.status === 'Partial');
@@ -164,26 +167,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
         }, 0);
             
         const pendingApprovals = schoolUsers.filter(u => u.status === 'Pending Approval').length;
-        const totalPaidChallans = schoolFees.filter(f => f.status === 'Paid').length;
+        
+        // Filter Paid/Unpaid by CURRENT MONTH only
+        const currentMonthFees = schoolFees.filter(f => f.month === currentMonthName && f.year === currentYear && f.status !== 'Cancelled');
+        const paidThisMonthCount = currentMonthFees.filter(f => f.status === 'Paid').length;
+        const unpaidThisMonthCount = currentMonthFees.filter(f => f.status === 'Unpaid' || f.status === 'Partial').length;
         
         return {
             feesCollectedToday: `Rs. ${feesCollectedToday.toLocaleString()}`,
             pendingApprovals: pendingApprovals.toString(),
             collectedThisMonth: `Rs. ${collectedThisMonth.toLocaleString()}`,
-            totalPaidChallans: totalPaidChallans.toLocaleString(),
+            paidThisMonthCount: paidThisMonthCount.toLocaleString(),
             totalOutstandingDues: `Rs. ${totalOutstandingDues.toLocaleString()}`,
-            totalUnpaidChallans: outstandingChallans.length.toLocaleString(),
+            unpaidThisMonthCount: unpaidThisMonthCount.toLocaleString(),
         };
     }, [fees, students, schoolUsers, effectiveSchoolId]);
 
 
     const feeStatusData = useMemo(() => {
-        const schoolFees = fees.filter(fee => {
+        const now = new Date();
+        const currentMonthName = months[now.getMonth()];
+        const currentYear = now.getFullYear();
+
+        // Only show status for the CURRENT MONTH
+        const currentMonthFees = fees.filter(fee => {
             const student = students.find(s => s.id === fee.studentId);
-            return student?.schoolId === effectiveSchoolId;
+            return student?.schoolId === effectiveSchoolId && fee.month === currentMonthName && fee.year === currentYear;
         });
 
-        const statusCounts = schoolFees.reduce((acc, fee) => {
+        const statusCounts = currentMonthFees.reduce((acc, fee) => {
             acc[fee.status] = (acc[fee.status] || 0) + 1;
             return acc;
         }, {} as Record<FeeChallan['status'], number>);
@@ -309,6 +321,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
         });
     }, [fees, students, effectiveSchoolId, feePeriod]);
     
+    const classRecoveryData = useMemo(() => {
+        if (!effectiveSchoolId) return [];
+        const now = new Date();
+        const currentMonthName = months[now.getMonth()];
+        const currentYear = now.getFullYear();
+
+        const schoolClasses = classes.filter(c => c.schoolId === effectiveSchoolId);
+        const sortedClasses = [...schoolClasses].sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name));
+
+        return sortedClasses.map(c => {
+            const classChallans = fees.filter(f => {
+                const student = students.find(s => s.id === f.studentId);
+                return student?.classId === c.id && f.month === currentMonthName && f.year === currentYear && f.status !== 'Cancelled';
+            });
+
+            const totalPaid = classChallans.reduce((sum, f) => sum + f.paidAmount, 0);
+            const totalRemaining = classChallans.reduce((sum, f) => sum + (f.totalAmount - f.discount - f.paidAmount), 0);
+
+            return {
+                label: `${c.name}${c.section ? `-${c.section}` : ''}`,
+                value: totalPaid + totalRemaining, // total amount for segments
+                segments: [
+                    { label: 'Paid', value: totalPaid, color: '#10b981' },
+                    { label: 'Remaining', value: totalRemaining, color: '#ef4444' }
+                ]
+            };
+        }).filter(item => item.value > 0);
+    }, [classes, fees, students, effectiveSchoolId]);
+
     const classStrengthData = useMemo(() => {
         if (!effectiveSchoolId) return [];
         const schoolClasses = classes.filter(c => c.schoolId === effectiveSchoolId);
@@ -334,10 +375,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
     }, [logs]);
 
     const handleFeeStatusClick = (item: { label: string }) => {
+        const now = new Date();
+        const currentMonthName = months[now.getMonth()];
+        const currentYear = now.getFullYear();
+
         const status = item.label as FeeChallan['status'];
         const relevantChallans = fees.filter(f => {
             const student = students.find(s => s.id === f.studentId);
-            return student?.schoolId === effectiveSchoolId && f.status === status;
+            return student?.schoolId === effectiveSchoolId && f.status === status && f.month === currentMonthName && f.year === currentYear;
         });
 
         const items = relevantChallans.map(c => {
@@ -350,7 +395,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
             };
         });
 
-        setModalDetails({ title: `${status} Challans`, items });
+        setModalDetails({ title: `${status} Challans (${currentMonthName})`, items });
     };
 
     const handleAttendanceClick = (item: { label: string }) => {
@@ -439,8 +484,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
                     
                     <StatCard title="Collected This Month" value={stats.collectedThisMonth} color="bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300" icon={<TrendingUpIcon />} />
                     <StatCard title="Total Outstanding Dues" value={stats.totalOutstandingDues} color="bg-yellow-100 dark:bg-yellow-900/50 text-yellow-600 dark:text-yellow-300" icon={<FileTextIcon />} />
-                    <StatCard title="Paid Challans" value={stats.totalPaidChallans} color="bg-teal-100 dark:bg-teal-900/50 text-teal-600 dark:text-teal-300" icon={<CheckSquareIcon />} />
-                    <StatCard title="Unpaid Challans" value={stats.totalUnpaidChallans} color="bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300" icon={<AlertCircleIcon />} />
+                    <StatCard title="Paid (This Month)" value={stats.paidThisMonthCount} color="bg-teal-100 dark:bg-teal-900/50 text-teal-600 dark:text-teal-300" icon={<CheckSquareIcon />} />
+                    <StatCard title="Unpaid (This Month)" value={stats.unpaidThisMonthCount} color="bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300" icon={<AlertCircleIcon />} />
                 </div>
 
                 <div className="bg-white dark:bg-secondary-800 p-6 rounded-xl shadow-lg">
@@ -459,13 +504,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
                     <div className="lg:col-span-3">
                         {feeChartType === 'line' ? (
                             <LineChart
-                                title={<FeeChartHeader title="Fee Collection" chartType={feeChartType} onChartTypeChange={setFeeChartType} period={feePeriod} onPeriodChange={setFeePeriod} />}
+                                title={<FeeChartHeader title="Daily Fee Collection" chartType={feeChartType} onChartTypeChange={setFeeChartType} period={feePeriod} onPeriodChange={setFeePeriod} />}
                                 data={feeCollectionData}
                                 color="#10b981"
                             />
                         ) : (
                              <BarChart
-                                title={<FeeChartHeader title="Fee Collection" chartType={feeChartType} onChartTypeChange={setFeeChartType} period={feePeriod} onPeriodChange={setFeePeriod} />}
+                                title={<FeeChartHeader title="Daily Fee Collection" chartType={feeChartType} onChartTypeChange={setFeeChartType} period={feePeriod} onPeriodChange={setFeePeriod} />}
                                 data={feeCollectionData}
                                 color="#10b981"
                             />
@@ -473,7 +518,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
                     </div>
                     <div className="lg:col-span-2">
                          <DoughnutChart
-                            title="Fee Status Overview"
+                            title="Monthly Status Overview"
                             data={feeStatusData}
                             onClick={handleFeeStatusClick}
                         />
@@ -482,21 +527,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                     <div className="lg:col-span-3">
-                        <DivergingBarChart
-                            title="Class Strength (Male vs Female)"
-                            data={classStrengthData}
-                            labels={{ value1: 'Male', value2: 'Female' }}
-                            colors={{ value1: '#3b82f6', value2: '#ec4899' }}
-                            onClick={handleClassStrengthClick}
+                        <BarChart
+                            title="Class-wise Fee Recovery (Current Month)"
+                            data={classRecoveryData}
                         />
                     </div>
-                     <div className="lg:col-span-2">
+                    <div className="lg:col-span-2">
                         <DoughnutChart
                             title="Today's Attendance Snapshot"
                             data={attendanceData}
                             onClick={handleAttendanceClick}
                         />
                     </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
+                    <DivergingBarChart
+                        title="Class Strength (Male vs Female)"
+                        data={classStrengthData}
+                        labels={{ value1: 'Male', value2: 'Female' }}
+                        colors={{ value1: '#3b82f6', value2: '#ec4899' }}
+                        onClick={handleClassStrengthClick}
+                    />
                 </div>
 
                 <div className="bg-white dark:bg-secondary-800 p-6 rounded-xl shadow-lg">

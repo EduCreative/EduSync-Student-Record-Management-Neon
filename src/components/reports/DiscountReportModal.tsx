@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import Modal from '../common/Modal';
 import { useData } from '../../context/DataContext';
@@ -28,6 +27,41 @@ const getFirstDayOfMonthString = () => {
     const year = today.getFullYear();
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
     return `${year}-${month}-01`;
+};
+
+/**
+ * Robust date normalization to handle inconsistent formats from database or imports.
+ */
+const normalizeDate = (dateStr?: string | null): string | null => {
+    if (!dateStr || String(dateStr).trim() === '') return null;
+    
+    const input = String(dateStr).trim();
+    
+    // 1. Standard YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
+
+    // 2. Truncate ISO/Timestamps
+    if (input.includes('T') || input.includes(' ')) {
+        const parts = input.split(/[T ]/);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(parts[0])) return parts[0];
+    }
+
+    // 3. JS Parsing
+    try {
+        const d = new Date(input);
+        if (!isNaN(d.getTime())) {
+            return d.toISOString().split('T')[0];
+        }
+    } catch { }
+
+    // 4. DD/MM/YYYY or DD-MM-YYYY
+    const dmY = input.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (dmY) {
+        const [, d, m, y] = dmY;
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+
+    return null;
 };
 
 interface DiscountSummary {
@@ -69,15 +103,21 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
         const discountList: DiscountSummary[] = [];
 
         fees.forEach(fee => {
-            if (fee.discount > 0) {
+            const discountAmount = Number(fee.discount || 0);
+            if (discountAmount > 0) {
                 const student = studentMap.get(fee.studentId);
+                // Verify student belongs to current school context
                 if (!student || student.schoolId !== effectiveSchoolId) return;
+                
+                // Apply Class Filter
                 if (classIdFilter !== 'all' && student.classId !== classIdFilter) return;
 
-                // Determine the "Date" of discount. Usually when the payment was recorded or issue date.
-                const effectiveDate = fee.paidDate || fee.dueDate;
+                // Normalize date for comparison
+                // We check paidDate first, fallback to dueDate (issue date context)
+                const rawDate = fee.paidDate || fee.dueDate;
+                const normalizedFeeDate = normalizeDate(rawDate);
                 
-                if (effectiveDate >= startDate && effectiveDate <= endDate) {
+                if (normalizedFeeDate && normalizedFeeDate >= startDate && normalizedFeeDate <= endDate) {
                     discountList.push({
                         studentId: student.id,
                         rollNumber: student.rollNumber,
@@ -85,8 +125,8 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
                         classId: student.classId,
                         className: classMap.get(student.classId) || 'N/A',
                         challanMonth: `${fee.month} ${fee.year}`,
-                        date: effectiveDate,
-                        amount: Number(fee.discount)
+                        date: normalizedFeeDate,
+                        amount: discountAmount
                     });
                 }
             }
@@ -109,7 +149,11 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
 
         // Sort groups by class level and discounts within groups by date
         return Object.values(grouped)
-            .sort((a, b) => getClassLevel(a.className) - getClassLevel(b.className))
+            .sort((a, b) => {
+                const levelA = getClassLevel(a.className);
+                const levelB = getClassLevel(b.className);
+                return levelA - levelB;
+            })
             .map(group => {
                 group.discounts.sort((a, b) => a.date.localeCompare(b.date));
                 return group;
@@ -194,10 +238,9 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
                 ];
                 csvRows.push(row.map(escapeCsvCell).join(','));
             });
-            // Add a subtotal row for each class in CSV too
             const subtotalRow = [group.className, "", "", "", "SUBTOTAL", group.subtotal];
             csvRows.push(subtotalRow.map(escapeCsvCell).join(','));
-            csvRows.push(""); // Empty line for readability
+            csvRows.push("");
         });
 
         if (reportData.length > 0) {
