@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { School, User, UserRole, Class, Student, Attendance, FeeChallan, Result, ActivityLog, FeeHead, SchoolEvent, Subject, Exam } from '../types';
 import { useAuth } from './AuthContext';
@@ -122,7 +123,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const effectiveSchoolId = user.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user.schoolId;
 
-            // STEP 1: Core Configuration (15%)
             setSyncProgress({ percentage: 10, status: 'Loading configuration...' });
             const [schoolsData, classesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
                 sql`SELECT * FROM schools`,
@@ -141,14 +141,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setEvents(toCamelCase(eventsData));
             setSyncProgress({ percentage: 25, status: 'Setting up users...' });
 
-            // STEP 2: Profiles (35%)
             const profilesData = effectiveSchoolId 
                 ? await sql`SELECT * FROM profiles WHERE school_id = ${effectiveSchoolId} OR school_id IS NULL` 
                 : await sql`SELECT * FROM profiles`;
             setUsers(toCamelCase(profilesData));
             setSyncProgress({ percentage: 40, status: 'Fetching students...' });
 
-            // STEP 3: Students (Crucial for next steps) (50%)
             const studentsData = effectiveSchoolId 
                 ? await sql`SELECT * FROM students WHERE school_id = ${effectiveSchoolId}` 
                 : await sql`SELECT * FROM students`;
@@ -169,7 +167,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 return;
             }
 
-            // STEP 4: Historical Data (Streamed for responsive feel)
             setSyncProgress({ percentage: 60, status: 'Syncing fee ledgers...' });
             const feesData = await sql`SELECT * FROM fee_challans WHERE student_id = ANY(${sIds})`;
             setFees(toCamelCase(feesData).map((f: any) => {
@@ -205,7 +202,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 : await sql`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 100`;
             setLogs(toCamelCase(logsData));
 
-            // FINAL STEP: Cache locally if offline mode
             if (syncMode === 'offline') {
                 await db.transaction('rw', db.tables, async () => {
                     await Promise.all([
@@ -233,12 +229,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } finally {
             setLoading(false);
             if (isInitialLoad) setIsInitialLoad(false);
-            // Clear status after a delay
             setTimeout(() => setSyncProgress({ percentage: 0, status: '' }), 3000);
         }
     }, [user, activeSchoolId, isInitialLoad, syncMode, schools, users, classes, fees, attendance, results, logs, feeHeads, events, subjects, exams]);
 
-    useEffect(() => { fetchData(); }, [user, activeSchoolId]); // Only fetch when user or school context changes
+    useEffect(() => { fetchData(); }, [user, activeSchoolId]);
 
     const addLog = useCallback(async (action: string, details: string) => {
         if (!user) return;
@@ -370,8 +365,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const challan = fees.find(f => f.id === challanId);
         if (!challan) return;
         const status = paidAmount >= (challan.totalAmount - discount) ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Unpaid');
-        
-        // Use provided history or maintain current
         const historyToSave = paymentHistory || challan.paymentHistory || [];
 
         await sql`
@@ -399,7 +392,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
 
         let count = 0;
-        const BATCH_SIZE = 40; // Optimize for network but prevent large payload errors
+        const BATCH_SIZE = 40; 
         const currentStudentIds = [...studentIds];
         
         while (currentStudentIds.length > 0) {
@@ -597,8 +590,88 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         a.click();
     };
 
-    const restoreData = async (_file: File) => {
-        showToast('Info', 'For Neon migration, please use the Neon "Import from database" tool in your Neon dashboard for full reliability.', 'info');
+    const restoreData = async (file: File) => {
+        if (!user) return;
+        const effectiveSchoolId = user.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user.schoolId;
+
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            
+            showToast('Restoring...', 'Processing backup data. This may take a minute.', 'info');
+            
+            // Logic: Wipe context-specific data and re-insert
+            // We use standard loops as Neon serverless sql template literal doesn't support complex batching easily
+            
+            const wipeSchoolData = async (sid: string) => {
+                // Delete everything tied to students of this school first
+                await sql`DELETE FROM results WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
+                await sql`DELETE FROM attendance WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
+                await sql`DELETE FROM fee_challans WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
+                
+                // Delete primary school entities
+                await sql`DELETE FROM students WHERE school_id = ${sid}`;
+                await sql`DELETE FROM classes WHERE school_id = ${sid}`;
+                await sql`DELETE FROM fee_heads WHERE school_id = ${sid}`;
+                await sql`DELETE FROM school_events WHERE school_id = ${sid}`;
+                
+                // Handle users (profiles) - Careful not to delete the current user if they are an admin of this school
+                await sql`DELETE FROM profiles WHERE school_id = ${sid} AND id != ${user.id}`;
+            };
+
+            if (user.role === UserRole.Owner && !activeSchoolId) {
+                // Global restore for owners: potentially dangerous, usually implies a full fresh state
+                // Implementation for global wipe omitted for safety, only single school context supported in UI
+            } else if (effectiveSchoolId) {
+                await wipeSchoolData(effectiveSchoolId);
+                
+                // 1. Restore Classes
+                if (data.classes) {
+                    const schoolClasses = data.classes.filter((c: any) => c.schoolId === effectiveSchoolId);
+                    for (const c of schoolClasses) {
+                        const sn = toSnakeCase(c);
+                        await sql`INSERT INTO classes (id, name, section, teacher_id, school_id, sort_order) 
+                                  VALUES (${sn.id}, ${sn.name}, ${sn.section}, ${sn.teacher_id}, ${sn.school_id}, ${sn.sort_order})`;
+                    }
+                }
+                
+                // 2. Restore Students
+                if (data.students) {
+                    const schoolStudents = data.students.filter((s: any) => s.schoolId === effectiveSchoolId);
+                    for (const s of schoolStudents) {
+                        const sn = toSnakeCase(s);
+                        await sql`INSERT INTO students (id, name, roll_number, class_id, school_id, father_name, father_cnic, date_of_birth, date_of_admission, contact_number, secondary_contact_number, address, status, gender, admitted_class, gr_number, religion, caste, last_school_attended, opening_balance, user_id, fee_structure)
+                                  VALUES (${sn.id}, ${sn.name}, ${sn.roll_number}, ${sn.class_id}, ${sn.school_id}, ${sn.father_name}, ${sn.father_cnic}, ${sn.date_of_birth}, ${sn.date_of_admission}, ${sn.contact_number}, ${sn.secondary_contact_number}, ${sn.address}, ${sn.status}, ${sn.gender}, ${sn.admitted_class}, ${sn.gr_number}, ${sn.religion}, ${sn.caste}, ${sn.last_school_attended}, ${sn.opening_balance}, ${sn.user_id}, ${JSON.stringify(sn.fee_structure)})`;
+                    }
+                }
+
+                // 3. Restore Fee Heads
+                if (data.feeHeads) {
+                    const schoolHeads = data.feeHeads.filter((fh: any) => fh.schoolId === effectiveSchoolId);
+                    for (const fh of schoolHeads) {
+                        const sn = toSnakeCase(fh);
+                        await sql`INSERT INTO fee_heads (id, name, default_amount, school_id) VALUES (${sn.id}, ${sn.name}, ${sn.default_amount}, ${sn.school_id})`;
+                    }
+                }
+                
+                // 4. Restore Fee Challans
+                if (data.fees) {
+                    const schoolIds = new Set(data.students.filter((s: any) => s.schoolId === effectiveSchoolId).map((s: any) => s.id));
+                    const schoolFees = data.fees.filter((f: any) => schoolIds.has(f.studentId));
+                    for (const f of schoolFees) {
+                        const sn = toSnakeCase(f);
+                        await sql`INSERT INTO fee_challans (id, challan_number, student_id, class_id, month, year, due_date, status, fee_items, previous_balance, total_amount, discount, paid_amount, paid_date, payment_history)
+                                  VALUES (${sn.id}, ${sn.challan_number}, ${sn.student_id}, ${sn.class_id}, ${sn.month}, ${sn.year}, ${sn.due_date}, ${sn.status}, ${JSON.stringify(sn.fee_items)}, ${sn.previous_balance}, ${sn.total_amount}, ${sn.discount}, ${sn.paid_amount}, ${sn.paid_date}, ${JSON.stringify(sn.payment_history)})`;
+                    }
+                }
+                
+                showToast('Success', 'Restore completed successfully!', 'success');
+                fetchData();
+            }
+        } catch (error: any) {
+            console.error('Restore failed:', error);
+            showToast('Restore Failed', error.message || 'Check file format.', 'error');
+        }
     };
 
     const sendFeeReminders = async (challanIds: string[]) => {
