@@ -127,6 +127,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [feeHeads, setFeeHeads] = useState<FeeHead[]>([]);
     const [events, setEvents] = useState<SchoolEvent[]>([]);
 
+    // Concurrency lock for backups
+    const isBackingUpRef = useRef(false);
+
     const updateAutoBackupSettings = useCallback((newSettings: Partial<AutoBackupSettings>) => {
         setAutoBackupSettings(prev => {
             const updated = { ...prev, ...newSettings };
@@ -136,6 +139,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const backupToDrive = useCallback(async (silent = false) => {
+        if (isBackingUpRef.current) return;
+        isBackingUpRef.current = true;
+
         if (!silent) setOperationProgress({ percentage: 10, status: 'Creating system snapshot...' });
         
         try {
@@ -145,8 +151,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const jsonString = JSON.stringify(payload, null, 2);
             const fileName = `edusync_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
             
-            if (!silent) setOperationProgress({ percentage: 40, status: 'Connecting to Google Drive...' });
+            if (!silent) setOperationProgress({ percentage: 40, status: 'Requesting Google Authorization...' });
             
+            // This call triggers the OAuth flow.
             await driveService.uploadFile(fileName, jsonString);
             
             updateAutoBackupSettings({ lastBackup: new Date().toISOString() });
@@ -156,13 +163,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 showToast('Success', 'System snapshot secured to Google Drive.', 'success');
             }
         } catch (err: any) {
+            console.error("Backup to drive failed:", err);
             if (!silent) {
                 showToast('Cloud Error', err.message || 'Drive communication failed.', 'error');
                 setOperationProgress({ percentage: 0, status: '' });
-            } else if (err.message.includes('Identity') || err.message.includes('Token')) {
+            } else if (err.message.includes('Identity') || err.message.includes('Token') || err.message.includes('expired')) {
+                // Background task needs interaction
                 showToast('Backup Authorization Needed', 'Automatic backup is due. Please visit Settings to authorize Google Drive.', 'info');
             }
         } finally {
+            isBackingUpRef.current = false;
             if (!silent) {
                 setTimeout(() => setOperationProgress({ percentage: 0, status: '' }), 3000);
             }
@@ -458,7 +468,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await fetchData();
     };
 
-    const generateChallansForMonth = async (month: string, year: number, selectedHeads: any[], studentIds: string[], dueDate?: string) => {
+    const generateChallansForMonth = async (month: string, year: number, selectedFeeHeads: { feeHeadId: string, amount: number }[], studentIds: string[], dueDate?: string) => {
         const studentFeesMap = new Map<string, FeeChallan[]>();
         fees.forEach(f => {
             if (f.status !== 'Cancelled') {
@@ -490,7 +500,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 // Build fee items from selected heads, respecting student overrides
                 const feeStructureMap = new Map((student.feeStructure || []).map(item => [item.feeHeadId, item.amount]));
-                const items = selectedHeads.map((h: any) => ({
+                const items = selectedFeeHeads.map((h: any) => ({
                     description: feeHeads.find(fh => fh.id === h.feeHeadId)?.name || 'Fee',
                     amount: feeStructureMap.get(h.feeHeadId) ?? h.amount
                 }));

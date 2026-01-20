@@ -16,13 +16,15 @@ export interface DriveFile {
 class GoogleDriveService {
     private tokenClient: any = null;
     private accessToken: string | null = null;
+    private resolveToken: ((token: string) => void) | null = null;
+    private rejectToken: ((reason: any) => void) | null = null;
 
     init() {
         return new Promise<void>((resolve, reject) => {
             if (this.tokenClient) return resolve();
             
             if (!(window as any).google) {
-                return reject(new Error('Google Identity Services script not loaded.'));
+                return reject(new Error('Google Identity Services script not loaded. Please check your internet connection and refresh.'));
             }
 
             try {
@@ -31,13 +33,17 @@ class GoogleDriveService {
                     scope: SCOPES,
                     callback: (response: any) => {
                         if (response.error) {
-                            reject(response);
+                            if (this.rejectToken) this.rejectToken(new Error(response.error_description || response.error));
                         } else {
                             this.accessToken = response.access_token;
-                            resolve();
+                            if (this.resolveToken) this.resolveToken(response.access_token);
                         }
+                        // Reset handlers
+                        this.resolveToken = null;
+                        this.rejectToken = null;
                     },
                 });
+                resolve();
             } catch (err) {
                 reject(err);
             }
@@ -45,20 +51,22 @@ class GoogleDriveService {
     }
 
     async getAccessToken(): Promise<string> {
+        // If we have a fresh token, use it
+        if (this.accessToken) {
+            return this.accessToken;
+        }
+
         return new Promise((resolve, reject) => {
-            if (this.accessToken) {
-                return resolve(this.accessToken);
-            }
+            this.resolveToken = resolve;
+            this.rejectToken = reject;
 
             this.init().then(() => {
-                this.tokenClient.requestAccessToken({ prompt: 'consent' });
-                // The resolve happens in the callback of initTokenClient
-                const checkInterval = setInterval(() => {
-                    if (this.accessToken) {
-                        clearInterval(checkInterval);
-                        resolve(this.accessToken);
-                    }
-                }, 500);
+                try {
+                    // Trigger the GIS popup. GIS handles the callback we defined in initTokenClient.
+                    this.tokenClient.requestAccessToken({ prompt: '' });
+                } catch (err) {
+                    reject(err);
+                }
             }).catch(reject);
         });
     }
@@ -82,6 +90,10 @@ class GoogleDriveService {
         });
 
         if (!response.ok) {
+            if (response.status === 401) {
+                this.accessToken = null; // Token likely expired
+                throw new Error("Session expired. Please try the backup again to re-authorize.");
+            }
             throw new Error(`Upload failed: ${response.statusText}`);
         }
     }
@@ -96,11 +108,12 @@ class GoogleDriveService {
         );
 
         if (!response.ok) {
+            if (response.status === 401) this.accessToken = null;
             throw new Error(`Failed to list files: ${response.statusText}`);
         }
 
         const data = await response.json();
-        return data.files.filter((f: any) => f.name.startsWith('edusync_backup_'));
+        return (data.files || []).filter((f: any) => f.name.startsWith('edusync_backup_'));
     }
 
     async downloadFile(fileId: string): Promise<string> {
@@ -110,6 +123,7 @@ class GoogleDriveService {
         });
 
         if (!response.ok) {
+            if (response.status === 401) this.accessToken = null;
             throw new Error(`Download failed: ${response.statusText}`);
         }
 
