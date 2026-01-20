@@ -1,6 +1,12 @@
 
 # Changelog
 
+## [3.4.3] - 2025-02-21
+
+### Fixed
+- **Build Error TS6133**: Resolved unused parameter `selectedHeads` in `DataContext.tsx`.
+- **Fee Generation**: Restored missing logic in `generateChallansForMonth` to correctly calculate student arrears and respect custom fee structures.
+
 ## [3.4.2] - 2025-02-21
 
 ### Added

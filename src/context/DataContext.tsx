@@ -459,6 +459,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const generateChallansForMonth = async (month: string, year: number, selectedHeads: any[], studentIds: string[], dueDate?: string) => {
+        const studentFeesMap = new Map<string, FeeChallan[]>();
+        fees.forEach(f => {
+            if (f.status !== 'Cancelled') {
+                const list = studentFeesMap.get(f.studentId) || [];
+                list.push(f);
+                studentFeesMap.set(f.studentId, list);
+            }
+        });
+
         let count = 0;
         const BATCH_SIZE = 40; 
         const currentStudentIds = [...studentIds];
@@ -468,16 +477,40 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const batchPromises = batchIds.map(async (sId) => {
                 const student = students.find(s => s.id === sId);
                 if (!student) return null;
+
+                const studentChallans = studentFeesMap.get(sId) || [];
+                // Calculate arrears: (Opening Balance + Total Fees Charged) - Total Paid/Discount
+                const totalCharged = studentChallans.reduce((sum, f) => {
+                    const feeSum = f.feeItems.reduce((acc, item) => acc + item.amount, 0);
+                    return sum + feeSum;
+                }, 0) + (student.openingBalance || 0);
+                
+                const totalCollected = studentChallans.reduce((sum, f) => sum + (f.paidAmount || 0) + (f.discount || 0), 0);
+                const arrears = Math.max(0, totalCharged - totalCollected);
+
+                // Build fee items from selected heads, respecting student overrides
+                const feeStructureMap = new Map((student.feeStructure || []).map(item => [item.feeHeadId, item.amount]));
+                const items = selectedHeads.map((h: any) => ({
+                    description: feeHeads.find(fh => fh.id === h.feeHeadId)?.name || 'Fee',
+                    amount: feeStructureMap.get(h.feeHeadId) ?? h.amount
+                }));
+
+                const subtotal = items.reduce((sum: number, i: any) => sum + i.amount, 0);
+                const total = subtotal + arrears;
                 const cNum = `${year}${month.substring(0, 3)}-${student.rollNumber}`;
+
                 return sql`
                     INSERT INTO fee_challans (id, challan_number, student_id, class_id, month, year, due_date, status, fee_items, previous_balance, total_amount, discount, paid_amount)
-                    VALUES (${crypto.randomUUID()}, ${cNum}, ${sId}, ${student.classId}, ${month}, ${year}, ${dueDate}, 'Unpaid', ${JSON.stringify([])}, 0, 0, 0, 0)
+                    VALUES (${crypto.randomUUID()}, ${cNum}, ${sId}, ${student.classId}, ${month}, ${year}, ${dueDate}, 'Unpaid', ${JSON.stringify(items)}, ${arrears}, ${total}, 0, 0)
                 `;
             });
+
             await Promise.all(batchPromises);
             count += batchIds.length;
         }
+
         await fetchData();
+        showToast('Success', `${count} challans generated for ${month} ${year}.`, 'success');
         return count;
     };
 
