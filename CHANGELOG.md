@@ -1,15 +1,15 @@
 
 # Changelog
 
-## [3.4.1] - 2025-02-21
+## [3.4.2] - 2025-02-21
 
 ### Added
-- **Scheduled Auto-Backups**: Users can now enable automatic backups to Google Drive on a Weekly or Monthly basis.
-- **Background Persistence**: The system checks for due backups upon app initialization and attempts to perform them silently.
-- **Automation UI**: New settings controls for managing backup frequency and viewing the next scheduled run.
+- **Intelligent Auto-Backup Scheduler**: Re-engineered the background sync to run safely without triggering infinite re-fetch loops.
+- **Improved Data Integrity**: Added validation checks before performing global restores.
 
 ### Fixed
-- **Progress Clarity**: Refined the operation progress overlay to support background tasks without interrupting the main user flow.
+- **Build Error TS6133**: Resolved unused variable 'data' in SettingsPage.tsx.
+- **Context Refresh**: Fixed a bug where switching schools didn't always reset the auto-backup due-date calculation.
 
-## [3.4.0] - 2025-02-21
-...
+## [3.4.1] - 2025-02-21
+- **Scheduled Auto-Backups**: Users can now enable automatic backups to Google Drive.

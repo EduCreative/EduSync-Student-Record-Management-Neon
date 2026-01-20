@@ -34,12 +34,12 @@ const OperationProgressOverlay: React.FC<{ progress: { percentage: number; statu
                         </svg>
                     </div>
                     <div className="space-y-2">
-                        <h3 className="text-xl font-bold">Processing Data</h3>
+                        <h3 className="text-xl font-bold">Secure Operation in Progress</h3>
                         <p className="text-sm text-secondary-500 dark:text-secondary-400">{progress.status}</p>
                     </div>
                     <div className="w-full space-y-2">
                         <div className="flex justify-between text-xs font-bold text-primary-600">
-                            <span>Progress</span>
+                            <span>Completing task...</span>
                             <span>{progress.percentage}%</span>
                         </div>
                         <div className="w-full bg-secondary-100 dark:bg-secondary-700 rounded-full h-3 overflow-hidden">
@@ -49,7 +49,7 @@ const OperationProgressOverlay: React.FC<{ progress: { percentage: number; statu
                             ></div>
                         </div>
                     </div>
-                    <p className="text-[10px] text-secondary-400 uppercase tracking-widest">Please do not refresh or close this tab</p>
+                    <p className="text-[10px] text-secondary-400 uppercase tracking-widest animate-pulse">Critical: Do not exit the browser</p>
                 </div>
             </div>
         </div>
@@ -59,7 +59,7 @@ const OperationProgressOverlay: React.FC<{ progress: { percentage: number; statu
 const SettingsPage: React.FC = () => {
     const { toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, syncMode, setSyncMode, sidebarMode, setSidebarMode } = useTheme();
     const { user, effectiveRole, activeSchoolId } = useAuth();
-    const { schools, backupData, backupToDrive, restoreData, updateSchool, feeHeads, addFeeHead, updateFeeHead, operationProgress, autoBackupSettings, updateAutoBackupSettings, ...data } = useData();
+    const { schools, backupData, backupToDrive, restoreData, updateSchool, feeHeads, addFeeHead, updateFeeHead, operationProgress, autoBackupSettings, updateAutoBackupSettings } = useData();
     const { showToast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [restoreFile, setRestoreFile] = useState<File | null>(null);
@@ -96,7 +96,7 @@ const SettingsPage: React.FC = () => {
     }, [school, feeHeads, effectiveSchoolId]);
     
     const nextBackupDate = useMemo(() => {
-        if (!autoBackupSettings.lastBackup) return "Run now to schedule next";
+        if (!autoBackupSettings.lastBackup) return "Ready for first run";
         const last = new Date(autoBackupSettings.lastBackup);
         const days = autoBackupSettings.frequency === 'weekly' ? 7 : 30;
         last.setDate(last.getDate() + days);
@@ -109,19 +109,12 @@ const SettingsPage: React.FC = () => {
 
         setIsSchoolSaving(true);
         try {
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("Request timed out.")), 15000)
-            );
-
-            await Promise.race([
-                updateSchool({
-                    id: school.id,
-                    name: schoolDetails.name,
-                    address: schoolDetails.address,
-                    logoUrl: schoolDetails.logoUrl
-                }),
-                timeoutPromise
-            ]);
+            await updateSchool({
+                id: school.id,
+                name: schoolDetails.name,
+                address: schoolDetails.address,
+                logoUrl: schoolDetails.logoUrl
+            });
             
             const tuitionFeeHead = feeHeads.find(fh => fh.schoolId === effectiveSchoolId && fh.name.toLowerCase() === 'tuition fee');
             if (tuitionFeeHead) {
@@ -174,7 +167,7 @@ const SettingsPage: React.FC = () => {
     };
 
     const handleRestoreFromCloud = async (file: DriveFile) => {
-        if (!window.confirm(`Restore data from ${file.name}? Current local data will be overwritten.`)) return;
+        if (!window.confirm(`Restore system state from ${file.name}? Existing records will be replaced.`)) return;
         
         setShowCloudPicker(false);
         try {
@@ -182,7 +175,7 @@ const SettingsPage: React.FC = () => {
             const blob = new Blob([content], { type: 'application/json' });
             const virtualFile = new File([blob], file.name, { type: 'application/json' });
             await restoreData(virtualFile);
-            showToast('Success', 'Data restored from cloud.', 'success');
+            showToast('Success', 'Cloud restoration complete.', 'success');
         } catch (err: any) {
             showToast('Restore Failed', err.message || 'Error downloading file.', 'error');
         }
@@ -190,43 +183,36 @@ const SettingsPage: React.FC = () => {
 
     const handleHardReset = async () => {
         setIsResetModalOpen(false);
-        showToast('Resetting...', 'Clearing local data and preparing to re-sync.', 'info');
+        showToast('Resetting...', 'Clearing local environment cache.', 'info');
         try {
             await deleteDatabase();
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+            setTimeout(() => { window.location.reload(); }, 1500);
         } catch (error) {
-            console.error('Failed to delete database:', error);
-            showToast('Reset Failed', 'Could not clear local data.', 'error');
+            showToast('Reset Failed', 'Clear storage manually in browser.', 'error');
         }
     };
 
     const handleSyncModeChange = async (mode: 'offline' | 'online') => {
         if (syncMode === mode) return;
-        showToast('Changing Sync Mode', `Switching to ${mode} mode. The app will now reload.`, 'info');
-        if (mode === 'online') {
-            await deleteDatabase();
-        }
+        showToast('Updating Configuration', `Swapping to ${mode} sync architecture.`, 'info');
+        if (mode === 'online') { await deleteDatabase(); }
         setSyncMode(mode);
-        setTimeout(() => {
-            window.location.reload();
-        }, 1500);
+        setTimeout(() => { window.location.reload(); }, 1500);
     };
     
     return (
         <>
             <OperationProgressOverlay progress={operationProgress} />
 
-            <Modal isOpen={!!restoreFile} onClose={() => setRestoreFile(null)} title="Confirm Data Restore">
-                <p>Are you sure you want to restore data from <strong>{restoreFile?.name}</strong>? This will overwrite all existing data for the current school. This action cannot be undone.</p>
+            <Modal isOpen={!!restoreFile} onClose={() => setRestoreFile(null)} title="Confirm Import">
+                <p>Verify restore from <strong>{restoreFile?.name}</strong>? This replaces existing local records with the backup content.</p>
                 <div className="flex justify-end space-x-2 pt-4">
                     <button type="button" onClick={() => setRestoreFile(null)} className="btn-secondary">Cancel</button>
-                    <button type="button" onClick={handleConfirmRestore} className="btn-danger">Confirm Restore</button>
+                    <button type="button" onClick={handleConfirmRestore} className="btn-danger">Proceed</button>
                 </div>
             </Modal>
 
-            <Modal isOpen={showCloudPicker} onClose={() => setShowCloudPicker(false)} title="Select Cloud Backup to Restore">
+            <Modal isOpen={showCloudPicker} onClose={() => setShowCloudPicker(false)} title="Restore from Google Drive">
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
                     {driveBackups.length > 0 ? driveBackups.map(file => (
                         <div key={file.id} className="p-3 border rounded-lg hover:bg-secondary-50 dark:hover:bg-secondary-700/50 flex justify-between items-center group">
@@ -234,18 +220,18 @@ const SettingsPage: React.FC = () => {
                                 <p className="text-sm font-semibold">{file.name}</p>
                                 <p className="text-xs text-secondary-500">{new Date(file.modifiedTime).toLocaleString()}</p>
                             </div>
-                            <button onClick={() => handleRestoreFromCloud(file)} className="text-xs btn-primary py-1 px-3">Restore</button>
+                            <button onClick={() => handleRestoreFromCloud(file)} className="text-xs btn-primary py-1 px-3 shadow-none">Restore</button>
                         </div>
-                    )) : <p className="text-center py-4 text-secondary-500">No backups found in your Google Drive.</p>}
+                    )) : <p className="text-center py-4 text-secondary-500">No backup records found.</p>}
                 </div>
             </Modal>
 
             <IncreaseTuitionFeeModal isOpen={isTuitionFeeModalOpen} onClose={() => setIsTuitionFeeModalOpen(false)} />
-            <Modal isOpen={isResetModalOpen} onClose={() => setIsResetModalOpen(false)} title="Confirm Hard Reset">
-                <p>Are you sure you want to clear all local data? This will log you out and re-download all information from the server upon your next login.</p>
+            <Modal isOpen={isResetModalOpen} onClose={() => setIsResetModalOpen(false)} title="System Cache Reset">
+                <p>Delete all locally cached data? You will need to log in again to re-sync with the cloud database.</p>
                 <div className="flex justify-end space-x-2 pt-4">
                     <button type="button" onClick={() => setIsResetModalOpen(false)} className="btn-secondary">Cancel</button>
-                    <button type="button" onClick={handleHardReset} className="btn-danger">Clear Data & Reload</button>
+                    <button type="button" onClick={handleHardReset} className="btn-danger">Reset & Logout</button>
                 </div>
             </Modal>
 
@@ -256,30 +242,30 @@ const SettingsPage: React.FC = () => {
                     <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Cloud Backup (Google Drive)</h2>
                     <div className="space-y-6">
                         <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg flex items-start gap-4">
-                            <div className="p-2 bg-white dark:bg-secondary-800 rounded-full shadow-sm"><GoogleIcon /></div>
+                            <div className="p-2 bg-white dark:bg-secondary-800 rounded-full shadow-sm flex-shrink-0"><GoogleIcon /></div>
                             <div className="flex-1">
-                                <h3 className="font-semibold text-secondary-900 dark:text-white">Personal Cloud Storage</h3>
+                                <h3 className="font-semibold text-secondary-900 dark:text-white">External Cloud Storage</h3>
                                 <p className="text-sm text-secondary-600 dark:text-secondary-400 mt-1">
-                                    Securely save and retrieve system snapshots using your own Google Drive. EduSync only accesses files it creates.
+                                    Secure your records externally. Backup files are stored in your private drive folder.
                                 </p>
                                 <div className="mt-4 flex flex-wrap gap-3">
                                     <button onClick={handleManualDriveBackup} disabled={isCloudBackingUp} className="btn-primary">
-                                        {isCloudBackingUp ? 'Uploading...' : 'Backup to Drive'}
+                                        {isCloudBackingUp ? 'Working...' : 'Backup Now'}
                                     </button>
                                     <button onClick={handleFetchCloudBackups} disabled={isFetchingCloud} className="btn-secondary">
-                                        {isFetchingCloud ? 'Searching...' : 'Restore from Drive'}
+                                        {isFetchingCloud ? 'Searching...' : 'Restore from Cloud'}
                                     </button>
                                 </div>
                             </div>
                         </div>
 
                         <div className="border-t dark:border-secondary-700 pt-6">
-                            <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Automation</h3>
+                            <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Scheduled Automation</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-secondary-900/50 rounded-lg border dark:border-secondary-700">
                                     <div>
-                                        <p className="font-medium">Scheduled Backup</p>
-                                        <p className="text-xs text-secondary-500">Run automatically when you are active.</p>
+                                        <p className="font-medium">Auto-Sync Enabled</p>
+                                        <p className="text-[10px] text-secondary-500 uppercase font-bold">Recommended</p>
                                     </div>
                                     <button 
                                         onClick={() => updateAutoBackupSettings({ enabled: !autoBackupSettings.enabled })}
@@ -290,26 +276,26 @@ const SettingsPage: React.FC = () => {
                                 </div>
 
                                 <div className={`p-3 bg-secondary-50 dark:bg-secondary-900/50 rounded-lg border dark:border-secondary-700 transition-opacity ${!autoBackupSettings.enabled ? 'opacity-50 pointer-events-none' : ''}`}>
-                                    <label className="text-xs font-bold text-secondary-500 uppercase block mb-1">Frequency</label>
+                                    <label className="text-[10px] font-extrabold text-secondary-500 uppercase block mb-1">Backup Frequency</label>
                                     <select 
                                         value={autoBackupSettings.frequency}
                                         onChange={(e) => updateAutoBackupSettings({ frequency: e.target.value as any })}
-                                        className="bg-transparent border-none text-sm font-semibold focus:ring-0 w-full p-0"
+                                        className="bg-transparent border-none text-sm font-semibold focus:ring-0 w-full p-0 cursor-pointer"
                                     >
-                                        <option value="weekly">Every Week</option>
-                                        <option value="monthly">Every Month</option>
+                                        <option value="weekly">Weekly Snapshot</option>
+                                        <option value="monthly">Monthly Snapshot</option>
                                     </select>
                                 </div>
                             </div>
 
                             {autoBackupSettings.enabled && (
-                                <div className="mt-4 flex items-center gap-4 text-xs text-secondary-500 bg-secondary-50 dark:bg-secondary-900/50 p-2 rounded border border-dashed dark:border-secondary-700">
+                                <div className="mt-4 flex items-center gap-4 text-xs text-secondary-500 bg-secondary-50 dark:bg-secondary-900/50 p-2.5 rounded border border-dashed dark:border-secondary-700">
                                     <div className="flex-1">
-                                        <span className="font-bold uppercase mr-1">Last Run:</span>
-                                        {autoBackupSettings.lastBackup ? new Date(autoBackupSettings.lastBackup).toLocaleString() : 'Never'}
+                                        <span className="font-bold uppercase mr-1 opacity-60">Last Secured:</span>
+                                        {autoBackupSettings.lastBackup ? new Date(autoBackupSettings.lastBackup).toLocaleString() : 'Not yet run'}
                                     </div>
                                     <div className="flex-1 text-right">
-                                        <span className="font-bold uppercase mr-1 text-primary-600">Next Due:</span>
+                                        <span className="font-bold uppercase mr-1 text-primary-600">Next Scheduled:</span>
                                         {nextBackupDate}
                                     </div>
                                 </div>
@@ -319,51 +305,51 @@ const SettingsPage: React.FC = () => {
                 </div>
 
                 <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Sidebar Configuration</h2>
+                    <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Interface Options</h2>
                      <div className="space-y-4">
-                        <p className="text-sm text-secondary-600 dark:text-secondary-400">Choose how the sidebar behaves on desktop screens.</p>
+                        <p className="text-sm text-secondary-600 dark:text-secondary-400">Manage your workspace layout.</p>
                         <div className="flex flex-col sm:flex-row gap-4">
                             <div className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${sidebarMode === 'fixed' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-secondary-200 dark:border-secondary-700'}`} onClick={() => setSidebarMode('fixed')}>
-                                <div className="flex items-center gap-3 mb-2"><h3 className="font-semibold">Always Expanded</h3></div>
-                                <p className="text-xs text-secondary-500">The sidebar stays open at full width.</p>
+                                <h3 className="font-semibold text-sm">Full Sidebar</h3>
+                                <p className="text-[10px] text-secondary-500">Traditional expanded navigation.</p>
                             </div>
                             <div className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${sidebarMode === 'collapsible' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-secondary-200 dark:border-secondary-700'}`} onClick={() => setSidebarMode('collapsible')}>
-                                <div className="flex items-center gap-3 mb-2"><h3 className="font-semibold">Collapsible (Hover)</h3></div>
-                                <p className="text-xs text-secondary-500">The sidebar shrinks to icons.</p>
+                                <h3 className="font-semibold text-sm">Slim Sidebar</h3>
+                                <p className="text-[10px] text-secondary-500">Icons only until hovered.</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Data Synchronization</h2>
+                    <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Database Mode</h2>
                      <div className="space-y-4">
                         <div className="flex flex-col sm:flex-row gap-4">
-                            <div className={`flex-1 p-4 border-2 rounded-lg cursor-pointer ${syncMode === 'offline' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'dark:border-secondary-700'}`} onClick={() => handleSyncModeChange('offline')}>
-                                <h3 className="font-semibold">Offline-First</h3>
-                                <p className="text-sm text-secondary-500">Caches all data locally. Best for performance.</p>
+                            <div className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${syncMode === 'offline' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-secondary-200 dark:border-secondary-700'}`} onClick={() => handleSyncModeChange('offline')}>
+                                <h3 className="font-semibold text-sm">Hybrid Offline</h3>
+                                <p className="text-[10px] text-secondary-500">Fast local access with background cloud sync.</p>
                             </div>
-                            <div className={`flex-1 p-4 border-2 rounded-lg cursor-pointer ${syncMode === 'online' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'dark:border-secondary-700'}`} onClick={() => handleSyncModeChange('online')}>
-                                <h3 className="font-semibold">Online-Only</h3>
-                                <p className="text-sm text-secondary-500">Always fetches fresh data. Most reliable for multi-user.</p>
+                            <div className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${syncMode === 'online' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-secondary-200 dark:border-secondary-700'}`} onClick={() => handleSyncModeChange('online')}>
+                                <h3 className="font-semibold text-sm">Direct Online</h3>
+                                <p className="text-[10px] text-secondary-500">Real-time data without local caching.</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Appearance</h2>
+                    <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Accessibility</h2>
                     <div className="space-y-6">
                         <div className="flex items-center justify-between">
-                            <label className="font-medium text-secondary-700 dark:text-secondary-300">Theme</label>
-                            <button onClick={toggleTheme} className="btn-secondary">Switch Theme</button>
+                            <label className="font-medium text-secondary-700 dark:text-secondary-300">Display Theme</label>
+                            <button onClick={toggleTheme} className="btn-secondary shadow-none">Cycle Light/Dark</button>
                         </div>
                          <div className="flex items-center justify-between">
-                            <label className="font-medium text-secondary-700 dark:text-secondary-300">Font Size</label>
+                            <label className="font-medium text-secondary-700 dark:text-secondary-300">Text Scaling</label>
                             <div className="flex items-center space-x-2">
-                                <button onClick={decreaseFontSize} className="btn-secondary px-3">-</button>
-                                <button onClick={resetFontSize} className="btn-secondary">Default</button>
-                                <button onClick={increaseFontSize} className="btn-secondary px-3">+</button>
+                                <button onClick={decreaseFontSize} className="btn-secondary px-3 shadow-none">-</button>
+                                <button onClick={resetFontSize} className="btn-secondary shadow-none">Default</button>
+                                <button onClick={increaseFontSize} className="btn-secondary px-3 shadow-none">+</button>
                             </div>
                         </div>
                     </div>
@@ -372,23 +358,23 @@ const SettingsPage: React.FC = () => {
                  {effectiveRole === UserRole.Admin && (
                     <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
                         <div className="flex justify-between items-center border-b pb-3 dark:border-secondary-700 mb-6">
-                            <h2 className="text-xl font-semibold">School Details</h2>
-                            <button onClick={() => setIsTuitionFeeModalOpen(true)} className="btn-secondary text-xs">
-                                Bulk Tuition Increase
+                            <h2 className="text-xl font-semibold">Institution Profile</h2>
+                            <button onClick={() => setIsTuitionFeeModalOpen(true)} className="text-xs font-bold text-primary-600 hover:underline">
+                                Bulk Tuition Manager
                             </button>
                         </div>
                         <form onSubmit={handleSchoolUpdate} className="space-y-4">
                              <ImageUpload imageUrl={schoolDetails.logoUrl} onChange={(newLogoUrl) => setSchoolDetails(prev => ({...prev, logoUrl: newLogoUrl}))} bucketName="logos" />
                             <div>
-                                <label className="input-label">School Name</label>
+                                <label className="input-label">Legal Name</label>
                                 <input type="text" value={schoolDetails.name} onChange={e => setSchoolDetails(p => ({...p, name: e.target.value}))} className="input-field" />
                             </div>
                              <div>
-                                <label className="input-label">Address</label>
+                                <label className="input-label">Mailing Address</label>
                                 <textarea value={schoolDetails.address} onChange={e => setSchoolDetails(p => ({...p, address: e.target.value}))} className="input-field" rows={2}></textarea>
                             </div>
-                            <div className="flex justify-end">
-                                <button type="submit" className="btn-primary" disabled={isSchoolSaving}>{isSchoolSaving ? 'Saving...' : 'Save School Details'}</button>
+                            <div className="flex justify-end pt-4">
+                                <button type="submit" className="btn-primary" disabled={isSchoolSaving}>{isSchoolSaving ? 'Saving...' : 'Update Institution Profile'}</button>
                             </div>
                         </form>
                     </div>
@@ -399,13 +385,17 @@ const SettingsPage: React.FC = () => {
                         <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Local Management</h2>
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <p className="font-medium">Local Download</p>
-                                <button onClick={backupData} className="btn-secondary"><DownloadIcon className="w-4 h-4 mr-2" /> JSON Backup</button>
+                                <p className="font-medium text-sm">Download Local Copy</p>
+                                <button onClick={backupData} className="btn-secondary text-xs shadow-none"><DownloadIcon className="w-3 h-3 mr-1" /> JSON Export</button>
                             </div>
                              <div className="flex items-center justify-between">
-                                <p className="font-medium">Manual Import</p>
+                                <p className="font-medium text-sm">Manual File Import</p>
                                 <input ref={fileInputRef} type="file" accept=".json" onChange={handleRestoreInitiate} className="hidden" />
-                                <button onClick={() => fileInputRef.current?.click()} className="btn-secondary"><UploadIcon className="w-4 h-4 mr-2"/> Restore Local File</button>
+                                <button onClick={() => fileInputRef.current?.click()} className="btn-secondary text-xs shadow-none"><UploadIcon className="w-3 h-3 mr-1"/> Load File</button>
+                            </div>
+                            <div className="flex items-center justify-between pt-2">
+                                <p className="font-medium text-sm text-red-500">System Troubleshooting</p>
+                                <button onClick={() => setIsResetModalOpen(true)} className="text-xs text-red-600 hover:underline">Clear Local Cache</button>
                             </div>
                         </div>
                     </div>
