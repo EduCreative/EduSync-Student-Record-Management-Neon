@@ -1,6 +1,12 @@
 
 # Changelog
 
+## [3.3.8] - 2025-02-21
+
+### Fixed
+- **Build Errors**: Resolved multiple TypeScript TS6133 errors in `SettingsPage.tsx` caused by unused variables and imports.
+- **Cleanup**: Removed unused dependencies and state variables from the Settings module to optimize performance and code quality.
+
 ## [3.3.7] - 2025-02-21
 
 ### Added

@@ -5,13 +5,14 @@
 
 ---
 
-## ✨ Key Features (v3.3.5)
+## ✨ Key Features (v3.3.8)
 - **Intelligent Dashboards**: Real-time insights into fee recovery, attendance, and student distribution.
 - **Advanced Financial Engine**: Multi-part challan generation, partial payment tracking, and automated discount reporting.
 - **Academic Suite**: Class management with student promotion logic, result cards, and attendance tracking.
 - **Modern Communication**: Targeted announcements and real-time notification center.
 - **Enterprise Reporting**: Professional PDF-ready printouts for report cards, certificates, and financial ledgers.
 - **Hybrid Sync**: Support for Offline-First (Dexie.js) and Online-Only database modes.
+- **Google Drive Backup**: Securely save snapshots to your personal cloud.
 
 ---
 

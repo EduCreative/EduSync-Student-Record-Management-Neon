@@ -1,4 +1,5 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+
+import React, { useRef, useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -7,10 +8,10 @@ import Modal from '../common/Modal';
 import { UserRole } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import ImageUpload from '../common/ImageUpload';
-import { usePWAInstall } from '../../context/PWAInstallContext';
-import IncreaseTuitionFeeModal from './IncreaseTuitionFeeModal';
 import { deleteDatabase } from '../../lib/db';
 import { driveService, DriveFile } from '../../utils/googleDriveService';
+// FIX: Imported missing IncreaseTuitionFeeModal component to resolve 'Cannot find name' error.
+import IncreaseTuitionFeeModal from './IncreaseTuitionFeeModal';
 
 const GoogleIcon = () => (
     <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -22,11 +23,10 @@ const GoogleIcon = () => (
 );
 
 const SettingsPage: React.FC = () => {
-    const { theme, toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, highlightMissingData, toggleHighlightMissingData, syncMode, setSyncMode, sidebarMode, setSidebarMode } = useTheme();
+    const { toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, syncMode, setSyncMode, sidebarMode, setSidebarMode } = useTheme();
     const { user, effectiveRole, activeSchoolId } = useAuth();
     const { schools, backupData, restoreData, updateSchool, feeHeads, addFeeHead, updateFeeHead, ...data } = useData();
     const { showToast } = useToast();
-    const { installPrompt } = usePWAInstall();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [restoreFile, setRestoreFile] = useState<File | null>(null);
 
@@ -47,7 +47,6 @@ const SettingsPage: React.FC = () => {
     // State for Class Promotion
     const [isTuitionFeeModalOpen, setIsTuitionFeeModalOpen] = useState(false);
     const [isResetModalOpen, setIsResetModalOpen] = useState(false);
-    const [isResetting, setIsResetting] = useState(false);
 
     // Initialize forms and preferences from user data
     useEffect(() => {
@@ -117,7 +116,6 @@ const SettingsPage: React.FC = () => {
         setIsCloudBackingUp(true);
         try {
             const payload = {
-                // FIX: Use destructured 'schools' variable directly as it's not present in 'data'
                 schools: schools,
                 users: data.users,
                 classes: data.classes,
@@ -126,7 +124,6 @@ const SettingsPage: React.FC = () => {
                 attendance: data.attendance,
                 results: data.results,
                 logs: data.logs,
-                // FIX: Use destructured 'feeHeads' variable directly as it's not present in 'data'
                 feeHeads: feeHeads,
                 events: data.events
             };
@@ -171,7 +168,6 @@ const SettingsPage: React.FC = () => {
     };
 
     const handleHardReset = async () => {
-        setIsResetting(true);
         setIsResetModalOpen(false);
         showToast('Resetting...', 'Clearing local data and preparing to re-sync.', 'info');
         try {
@@ -182,7 +178,6 @@ const SettingsPage: React.FC = () => {
         } catch (error) {
             console.error('Failed to delete database:', error);
             showToast('Reset Failed', 'Could not clear local data.', 'error');
-            setIsResetting(false);
         }
     };
 
@@ -310,7 +305,13 @@ const SettingsPage: React.FC = () => {
 
                  {effectiveRole === UserRole.Admin && (
                     <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
-                        <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">School Details</h2>
+                        {/* FIX: Added header layout to accommodate the Tuition Fee increase button for Admins */}
+                        <div className="flex justify-between items-center border-b pb-3 dark:border-secondary-700 mb-6">
+                            <h2 className="text-xl font-semibold">School Details</h2>
+                            <button onClick={() => setIsTuitionFeeModalOpen(true)} className="btn-secondary text-xs">
+                                Bulk Tuition Increase
+                            </button>
+                        </div>
                         <form onSubmit={handleSchoolUpdate} className="space-y-4">
                              <ImageUpload imageUrl={schoolDetails.logoUrl} onChange={(newLogoUrl) => setSchoolDetails(prev => ({...prev, logoUrl: newLogoUrl}))} bucketName="logos" />
                             <div>
