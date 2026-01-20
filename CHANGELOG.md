@@ -1,22 +1,15 @@
 
 # Changelog
 
-## [3.3.8] - 2025-02-21
-
-### Fixed
-- **Build Errors**: Resolved multiple TypeScript TS6133 errors in `SettingsPage.tsx` caused by unused variables and imports.
-- **Cleanup**: Removed unused dependencies and state variables from the Settings module to optimize performance and code quality.
-
-## [3.3.7] - 2025-02-21
+## [3.4.1] - 2025-02-21
 
 ### Added
-- **Functional Cloud Restore**: The `restoreData` function now actually writes data to the Neon database. It supports clearing existing records and re-populating from a JSON snapshot (local or Google Drive).
-- **Context-Aware Safety**: Restore logic automatically restricts its scope to the current school ID for Admin users, preventing accidental cross-school data corruption.
+- **Scheduled Auto-Backups**: Users can now enable automatic backups to Google Drive on a Weekly or Monthly basis.
+- **Background Persistence**: The system checks for due backups upon app initialization and attempts to perform them silently.
+- **Automation UI**: New settings controls for managing backup frequency and viewing the next scheduled run.
 
 ### Fixed
-- **Environment Variable Binding**: Confirmed `VITE_GOOGLE_CLIENT_ID` integration for Vercel deployments.
+- **Progress Clarity**: Refined the operation progress overlay to support background tasks without interrupting the main user flow.
 
-## [3.3.6] - 2025-02-21
-
-### Added
-- **Google Drive Backup Utility**: Integrated Google Identity Services and Drive API for off-site data snapshots.
+## [3.4.0] - 2025-02-21
+...

@@ -1,5 +1,5 @@
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -10,7 +10,6 @@ import { useToast } from '../../context/ToastContext';
 import ImageUpload from '../common/ImageUpload';
 import { deleteDatabase } from '../../lib/db';
 import { driveService, DriveFile } from '../../utils/googleDriveService';
-// FIX: Imported missing IncreaseTuitionFeeModal component to resolve 'Cannot find name' error.
 import IncreaseTuitionFeeModal from './IncreaseTuitionFeeModal';
 
 const GoogleIcon = () => (
@@ -22,10 +21,45 @@ const GoogleIcon = () => (
     </svg>
 );
 
+const OperationProgressOverlay: React.FC<{ progress: { percentage: number; status: string } }> = ({ progress }) => {
+    if (progress.percentage === 0) return null;
+    return (
+        <div className="fixed inset-0 z-[60] bg-secondary-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-secondary-800 rounded-2xl shadow-2xl p-8 max-w-md w-full border border-primary-500/30">
+                <div className="flex flex-col items-center text-center space-y-6">
+                    <div className="w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+                        <svg className="w-8 h-8 text-primary-600 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <div className="space-y-2">
+                        <h3 className="text-xl font-bold">Processing Data</h3>
+                        <p className="text-sm text-secondary-500 dark:text-secondary-400">{progress.status}</p>
+                    </div>
+                    <div className="w-full space-y-2">
+                        <div className="flex justify-between text-xs font-bold text-primary-600">
+                            <span>Progress</span>
+                            <span>{progress.percentage}%</span>
+                        </div>
+                        <div className="w-full bg-secondary-100 dark:bg-secondary-700 rounded-full h-3 overflow-hidden">
+                            <div 
+                                className="bg-primary-600 h-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(37,99,235,0.5)]" 
+                                style={{ width: `${progress.percentage}%` }}
+                            ></div>
+                        </div>
+                    </div>
+                    <p className="text-[10px] text-secondary-400 uppercase tracking-widest">Please do not refresh or close this tab</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const SettingsPage: React.FC = () => {
     const { toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, syncMode, setSyncMode, sidebarMode, setSidebarMode } = useTheme();
     const { user, effectiveRole, activeSchoolId } = useAuth();
-    const { schools, backupData, restoreData, updateSchool, feeHeads, addFeeHead, updateFeeHead, ...data } = useData();
+    const { schools, backupData, backupToDrive, restoreData, updateSchool, feeHeads, addFeeHead, updateFeeHead, operationProgress, autoBackupSettings, updateAutoBackupSettings, ...data } = useData();
     const { showToast } = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [restoreFile, setRestoreFile] = useState<File | null>(null);
@@ -61,6 +95,14 @@ const SettingsPage: React.FC = () => {
         }
     }, [school, feeHeads, effectiveSchoolId]);
     
+    const nextBackupDate = useMemo(() => {
+        if (!autoBackupSettings.lastBackup) return "Run now to schedule next";
+        const last = new Date(autoBackupSettings.lastBackup);
+        const days = autoBackupSettings.frequency === 'weekly' ? 7 : 30;
+        last.setDate(last.getDate() + days);
+        return last.toLocaleDateString();
+    }, [autoBackupSettings]);
+
     const handleSchoolUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!school || !schoolDetails.name.trim() || !effectiveSchoolId) return;
@@ -107,36 +149,15 @@ const SettingsPage: React.FC = () => {
 
     const handleConfirmRestore = async () => {
         if (restoreFile) {
-            await restoreData(restoreFile);
             setRestoreFile(null);
+            await restoreData(restoreFile);
         }
     };
 
-    const handleCloudBackup = async () => {
+    const handleManualDriveBackup = async () => {
         setIsCloudBackingUp(true);
-        try {
-            const payload = {
-                schools: schools,
-                users: data.users,
-                classes: data.classes,
-                students: data.students,
-                fees: data.fees,
-                attendance: data.attendance,
-                results: data.results,
-                logs: data.logs,
-                feeHeads: feeHeads,
-                events: data.events
-            };
-            const jsonString = JSON.stringify(payload, null, 2);
-            const fileName = `edusync_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-            
-            await driveService.uploadFile(fileName, jsonString);
-            showToast('Success', 'Backup uploaded to Google Drive!', 'success');
-        } catch (err: any) {
-            showToast('Cloud Error', err.message || 'Failed to backup to Drive.', 'error');
-        } finally {
-            setIsCloudBackingUp(false);
-        }
+        await backupToDrive();
+        setIsCloudBackingUp(false);
     };
 
     const handleFetchCloudBackups = async () => {
@@ -155,12 +176,12 @@ const SettingsPage: React.FC = () => {
     const handleRestoreFromCloud = async (file: DriveFile) => {
         if (!window.confirm(`Restore data from ${file.name}? Current local data will be overwritten.`)) return;
         
+        setShowCloudPicker(false);
         try {
             const content = await driveService.downloadFile(file.id);
             const blob = new Blob([content], { type: 'application/json' });
             const virtualFile = new File([blob], file.name, { type: 'application/json' });
             await restoreData(virtualFile);
-            setShowCloudPicker(false);
             showToast('Success', 'Data restored from cloud.', 'success');
         } catch (err: any) {
             showToast('Restore Failed', err.message || 'Error downloading file.', 'error');
@@ -195,6 +216,8 @@ const SettingsPage: React.FC = () => {
     
     return (
         <>
+            <OperationProgressOverlay progress={operationProgress} />
+
             <Modal isOpen={!!restoreFile} onClose={() => setRestoreFile(null)} title="Confirm Data Restore">
                 <p>Are you sure you want to restore data from <strong>{restoreFile?.name}</strong>? This will overwrite all existing data for the current school. This action cannot be undone.</p>
                 <div className="flex justify-end space-x-2 pt-4">
@@ -231,7 +254,7 @@ const SettingsPage: React.FC = () => {
 
                 <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
                     <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Cloud Backup (Google Drive)</h2>
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg flex items-start gap-4">
                             <div className="p-2 bg-white dark:bg-secondary-800 rounded-full shadow-sm"><GoogleIcon /></div>
                             <div className="flex-1">
@@ -240,7 +263,7 @@ const SettingsPage: React.FC = () => {
                                     Securely save and retrieve system snapshots using your own Google Drive. EduSync only accesses files it creates.
                                 </p>
                                 <div className="mt-4 flex flex-wrap gap-3">
-                                    <button onClick={handleCloudBackup} disabled={isCloudBackingUp} className="btn-primary">
+                                    <button onClick={handleManualDriveBackup} disabled={isCloudBackingUp} className="btn-primary">
                                         {isCloudBackingUp ? 'Uploading...' : 'Backup to Drive'}
                                     </button>
                                     <button onClick={handleFetchCloudBackups} disabled={isFetchingCloud} className="btn-secondary">
@@ -248,6 +271,49 @@ const SettingsPage: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
+                        </div>
+
+                        <div className="border-t dark:border-secondary-700 pt-6">
+                            <h3 className="font-semibold text-secondary-900 dark:text-white mb-4">Automation</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-secondary-900/50 rounded-lg border dark:border-secondary-700">
+                                    <div>
+                                        <p className="font-medium">Scheduled Backup</p>
+                                        <p className="text-xs text-secondary-500">Run automatically when you are active.</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => updateAutoBackupSettings({ enabled: !autoBackupSettings.enabled })}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${autoBackupSettings.enabled ? 'bg-primary-600' : 'bg-secondary-300 dark:bg-secondary-600'}`}
+                                    >
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoBackupSettings.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                    </button>
+                                </div>
+
+                                <div className={`p-3 bg-secondary-50 dark:bg-secondary-900/50 rounded-lg border dark:border-secondary-700 transition-opacity ${!autoBackupSettings.enabled ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    <label className="text-xs font-bold text-secondary-500 uppercase block mb-1">Frequency</label>
+                                    <select 
+                                        value={autoBackupSettings.frequency}
+                                        onChange={(e) => updateAutoBackupSettings({ frequency: e.target.value as any })}
+                                        className="bg-transparent border-none text-sm font-semibold focus:ring-0 w-full p-0"
+                                    >
+                                        <option value="weekly">Every Week</option>
+                                        <option value="monthly">Every Month</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {autoBackupSettings.enabled && (
+                                <div className="mt-4 flex items-center gap-4 text-xs text-secondary-500 bg-secondary-50 dark:bg-secondary-900/50 p-2 rounded border border-dashed dark:border-secondary-700">
+                                    <div className="flex-1">
+                                        <span className="font-bold uppercase mr-1">Last Run:</span>
+                                        {autoBackupSettings.lastBackup ? new Date(autoBackupSettings.lastBackup).toLocaleString() : 'Never'}
+                                    </div>
+                                    <div className="flex-1 text-right">
+                                        <span className="font-bold uppercase mr-1 text-primary-600">Next Due:</span>
+                                        {nextBackupDate}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -305,7 +371,6 @@ const SettingsPage: React.FC = () => {
 
                  {effectiveRole === UserRole.Admin && (
                     <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
-                        {/* FIX: Added header layout to accommodate the Tuition Fee increase button for Admins */}
                         <div className="flex justify-between items-center border-b pb-3 dark:border-secondary-700 mb-6">
                             <h2 className="text-xl font-semibold">School Details</h2>
                             <button onClick={() => setIsTuitionFeeModalOpen(true)} className="btn-secondary text-xs">

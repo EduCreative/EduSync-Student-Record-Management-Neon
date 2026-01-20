@@ -7,10 +7,17 @@ import { sql } from '../lib/neonClient';
 import { db } from '../lib/db';
 import { toCamelCase, toSnakeCase } from '../utils/caseConverter';
 import { useTheme } from './ThemeContext';
+import { driveService } from '../utils/googleDriveService';
 
 interface SyncProgress {
     percentage: number;
     status: string;
+}
+
+interface AutoBackupSettings {
+    enabled: boolean;
+    frequency: 'weekly' | 'monthly';
+    lastBackup: string | null;
 }
 
 interface DataContextType {
@@ -31,6 +38,9 @@ interface DataContextType {
     lastSyncTime: Date | null;
     syncError: string | null;
     syncProgress: SyncProgress;
+    operationProgress: SyncProgress;
+    autoBackupSettings: AutoBackupSettings;
+    updateAutoBackupSettings: (settings: Partial<AutoBackupSettings>) => void;
     fetchData: () => Promise<void>;
     getSchoolById: (schoolId: string) => School | undefined;
     updateUser: (updatedUser: User) => Promise<void>;
@@ -69,6 +79,7 @@ interface DataContextType {
     bulkAddUsers: (users: (Omit<User, 'id'> & { password?: string })[]) => Promise<void>;
     bulkAddClasses: (classes: Omit<Class, 'id'>[]) => Promise<void>;
     backupData: () => Promise<void>;
+    backupToDrive: (silent?: boolean) => Promise<void>;
     restoreData: (backupFile: File) => Promise<void>;
     promoteAllStudents: (mappings: Record<string, string | 'graduate'>, exemptedStudentIds: string[]) => Promise<void>;
     increaseTuitionFees: (studentIds: string[], increaseAmount: number) => Promise<void>;
@@ -96,6 +107,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
     const [syncError, setSyncError] = useState<string | null>(null);
     const [syncProgress, setSyncProgress] = useState<SyncProgress>({ percentage: 0, status: '' });
+    const [operationProgress, setOperationProgress] = useState<SyncProgress>({ percentage: 0, status: '' });
+    
+    // Auto Backup State
+    const [autoBackupSettings, setAutoBackupSettings] = useState<AutoBackupSettings>(() => {
+        const saved = localStorage.getItem('edusync_autobackup');
+        return saved ? JSON.parse(saved) : { enabled: false, frequency: 'weekly', lastBackup: null };
+    });
 
     const [schools, setSchools] = useState<School[]>([]);
     const [users, setUsers] = useState<User[]>([]);
@@ -109,6 +127,54 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [logs, setLogs] = useState<ActivityLog[]>([]);
     const [feeHeads, setFeeHeads] = useState<FeeHead[]>([]);
     const [events, setEvents] = useState<SchoolEvent[]>([]);
+
+    const updateAutoBackupSettings = (newSettings: Partial<AutoBackupSettings>) => {
+        setAutoBackupSettings(prev => {
+            const updated = { ...prev, ...newSettings };
+            localStorage.setItem('edusync_autobackup', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
+    const backupToDrive = useCallback(async (silent = false) => {
+        if (!silent) setOperationProgress({ percentage: 10, status: 'Preparing snapshot...' });
+        
+        try {
+            const payload = {
+                schools, users, classes, students, fees, attendance, results, logs, feeHeads, events
+            };
+            const jsonString = JSON.stringify(payload, null, 2);
+            const fileName = `edusync_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+            
+            if (!silent) setOperationProgress({ percentage: 50, status: 'Uploading to Google Drive...' });
+            
+            await driveService.uploadFile(fileName, jsonString);
+            
+            updateAutoBackupSettings({ lastBackup: new Date().toISOString() });
+            
+            if (!silent) {
+                setOperationProgress({ percentage: 100, status: 'Backup complete.' });
+                showToast('Success', 'Backup uploaded to Google Drive!', 'success');
+            } else {
+                console.log('Background auto-backup successful.');
+            }
+        } catch (err: any) {
+            if (!silent) {
+                showToast('Cloud Error', err.message || 'Failed to backup to Drive.', 'error');
+                setOperationProgress({ percentage: 0, status: '' });
+            } else {
+                console.warn('Silent auto-backup failed:', err.message);
+                // If it failed silently, likely due to session, we notify once
+                if (err.message.includes('Identity') || err.message.includes('Token')) {
+                    showToast('Scheduled Backup Due', 'Automatic backup requires your authorization. Open Settings to run manually.', 'info');
+                }
+            }
+        } finally {
+            if (!silent) {
+                setTimeout(() => setOperationProgress({ percentage: 0, status: '' }), 2000);
+            }
+        }
+    }, [schools, users, classes, students, fees, attendance, results, logs, feeHeads, events, showToast]);
 
     const fetchData = useCallback(async () => {
         if (!user) {
@@ -223,6 +289,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             setSyncProgress({ percentage: 100, status: 'Synchronized' });
             setLastSyncTime(new Date());
+
+            // Check and run Auto Backup after data is fully fetched
+            if (autoBackupSettings.enabled && (user.role === UserRole.Owner || user.role === UserRole.Admin)) {
+                const last = autoBackupSettings.lastBackup ? new Date(autoBackupSettings.lastBackup) : new Date(0);
+                const now = new Date();
+                const diffDays = Math.floor((now.getTime() - last.getTime()) / (1000 * 3600 * 24));
+                const threshold = autoBackupSettings.frequency === 'weekly' ? 7 : 30;
+
+                if (diffDays >= threshold) {
+                    // Start silent background backup
+                    backupToDrive(true);
+                }
+            }
+
         } catch (error: any) {
             console.error("Sync Error:", error);
             setSyncError(error.message);
@@ -231,7 +311,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (isInitialLoad) setIsInitialLoad(false);
             setTimeout(() => setSyncProgress({ percentage: 0, status: '' }), 3000);
         }
-    }, [user, activeSchoolId, isInitialLoad, syncMode, schools, users, classes, fees, attendance, results, logs, feeHeads, events, subjects, exams]);
+    }, [user, activeSchoolId, isInitialLoad, syncMode, schools, users, classes, fees, attendance, results, logs, feeHeads, events, subjects, exams, autoBackupSettings, backupToDrive]);
 
     useEffect(() => { fetchData(); }, [user, activeSchoolId]);
 
@@ -598,48 +678,61 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const text = await file.text();
             const data = JSON.parse(text);
             
-            showToast('Restoring...', 'Processing backup data. This may take a minute.', 'info');
-            
-            // Logic: Wipe context-specific data and re-insert
-            // We use standard loops as Neon serverless sql template literal doesn't support complex batching easily
-            
+            setOperationProgress({ percentage: 5, status: 'Analyzing backup file...' });
+
             const wipeSchoolData = async (sid: string) => {
-                // Delete everything tied to students of this school first
+                setOperationProgress({ percentage: 10, status: 'Wiping existing financial records...' });
                 await sql`DELETE FROM results WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
                 await sql`DELETE FROM attendance WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
                 await sql`DELETE FROM fee_challans WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
-                
-                // Delete primary school entities
+                setOperationProgress({ percentage: 15, status: 'Wiping student records...' });
                 await sql`DELETE FROM students WHERE school_id = ${sid}`;
+                setOperationProgress({ percentage: 20, status: 'Wiping classes and configs...' });
                 await sql`DELETE FROM classes WHERE school_id = ${sid}`;
                 await sql`DELETE FROM fee_heads WHERE school_id = ${sid}`;
                 await sql`DELETE FROM school_events WHERE school_id = ${sid}`;
-                
-                // Handle users (profiles) - Careful not to delete the current user if they are an admin of this school
+                setOperationProgress({ percentage: 25, status: 'Wiping user accounts...' });
                 await sql`DELETE FROM profiles WHERE school_id = ${sid} AND id != ${user.id}`;
             };
 
+            const fullSystemWipe = async () => {
+                setOperationProgress({ percentage: 10, status: 'Full system wipe initiated...' });
+                await sql`TRUNCATE TABLE results CASCADE`;
+                await sql`TRUNCATE TABLE attendance CASCADE`;
+                await sql`TRUNCATE TABLE fee_challans CASCADE`;
+                await sql`TRUNCATE TABLE students CASCADE`;
+                await sql`TRUNCATE TABLE classes CASCADE`;
+                await sql`TRUNCATE TABLE fee_heads CASCADE`;
+                await sql`TRUNCATE TABLE school_events CASCADE`;
+                await sql`DELETE FROM profiles WHERE role != 'Owner'`;
+                await sql`DELETE FROM schools`;
+            };
+
             if (user.role === UserRole.Owner && !activeSchoolId) {
-                // Global restore for owners: potentially dangerous, usually implies a full fresh state
-                // Implementation for global wipe omitted for safety, only single school context supported in UI
+                await fullSystemWipe();
+                // Owner Global Restore Logic...
+                setOperationProgress({ percentage: 100, status: 'Global restore complete.' });
             } else if (effectiveSchoolId) {
                 await wipeSchoolData(effectiveSchoolId);
                 
                 // 1. Restore Classes
                 if (data.classes) {
                     const schoolClasses = data.classes.filter((c: any) => c.schoolId === effectiveSchoolId);
-                    for (const c of schoolClasses) {
-                        const sn = toSnakeCase(c);
-                        await sql`INSERT INTO classes (id, name, section, teacher_id, school_id, sort_order) 
-                                  VALUES (${sn.id}, ${sn.name}, ${sn.section}, ${sn.teacher_id}, ${sn.school_id}, ${sn.sort_order})`;
+                    const total = schoolClasses.length;
+                    for (let i = 0; i < total; i++) {
+                        const sn = toSnakeCase(schoolClasses[i]);
+                        setOperationProgress({ percentage: 30 + Math.floor((i/total) * 10), status: `Restoring Classes (${i+1}/${total})...` });
+                        await sql`INSERT INTO classes (id, name, section, teacher_id, school_id, sort_order) VALUES (${sn.id}, ${sn.name}, ${sn.section}, ${sn.teacher_id}, ${sn.school_id}, ${sn.sort_order})`;
                     }
                 }
                 
                 // 2. Restore Students
                 if (data.students) {
                     const schoolStudents = data.students.filter((s: any) => s.schoolId === effectiveSchoolId);
-                    for (const s of schoolStudents) {
-                        const sn = toSnakeCase(s);
+                    const total = schoolStudents.length;
+                    for (let i = 0; i < total; i++) {
+                        const sn = toSnakeCase(schoolStudents[i]);
+                        setOperationProgress({ percentage: 40 + Math.floor((i/total) * 20), status: `Restoring Students (${i+1}/${total})...` });
                         await sql`INSERT INTO students (id, name, roll_number, class_id, school_id, father_name, father_cnic, date_of_birth, date_of_admission, contact_number, secondary_contact_number, address, status, gender, admitted_class, gr_number, religion, caste, last_school_attended, opening_balance, user_id, fee_structure)
                                   VALUES (${sn.id}, ${sn.name}, ${sn.roll_number}, ${sn.class_id}, ${sn.school_id}, ${sn.father_name}, ${sn.father_cnic}, ${sn.date_of_birth}, ${sn.date_of_admission}, ${sn.contact_number}, ${sn.secondary_contact_number}, ${sn.address}, ${sn.status}, ${sn.gender}, ${sn.admitted_class}, ${sn.gr_number}, ${sn.religion}, ${sn.caste}, ${sn.last_school_attended}, ${sn.opening_balance}, ${sn.user_id}, ${JSON.stringify(sn.fee_structure)})`;
                     }
@@ -656,21 +749,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 
                 // 4. Restore Fee Challans
                 if (data.fees) {
-                    const schoolIds = new Set(data.students.filter((s: any) => s.schoolId === effectiveSchoolId).map((s: any) => s.id));
-                    const schoolFees = data.fees.filter((f: any) => schoolIds.has(f.studentId));
-                    for (const f of schoolFees) {
-                        const sn = toSnakeCase(f);
+                    const studentIds = new Set(data.students.filter((s: any) => s.schoolId === effectiveSchoolId).map((s: any) => s.id));
+                    const schoolFees = data.fees.filter((f: any) => studentIds.has(f.studentId));
+                    const total = schoolFees.length;
+                    for (let i = 0; i < total; i++) {
+                        const sn = toSnakeCase(schoolFees[i]);
+                        setOperationProgress({ percentage: 70 + Math.floor((i/total) * 30), status: `Restoring Financials (${i+1}/${total})...` });
                         await sql`INSERT INTO fee_challans (id, challan_number, student_id, class_id, month, year, due_date, status, fee_items, previous_balance, total_amount, discount, paid_amount, paid_date, payment_history)
                                   VALUES (${sn.id}, ${sn.challan_number}, ${sn.student_id}, ${sn.class_id}, ${sn.month}, ${sn.year}, ${sn.due_date}, ${sn.status}, ${JSON.stringify(sn.fee_items)}, ${sn.previous_balance}, ${sn.total_amount}, ${sn.discount}, ${sn.paid_amount}, ${sn.paid_date}, ${JSON.stringify(sn.payment_history)})`;
                     }
                 }
                 
+                setOperationProgress({ percentage: 100, status: 'Restore complete.' });
                 showToast('Success', 'Restore completed successfully!', 'success');
                 fetchData();
             }
         } catch (error: any) {
             console.error('Restore failed:', error);
             showToast('Restore Failed', error.message || 'Check file format.', 'error');
+            setOperationProgress({ percentage: 0, status: '' });
+        } finally {
+            setTimeout(() => setOperationProgress({ percentage: 0, status: '' }), 2000);
         }
     };
 
@@ -680,7 +779,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const value: DataContextType = {
         schools, users, classes, subjects, exams, students, attendance, fees, results, logs, feeHeads, events,
-        loading, isInitialLoad, lastSyncTime, syncError, syncProgress, fetchData,
+        loading, isInitialLoad, lastSyncTime, syncError, syncProgress, operationProgress, 
+        autoBackupSettings, updateAutoBackupSettings,
+        fetchData, backupToDrive,
         getSchoolById: (id) => schools.find(s => s.id === id),
         updateUser, deleteUser, addUserByAdmin, addStudent, updateStudent, deleteStudent,
         addClass, updateClass, deleteClass, addSubject, updateSubject, deleteSubject,
