@@ -1,6 +1,12 @@
 
 # Changelog
 
+## [3.5.1] - 2025-02-21
+
+### Fixed
+- **Vercel Build**: Resolved `TS6133` error regarding unused variables in `ChallanScannerPage.tsx`.
+- **Header (Mobile)**: Reduced padding and hidden additional text labels on very small screens to ensure icons do not overflow the viewport.
+
 ## [3.5.0] - 2025-02-21
 
 ### Improved

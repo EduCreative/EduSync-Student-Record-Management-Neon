@@ -24,7 +24,6 @@ const ChallanScannerPage: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const detectorRef = useRef<BarcodeDetector | null>(null);
-    const lastNotFoundToast = useRef(0);
 
     const [isScanning, setIsScanning] = useState(false);
     const [scannedChallan, setScannedChallan] = useState<FeeChallan | null>(null);
