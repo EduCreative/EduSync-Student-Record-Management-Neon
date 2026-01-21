@@ -26,6 +26,8 @@ import SchoolDetailsPage from '../schools/SchoolDetailsPage';
 import ChallanScannerPage from '../challan-scanner/ChallanScannerPage';
 import AboutModal from '../common/AboutModal';
 import AnnouncementsPage from '../announcements/AnnouncementsPage';
+import { useData } from '../../context/DataContext';
+import OperationProgressOverlay from '../common/OperationProgressOverlay';
 
 export type ViewType = 'dashboard' | 'overview' | 'users' | 'students' | 'studentProfile' | 'teachers' | 'accountants' | 'classes' | 'schools' | 'schoolDetails' | 'settings' | 'results' | 'logs' | 'attendance' | 'fees' | 'calendar' | 'leavingCertificate' | 'reports' | 'userProfile' | 'scan-pay' | 'announcements' | string;
 
@@ -38,6 +40,7 @@ const Layout: React.FC = () => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeView, setActiveView] = useState<ActiveView>({ view: 'dashboard' });
     const { effectiveRole } = useAuth();
+    const { operationProgress } = useData();
     const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
 
     const renderContent = () => {
@@ -138,6 +141,7 @@ const Layout: React.FC = () => {
     return (
         <div className="flex h-screen bg-secondary-100 dark:bg-secondary-900 text-secondary-800 dark:text-secondary-200 transition-colors duration-300">
             <ToastContainer />
+            <OperationProgressOverlay progress={operationProgress} />
             <AboutModal isOpen={isAboutModalOpen} onClose={() => setIsAboutModalOpen(false)} />
             <Sidebar 
                 sidebarOpen={sidebarOpen} 
