@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { FeeChallan, Student } from '../../types';
@@ -92,37 +93,43 @@ const ChallanScannerPage: React.FC = () => {
         }
 
         if (!('BarcodeDetector' in window)) {
-            setError('Barcode detection is not supported in this browser.');
+            setError('Native barcode detection is not supported in this browser. Please use Google Chrome on Android or a very recent iOS version.');
             return;
         }
 
         try {
-            if (navigator.permissions && navigator.permissions.query) {
-                const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
-                if (permissionStatus.state === 'denied') {
-                    setError('Camera permission has been denied. To use the scanner, please go to your browser settings for this site and allow camera access.');
-                    return;
+            const constraints = {
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
                 }
-            }
+            };
 
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
             streamRef.current = stream;
+            
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
+                // Force play to ensure mobile browsers initialize the stream
+                try {
+                    await videoRef.current.play();
+                } catch (playErr) {
+                    console.warn("Video auto-play failed, waiting for user interaction or metadata.", playErr);
+                }
             }
+            
             detectorRef.current = new BarcodeDetector({ formats: ['code_128', 'qr_code'] });
             setIsScanning(true);
         } catch (err: any) {
-            let message = 'Could not access the camera. Please ensure you grant permission when prompted.';
+            let message = 'Could not access the camera.';
             if (err.name === 'NotAllowedError') {
-                message = 'Camera access was denied. To use the scanner, please go to your browser settings for this site and allow camera access.';
+                message = 'Camera permission denied. Please allow camera access in your browser settings.';
             } else if (err.name === 'NotFoundError') {
-                message = 'No camera was found on your device.';
-            } else if (err.name === 'NotReadableError') {
-                message = 'The camera is currently in use by another application or browser tab.';
+                message = 'No rear camera found on this device.';
             }
             setError(message);
-            console.error(err);
+            console.error("Scanner Error:", err);
         }
     }, [resetScanner]);
 
@@ -131,22 +138,17 @@ const ChallanScannerPage: React.FC = () => {
 
         const scanLoop = async () => {
             if (videoRef.current && detectorRef.current && isScanning && !scannedChallan) {
-                try {
-                    const barcodes = await detectorRef.current.detect(videoRef.current);
-                    if (barcodes.length > 0) {
-                        const challanNumber = barcodes[0].rawValue;
-                        const found = processChallanNumber(challanNumber);
-
-                        if (!found) {
-                            const now = Date.now();
-                            if (now - lastNotFoundToast.current > 3000) { // Only show toast every 3 seconds
-                                showToast('Not Found', `Challan #${challanNumber} not found.`, 'info');
-                                lastNotFoundToast.current = now;
-                            }
+                // Only scan if video is actually playing and producing frames
+                if (videoRef.current.readyState >= 2 && !videoRef.current.paused) {
+                    try {
+                        const barcodes = await detectorRef.current.detect(videoRef.current);
+                        if (barcodes.length > 0) {
+                            const challanNumber = barcodes[0].rawValue;
+                            processChallanNumber(challanNumber);
                         }
+                    } catch (e) {
+                        // Silent fail for individual frames
                     }
-                } catch (e) {
-                    console.error('Scan failed:', e);
                 }
             }
             animationFrameId = requestAnimationFrame(scanLoop);
@@ -158,13 +160,17 @@ const ChallanScannerPage: React.FC = () => {
 
         return () => {
             cancelAnimationFrame(animationFrameId);
-            stopScan();
         };
-    }, [isScanning, stopScan, showToast, scannedChallan, processChallanNumber]);
+    }, [isScanning, scannedChallan, processChallanNumber]);
     
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => stopScan();
+    }, [stopScan]);
+
     const handlePaymentModalClose = () => {
         setIsPaymentModalOpen(false);
-        resetScanner(); // Reset for next scan
+        resetScanner(); 
     };
     
     const balanceDue = scannedChallan ? scannedChallan.totalAmount - scannedChallan.discount - scannedChallan.paidAmount : 0;
@@ -186,13 +192,36 @@ const ChallanScannerPage: React.FC = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="bg-white dark:bg-secondary-800 p-4 rounded-lg shadow-md flex flex-col items-center">
                         <div className="w-full aspect-video bg-black rounded-md overflow-hidden relative flex items-center justify-center">
-                            <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${!isScanning ? 'hidden' : ''}`}></video>
-                            {!isScanning && <div className="text-secondary-400 flex flex-col items-center gap-2"><CameraOffIcon /><span className="text-sm">Camera is off</span></div>}
-                            {isScanning && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3/4 max-w-sm h-1/4 border-2 border-dashed border-white/50 rounded-lg"></div>}
+                            {/* Keep video in DOM to avoid initialization issues on mobile */}
+                            <video 
+                                ref={videoRef} 
+                                autoPlay 
+                                playsInline 
+                                muted 
+                                className={`w-full h-full object-cover ${!isScanning ? 'opacity-0 h-0 w-0' : 'opacity-100'}`}
+                            ></video>
+                            
+                            {!isScanning && (
+                                <div className="text-secondary-400 flex flex-col items-center gap-2">
+                                    <CameraOffIcon />
+                                    <span className="text-sm">Camera is inactive</span>
+                                </div>
+                            )}
+                            
+                            {isScanning && (
+                                <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                                    <div className="w-4/5 h-1/3 border-2 border-dashed border-neon-glow/60 rounded-lg shadow-[0_0_15px_rgba(0,243,255,0.3)] animate-pulse"></div>
+                                    <div className="mt-4 text-[10px] uppercase font-bold text-white bg-black/40 px-2 py-1 rounded backdrop-blur-sm">Align Barcode or QR inside box</div>
+                                </div>
+                            )}
                         </div>
-                        <button onClick={isScanning ? stopScan : startScan} className={`btn ${isScanning ? 'btn-danger' : 'btn-primary'} mt-4`}>
+                        
+                        <button 
+                            onClick={isScanning ? stopScan : startScan} 
+                            className={`btn ${isScanning ? 'btn-danger' : 'btn-primary'} mt-4 w-full sm:w-auto px-8 py-3`}
+                        >
                             {isScanning ? <CameraOffIcon /> : <CameraIcon />}
-                            {isScanning ? 'Stop Scanning' : 'Start Camera'}
+                            {isScanning ? 'Stop Camera' : 'Open Scanner'}
                         </button>
                         
                         <div className="w-full mt-4 pt-4 border-t dark:border-secondary-700">
@@ -202,7 +231,7 @@ const ChallanScannerPage: React.FC = () => {
                                     value={manualChallanNumber}
                                     onChange={(e) => setManualChallanNumber(e.target.value)}
                                     className="input-field"
-                                    placeholder="Or enter challan number manually"
+                                    placeholder="Enter Challan # manually"
                                     disabled={isScanning}
                                 />
                                 <button type="submit" className="btn-secondary" disabled={isScanning}><SearchIcon /></button>
@@ -210,47 +239,74 @@ const ChallanScannerPage: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="bg-white dark:bg-secondary-800 p-4 rounded-lg shadow-md">
-                        <h2 className="text-xl font-semibold mb-4 border-b pb-2 dark:border-secondary-700">Scanned Details</h2>
-                        {error && <div className="bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-200 p-4 rounded-md text-center">{error}</div>}
+                    <div className="bg-white dark:bg-secondary-800 p-4 rounded-lg shadow-md border-t-4 border-primary-500">
+                        <h2 className="text-xl font-bold mb-4 border-b pb-2 dark:border-secondary-700 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-primary-500 animate-pulse"></span>
+                            Live Results
+                        </h2>
+                        
+                        {error && (
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 p-4 rounded-lg text-sm text-center">
+                                <p className="font-bold mb-1">Initialization Failed</p>
+                                {error}
+                            </div>
+                        )}
+                        
                         {!error && scannedChallan && scannedStudent ? (
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-4">
-                                    <Avatar student={scannedStudent} className="w-16 h-16"/>
+                            <div className="space-y-4 animate-fade-in">
+                                <div className="flex items-center gap-4 p-3 bg-secondary-50 dark:bg-secondary-900/50 rounded-lg">
+                                    <Avatar student={scannedStudent} className="w-16 h-16 ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-secondary-800"/>
                                     <div>
-                                        <p className="font-bold text-lg">{scannedStudent.name}</p>
-                                        <p className="text-sm text-secondary-500">{classMap.get(scannedStudent.classId)} - <span className="font-bold text-primary-700 dark:text-primary-400">ID: {scannedStudent.rollNumber}</span></p>
-                                        <p className="text-xs text-secondary-400">Challan: {scannedChallan.challanNumber}</p>
+                                        <p className="font-bold text-lg text-secondary-900 dark:text-white leading-tight">{scannedStudent.name}</p>
+                                        <p className="text-sm text-secondary-500">{classMap.get(scannedStudent.classId)} | <span className="font-bold text-primary-700 dark:text-primary-400">ID: {scannedStudent.rollNumber}</span></p>
+                                        <p className="text-[10px] uppercase font-bold text-secondary-400 mt-1">Challan: {scannedChallan.challanNumber}</p>
                                     </div>
                                 </div>
 
-                                <div className="bg-secondary-50 dark:bg-secondary-700/50 p-3 rounded-md text-sm">
-                                    <div className="flex justify-between mb-1">
-                                        <span>Total Amount:</span>
-                                        <span className="font-bold">Rs. {scannedChallan.totalAmount.toLocaleString()}</span>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-secondary-500">Total Amount:</span>
+                                        <span className="font-semibold">Rs. {scannedChallan.totalAmount.toLocaleString()}</span>
                                     </div>
-                                    <div className="flex justify-between mb-1">
-                                        <span>Paid Amount:</span>
+                                    <div className="flex justify-between">
+                                        <span className="text-secondary-500">Paid Amount:</span>
                                         <span className="font-bold text-green-600 dark:text-green-400">Rs. {scannedChallan.paidAmount.toLocaleString()}</span>
                                     </div>
-                                    <div className="flex justify-between pt-2 border-t dark:border-secondary-600">
-                                        <span>Balance Due:</span>
-                                        <span className={`font-bold ${balanceDue > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                    <div className="flex justify-between pt-2 border-t dark:border-secondary-700 text-base">
+                                        <span className="font-bold">Balance Due:</span>
+                                        <span className={`font-black ${balanceDue > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                                             Rs. {balanceDue.toLocaleString()}
                                         </span>
                                     </div>
                                 </div>
 
-                                <button onClick={() => setIsPaymentModalOpen(true)} className="btn-primary w-full mt-2">
-                                    Record Payment
+                                <button 
+                                    onClick={() => setIsPaymentModalOpen(true)} 
+                                    className="btn-primary w-full mt-2 py-3 font-bold text-lg shadow-neon-glow/20"
+                                >
+                                    Record Payment Now
                                 </button>
                             </div>
                         ) : (
-                            !error && <p className="text-center text-secondary-500 py-8">Scan a QR code or barcode to view details.</p>
+                            !error && (
+                                <div className="py-12 flex flex-col items-center justify-center text-center opacity-40">
+                                    <div className="w-16 h-16 border-4 border-dashed border-secondary-300 dark:border-secondary-600 rounded-full mb-4 animate-spin-slow"></div>
+                                    <p className="text-secondary-500 font-medium">Waiting for valid barcode scan...</p>
+                                </div>
+                            )
                         )}
                     </div>
                 </div>
             </div>
+            
+            <style>{`
+                @keyframes fade-in {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
+                .animate-spin-slow { animation: spin 8s linear infinite; }
+            `}</style>
         </>
     );
 };

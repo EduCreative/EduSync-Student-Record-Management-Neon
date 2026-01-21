@@ -89,6 +89,8 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
 export const useData = (): DataContextType => {
     const context = useContext(DataContext);
     if (!context) {
@@ -477,6 +479,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const BATCH_SIZE = 40; 
         const currentStudentIds = [...studentIds];
         
+        const monthIndex = months.indexOf(month) + 1;
+        const monthStr = String(monthIndex).padStart(2, '0');
+
         while (currentStudentIds.length > 0) {
             const batchIds = currentStudentIds.splice(0, BATCH_SIZE);
             const batchPromises = batchIds.map(async (sId) => {
@@ -500,7 +505,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 const subtotal = items.reduce((sum: number, i: any) => sum + i.amount, 0);
                 const totalAmount = subtotal + arrears;
-                const cNum = `${year}${month.substring(0, 3)}-${student.rollNumber}`;
+                
+                // Purely Numeric format: YYYYMM-RollNumber
+                const cNum = `${year}${monthStr}-${student.rollNumber}`;
 
                 return sql`
                     INSERT INTO fee_challans (id, challan_number, student_id, class_id, month, year, due_date, status, fee_items, previous_balance, total_amount, discount, paid_amount)
@@ -778,7 +785,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 for (let i = 0; i < total; i++) {
                     const record = { ...dataArray[i] };
                     
-                    // CRITICAL: Remap school ID to current context if not global
                     if (!isOwnerGlobalView && effectiveSchoolId) {
                         record.schoolId = effectiveSchoolId;
                     }
@@ -803,12 +809,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         await (sql as any)(query, values);
                     } catch (e) {
                         console.error(`Row insertion failed in ${tableName}:`, sn, e);
-                        // We continue to allow other records to restore
                     }
                 }
             };
 
-            // Order matters: Parents (Heads, Classes) must exist before Children (Students, Fees)
             await processTable('fee_heads', rawData.feeHeads, 30, 5);
             await processTable('subjects', rawData.subjects, 35, 5);
             await processTable('exams', rawData.exams, 40, 5);
@@ -819,7 +823,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await processTable('results', rawData.results, 95, 5);
 
             setOperationProgress({ percentage: 100, status: 'Reconstruction complete!' });
-            showToast('Success', 'School database reconstruction complete!', 'success');
+            showToast('Success', 'Cloud database reconstruction complete!', 'success');
             await fetchData();
         } catch (error: any) {
             console.error('Restore Crash:', error);

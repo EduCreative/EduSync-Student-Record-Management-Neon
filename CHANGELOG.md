@@ -1,11 +1,11 @@
 
 # Changelog
 
-## [3.4.9] - 2025-02-21
+## [3.5.0] - 2025-02-21
 
-### Added
-- **Vercel Analytics**: Integrated official Vercel Analytics for real-time performance monitoring and visitor insights.
-- **Web Vitals Tracking**: Automated tracking of LCP, FID, and CLS to ensure smooth administrative workflows.
+### Improved
+- **Header Responsiveness**: Overhauled the header layout for mobile devices. Non-essential text labels are now hidden on small screens to prevent horizontal overflow, while critical icons remain accessible.
+- **Dynamic Text Handling**: School names now truncate gracefully on mobile to prioritize action buttons.
 
-## [3.4.8] - 2025-02-21
-- **Unique Constraint Violations**: Resolved the "duplicate key value violates unique constraint" error during restore by implementing a robust SQL Upsert (Insert or Update) engine.
+## [3.4.11] - 2025-02-21
+- **Challan Scanner (Mobile)**: Fixed an issue where the camera would close immediately after opening on mobile devices.
