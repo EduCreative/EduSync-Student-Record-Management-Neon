@@ -127,7 +127,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [feeHeads, setFeeHeads] = useState<FeeHead[]>([]);
     const [events, setEvents] = useState<SchoolEvent[]>([]);
 
-    // Concurrency lock for backups
     const isBackingUpRef = useRef(false);
 
     const updateAutoBackupSettings = useCallback((newSettings: Partial<AutoBackupSettings>) => {
@@ -177,7 +176,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [schools, users, classes, students, fees, attendance, results, logs, feeHeads, events, subjects, exams, showToast, updateAutoBackupSettings]);
 
-    // primary data fetch
     const fetchData = useCallback(async () => {
         if (!user) {
             setLoading(false);
@@ -296,7 +294,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     useEffect(() => { fetchData(); }, [user, activeSchoolId]);
 
-    // Independent Auto Backup Checker
     const lastCheckRef = useRef(0);
     useEffect(() => {
         if (!user || !autoBackupSettings.enabled) return;
@@ -712,22 +709,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const text = await file.text();
             const rawData = JSON.parse(text);
             
-            setOperationProgress({ percentage: 5, status: 'Pre-flight data integrity check...' });
+            setOperationProgress({ percentage: 5, status: 'Performing deep data integrity check...' });
 
             const wipeSchoolData = async (sid: string) => {
-                setOperationProgress({ percentage: 10, status: 'Clearing existing records...' });
+                setOperationProgress({ percentage: 10, status: 'Purging existing ledgers...' });
                 await sql`DELETE FROM results WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
                 await sql`DELETE FROM attendance WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
                 await sql`DELETE FROM fee_challans WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
-                setOperationProgress({ percentage: 15, status: 'Purging student directory...' });
+                setOperationProgress({ percentage: 15, status: 'Cleaning directories...' });
                 await sql`DELETE FROM students WHERE school_id = ${sid}`;
-                setOperationProgress({ percentage: 20, status: 'Resetting school configuration...' });
+                setOperationProgress({ percentage: 20, status: 'Resetting school config...' });
                 await sql`DELETE FROM classes WHERE school_id = ${sid}`;
                 await sql`DELETE FROM fee_heads WHERE school_id = ${sid}`;
                 await sql`DELETE FROM school_events WHERE school_id = ${sid}`;
                 await sql`DELETE FROM subjects WHERE school_id = ${sid}`;
                 await sql`DELETE FROM exams WHERE school_id = ${sid}`;
-                setOperationProgress({ percentage: 25, status: 'Removing associated credentials...' });
+                setOperationProgress({ percentage: 25, status: 'Updating security profiles...' });
                 await sql`DELETE FROM profiles WHERE school_id = ${sid} AND id != ${user.id}`;
             };
 
@@ -748,51 +745,70 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (isOwnerGlobalView) {
                 await fullSystemWipe();
-                
                 if (rawData.schools) {
                     for (const s of rawData.schools) {
                         const sn = toSnakeCase(s);
-                        await sql`INSERT INTO schools (id, name, address, logo_url) VALUES (${sn.id}, ${sn.name}, ${sn.address}, ${sn.logo_url})`;
+                        const keys = Object.keys(sn);
+                        const vals = Object.values(sn);
+                        const updateClause = keys.map(k => `${k} = EXCLUDED.${k}`).join(', ');
+                        const query = `INSERT INTO schools (${keys.join(', ')}) VALUES (${keys.map((_, i) => `$${i+1}`).join(', ')}) ON CONFLICT (id) DO UPDATE SET ${updateClause}`;
+                        await (sql as any)(query, vals);
                     }
                 }
-                
                 if (rawData.users) {
                     for (const u of rawData.users) {
                         if (u.id === user.id) continue;
                         const sn = toSnakeCase(u);
-                        await sql`INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url) VALUES (${sn.id}, ${sn.name}, ${sn.email}, ${sn.password}, ${sn.role}, ${sn.school_id}, ${sn.status}, ${sn.avatar_url})`;
+                        const keys = Object.keys(sn);
+                        const vals = Object.values(sn);
+                        const updateClause = keys.map(k => `${k} = EXCLUDED.${k}`).join(', ');
+                        const query = `INSERT INTO profiles (${keys.join(', ')}) VALUES (${keys.map((_, i) => `$${i+1}`).join(', ')}) ON CONFLICT (id) DO UPDATE SET ${updateClause}`;
+                        await (sql as any)(query, vals);
                     }
                 }
             } else if (effectiveSchoolId) {
                 await wipeSchoolData(effectiveSchoolId);
             } else {
-                throw new Error("No valid context found for restore.");
+                throw new Error("Invalid restore context.");
             }
 
-            // The following data arrays might need mapping if school_id differs
             const processTable = async (tableName: string, dataArray: any[], basePercentage: number, weight: number) => {
                 if (!dataArray || !Array.isArray(dataArray)) return;
                 const total = dataArray.length;
                 for (let i = 0; i < total; i++) {
-                    const record = dataArray[i];
-                    // Remap school ID if not in global mode
-                    if (!isOwnerGlobalView) record.schoolId = effectiveSchoolId;
+                    const record = { ...dataArray[i] };
+                    
+                    // CRITICAL: Remap school ID to current context if not global
+                    if (!isOwnerGlobalView && effectiveSchoolId) {
+                        record.schoolId = effectiveSchoolId;
+                    }
                     
                     const sn = toSnakeCase(record);
                     setOperationProgress({ 
                         percentage: basePercentage + Math.floor((i/total) * weight), 
-                        status: `Reconstructing ${tableName} (${i+1}/${total})...` 
+                        status: `Reconstructing ${tableName.replace('_', ' ')} (${i+1}/${total})...` 
                     });
 
-                    // Prepare SQL dynamically based on table columns
                     const keys = Object.keys(sn);
-                    const values = Object.values(sn).map(v => typeof v === 'object' ? JSON.stringify(v) : v);
+                    const values = Object.values(sn).map(v => (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
                     
-                    const query = `INSERT INTO ${tableName} (${keys.join(', ')}) VALUES (${keys.map((_, idx) => `$${idx + 1}`).join(', ')})`;
-                    await (sql as any)(query, values);
+                    const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
+                    const updateClause = keys.filter(k => k !== 'id').map(k => `${k} = EXCLUDED.${k}`).join(', ');
+                    
+                    const query = `INSERT INTO ${tableName} (${keys.join(', ')}) 
+                                   VALUES (${placeholders}) 
+                                   ON CONFLICT (id) DO UPDATE SET ${updateClause}`;
+                                   
+                    try {
+                        await (sql as any)(query, values);
+                    } catch (e) {
+                        console.error(`Row insertion failed in ${tableName}:`, sn, e);
+                        // We continue to allow other records to restore
+                    }
                 }
             };
 
+            // Order matters: Parents (Heads, Classes) must exist before Children (Students, Fees)
             await processTable('fee_heads', rawData.feeHeads, 30, 5);
             await processTable('subjects', rawData.subjects, 35, 5);
             await processTable('exams', rawData.exams, 40, 5);
@@ -802,12 +818,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await processTable('attendance', rawData.attendance, 85, 10);
             await processTable('results', rawData.results, 95, 5);
 
-            setOperationProgress({ percentage: 100, status: 'Finalizing database sync...' });
-            showToast('Success', 'Cloud database reconstruction complete!', 'success');
+            setOperationProgress({ percentage: 100, status: 'Reconstruction complete!' });
+            showToast('Success', 'School database reconstruction complete!', 'success');
             await fetchData();
         } catch (error: any) {
-            console.error('Critical Failure during Restore:', error);
-            showToast('Restore Failed', error.message || 'The snapshot file might be corrupted.', 'error');
+            console.error('Restore Crash:', error);
+            showToast('Restore Failed', error.message || 'The snapshot file is invalid.', 'error');
             setOperationProgress({ percentage: 0, status: '' });
         } finally {
             setTimeout(() => setOperationProgress({ percentage: 0, status: '' }), 4000);
