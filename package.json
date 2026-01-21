@@ -2,7 +2,7 @@
 {
   "name": "edusync-student-record-management-neon",
   "private": true,
-  "version": "3.4.8",
+  "version": "3.4.9",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
   "dependencies": {
     "@google/genai": "^0.12.0",
     "@neondatabase/serverless": "^0.9.0",
+    "@vercel/analytics": "^1.5.0",
     "dexie": "^4.0.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

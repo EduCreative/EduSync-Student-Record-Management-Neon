@@ -14,6 +14,7 @@ import ResetPasswordPage from './components/auth/ResetPasswordPage';
 import { PWAInstallProvider } from './context/PWAInstallContext';
 import { SyncProvider } from './context/SyncContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { Analytics } from '@vercel/analytics/react';
 
 type AuthView = 'login' | 'register' | 'requestReset';
 
@@ -74,6 +75,7 @@ const App: React.FC = () => {
                         <PrintProvider>
                             <PWAInstallProvider>
                                 <AppContent />
+                                <Analytics />
                             </PWAInstallProvider>
                         </PrintProvider>
                     </NotificationProvider>
