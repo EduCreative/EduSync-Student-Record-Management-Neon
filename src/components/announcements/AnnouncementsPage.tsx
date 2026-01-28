@@ -38,37 +38,55 @@ const AnnouncementsPage: React.FC = () => {
 
         setIsSending(true);
         try {
-            let targetUsers = users.filter(u => u.schoolId === effectiveSchoolId);
+            let finalRecipientIds = new Set<string>();
+            const potentialUsers = users.filter(u => u.schoolId === effectiveSchoolId);
 
-            if (targetRole !== 'All') {
-                targetUsers = targetUsers.filter(u => u.role === targetRole);
-            }
-
-            if (targetClassId !== 'All') {
-                const classStudents = students.filter(s => s.classId === targetClassId);
-                const classUserIds = new Set<string>();
-                
-                classStudents.forEach(s => {
-                    if (s.userId) classUserIds.add(s.userId);
-                    // Resolution logic for finding associated parents could be added here
-                    // if parents are stored in a different linkage table.
+            if (targetClassId === 'All') {
+                // Broad targeting by role
+                potentialUsers.forEach(u => {
+                    if (targetRole === 'All' || u.role === targetRole) {
+                        finalRecipientIds.add(u.id);
+                    }
                 });
-                
-                targetUsers = targetUsers.filter(u => classUserIds.has(u.id));
+            } else {
+                // Class-specific targeting
+                const studentsInClass = students.filter(s => s.classId === targetClassId && s.schoolId === effectiveSchoolId);
+                const studentIdsInClassSet = new Set(studentsInClass.map(s => s.id));
+                const studentUserIdsInClassSet = new Set(studentsInClass.filter(s => s.userId).map(s => s.userId!));
+
+                potentialUsers.forEach(u => {
+                    const isTargetRole = targetRole === 'All' || u.role === targetRole;
+                    if (!isTargetRole) return;
+
+                    if (u.role === UserRole.Student) {
+                        if (studentUserIdsInClassSet.has(u.id)) {
+                            finalRecipientIds.add(u.id);
+                        }
+                    } else if (u.role === UserRole.Parent) {
+                        // Check if this parent has any children in the selected class
+                        const hasChildInClass = u.childStudentIds?.some(childId => studentIdsInClassSet.has(childId));
+                        if (hasChildInClass) {
+                            finalRecipientIds.add(u.id);
+                        }
+                    } else if (targetRole === 'All') {
+                        // If targeting "All" by role but specific class, we usually only mean students/parents of that class
+                        // However, we can include class teachers here if desired.
+                    }
+                });
             }
 
-            const userIds = targetUsers.map(u => u.id);
+            const userIds = Array.from(finalRecipientIds);
             
             if (userIds.length === 0) {
                 showToast('Info', 'No users match your criteria.', 'info');
             } else {
                 await sendAnnouncement(userIds, title, message);
-                showToast('Success', `Announcement sent to ${userIds.length} users.`, 'success');
+                showToast('Success', `Announcement broadcasted to ${userIds.length} users.`, 'success');
                 setTitle('');
                 setMessage('');
             }
-        } catch (error) {
-            showToast('Error', 'Failed to send announcement.', 'error');
+        } catch (error: any) {
+            showToast('Error', `Broadcast failed: ${error.message || 'Check database connection'}`, 'error');
         } finally {
             setIsSending(false);
         }
@@ -144,14 +162,14 @@ const AnnouncementsPage: React.FC = () => {
                             <button 
                                 type="submit" 
                                 disabled={isSending}
-                                className="btn-primary px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
+                                className="btn-primary px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-neon-glow/20"
                             >
                                 {isSending ? (
                                     <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                                 ) : (
                                     <MegaphoneIcon className="w-5 h-5" />
                                 )}
-                                Send Announcement
+                                {isSending ? 'Broadcasting...' : 'Send Announcement'}
                             </button>
                         </div>
                     </form>

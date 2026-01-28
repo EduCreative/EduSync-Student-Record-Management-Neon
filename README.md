@@ -5,8 +5,9 @@
 
 ---
 
-## ✨ Key Features (v3.3.9)
+## ✨ Key Features (v3.5.2)
 - **Hybrid Sync**: Support for Offline-First (Dexie.js) and Online-Only database modes.
+- **Smart Broadcasts**: Send targeted announcements to specific classes, parents, or student groups.
 - **Google Drive Backup**: Securely save snapshots to your personal cloud.
 - **Global Owner Control**: Full system backup and restoration for Owners.
 
@@ -35,4 +36,4 @@ If you see an "Access Blocked" or "Unverified App" screen when backing up to Dri
 ---
 
 ## 🗄️ Neon Schema (SQL)
-*(Refer to the end of this file for the full SQL schema.)*
+To ensure all features work correctly, run the SQL commands in `schema.sql` within your Neon SQL Editor. This will create the necessary tables for profiles, schools, students, fees, and announcements.

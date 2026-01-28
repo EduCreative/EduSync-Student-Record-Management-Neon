@@ -80,13 +80,18 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (userIds.length === 0) return;
 
         try {
-            // Batch insert using values
-            // We use a manual string construction for simple SQL compatibility here since userIds are validated
-            for (const id of userIds) {
-                await sql`
-                    INSERT INTO notifications (id, user_id, title, message, link, is_read, timestamp)
-                    VALUES (${crypto.randomUUID()}, ${id}, ${title}, ${message}, ${link || null}, false, NOW())
-                `;
+            // Process in chunks of 20 to balance performance and connection stability
+            const CHUNK_SIZE = 20;
+            const uniqueUserIds = Array.from(new Set(userIds));
+
+            for (let i = 0; i < uniqueUserIds.length; i += CHUNK_SIZE) {
+                const chunk = uniqueUserIds.slice(i, i + CHUNK_SIZE);
+                await Promise.all(chunk.map(id => 
+                    sql`
+                        INSERT INTO notifications (id, user_id, title, message, link, is_read, timestamp)
+                        VALUES (${crypto.randomUUID()}, ${id}, ${title}, ${message}, ${link || null}, false, NOW())
+                    `
+                ));
             }
         } catch (error) {
             console.error('Failed to send announcements:', error);
