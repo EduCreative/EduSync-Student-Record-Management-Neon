@@ -7,7 +7,7 @@ import { sql } from '../lib/neonClient';
 import { db } from '../lib/db';
 import { toCamelCase, toSnakeCase } from '../utils/caseConverter';
 import { useTheme } from './ThemeContext';
-import { driveService } from '../utils/googleDriveService';
+import { driveService, DriveFile } from '../utils/googleDriveService';
 
 interface SyncProgress {
     percentage: number;
@@ -18,6 +18,8 @@ interface AutoBackupSettings {
     enabled: boolean;
     frequency: 'weekly' | 'monthly';
     lastBackup: string | null;
+    lastBackupSize: string | null;
+    includePhotos: boolean;
 }
 
 interface DataContextType {
@@ -113,7 +115,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     const [autoBackupSettings, setAutoBackupSettings] = useState<AutoBackupSettings>(() => {
         const saved = localStorage.getItem('edusync_autobackup');
-        return saved ? JSON.parse(saved) : { enabled: false, frequency: 'weekly', lastBackup: null };
+        return saved ? JSON.parse(saved) : { 
+            enabled: false, 
+            frequency: 'weekly', 
+            lastBackup: null, 
+            lastBackupSize: null,
+            includePhotos: true 
+        };
     });
 
     const [schools, setSchools] = useState<School[]>([]);
@@ -143,20 +151,43 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (isBackingUpRef.current) return;
         isBackingUpRef.current = true;
 
-        if (!silent) setOperationProgress({ percentage: 10, status: 'Creating system snapshot...' });
+        if (!silent) setOperationProgress({ percentage: 10, status: 'Preparing selective data backup...' });
         
         try {
+            // Conditionally strip photos to save memory if requested
+            const finalSchools = autoBackupSettings.includePhotos ? schools : schools.map(s => { const { logoUrl, ...rest } = s; return rest as School; });
+            const finalUsers = autoBackupSettings.includePhotos ? users : users.map(u => { const { avatarUrl, ...rest } = u; return rest as User; });
+            const finalStudents = autoBackupSettings.includePhotos ? students : students.map(s => { const { avatarUrl, ...rest } = s; return rest as Student; });
+
             const payload = {
-                schools, users, classes, students, fees, attendance, results, logs, feeHeads, events, subjects, exams
+                schools: finalSchools, 
+                users: finalUsers, 
+                classes, 
+                students: finalStudents, 
+                fees, 
+                attendance, 
+                results, 
+                logs, 
+                feeHeads, 
+                events, 
+                subjects, 
+                exams
             };
+
             const jsonString = JSON.stringify(payload, null, 2);
+            // Calculate size in MB
+            const sizeInMB = (new Blob([jsonString]).size / (1024 * 1024)).toFixed(2) + ' MB';
+            
             const fileName = `edusync_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
             
-            if (!silent) setOperationProgress({ percentage: 40, status: 'Handshaking with Google Drive...' });
+            if (!silent) setOperationProgress({ percentage: 40, status: `Handshaking with Google Drive... (${sizeInMB})` });
             
             await driveService.uploadFile(fileName, jsonString);
             
-            updateAutoBackupSettings({ lastBackup: new Date().toISOString() });
+            updateAutoBackupSettings({ 
+                lastBackup: new Date().toISOString(),
+                lastBackupSize: sizeInMB
+            });
             
             if (!silent) {
                 setOperationProgress({ percentage: 100, status: 'Snapshot secured!' });
@@ -176,7 +207,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setTimeout(() => setOperationProgress({ percentage: 0, status: '' }), 3000);
             }
         }
-    }, [schools, users, classes, students, fees, attendance, results, logs, feeHeads, events, subjects, exams, showToast, updateAutoBackupSettings]);
+    }, [schools, users, classes, students, fees, attendance, results, logs, feeHeads, events, subjects, exams, showToast, updateAutoBackupSettings, autoBackupSettings.includePhotos]);
 
     const fetchData = useCallback(async () => {
         if (!user) {
@@ -623,7 +654,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const id = crypto.randomUUID();
             const un = toSnakeCase({ ...u, id });
             setOperationProgress({ percentage: Math.round((i/total) * 100), status: `Importing User ${i+1} of ${total}...` });
-            await sql`INSERT INTO profiles (id, name, email, password, role, school_id, status) VALUES (${un.id}, ${un.name}, ${un.email}, ${un.password}, ${un.role}, ${un.school_id}, ${un.status})`;
+            await sql`INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url) VALUES (${un.id}, ${un.name}, ${un.email}, ${un.password}, ${un.role}, ${un.school_id}, ${un.status}, ${un.avatar_url})`;
         }
         await fetchData();
         setOperationProgress({ percentage: 0, status: '' });
@@ -752,27 +783,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (isOwnerGlobalView) {
                 await fullSystemWipe();
-                if (rawData.schools) {
-                    for (const s of rawData.schools) {
-                        const sn = toSnakeCase(s);
-                        const keys = Object.keys(sn);
-                        const vals = Object.values(sn);
-                        const updateClause = keys.map(k => `${k} = EXCLUDED.${k}`).join(', ');
-                        const query = `INSERT INTO schools (${keys.join(', ')}) VALUES (${keys.map((_, i) => `$${i+1}`).join(', ')}) ON CONFLICT (id) DO UPDATE SET ${updateClause}`;
-                        await (sql as any)(query, vals);
-                    }
-                }
-                if (rawData.users) {
-                    for (const u of rawData.users) {
-                        if (u.id === user.id) continue;
-                        const sn = toSnakeCase(u);
-                        const keys = Object.keys(sn);
-                        const vals = Object.values(sn);
-                        const updateClause = keys.map(k => `${k} = EXCLUDED.${k}`).join(', ');
-                        const query = `INSERT INTO profiles (${keys.join(', ')}) VALUES (${keys.map((_, i) => `$${i+1}`).join(', ')}) ON CONFLICT (id) DO UPDATE SET ${updateClause}`;
-                        await (sql as any)(query, vals);
-                    }
-                }
             } else if (effectiveSchoolId) {
                 await wipeSchoolData(effectiveSchoolId);
             } else {
@@ -785,8 +795,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 for (let i = 0; i < total; i++) {
                     const record = { ...dataArray[i] };
                     
+                    // Filter: Skip current owner profile during global restore to prevent session loss
+                    if (tableName === 'profiles' && record.id === user.id) continue;
+
+                    // If not global restore, force the current school ID onto the records
                     if (!isOwnerGlobalView && effectiveSchoolId) {
-                        record.schoolId = effectiveSchoolId;
+                        // These tables have school_id columns
+                        const schoolLinkedTables = ['fee_heads', 'subjects', 'exams', 'classes', 'students', 'school_events', 'profiles'];
+                        if (schoolLinkedTables.includes(tableName)) {
+                            record.schoolId = effectiveSchoolId;
+                        }
                     }
                     
                     const sn = toSnakeCase(record);
@@ -796,7 +814,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     });
 
                     const keys = Object.keys(sn);
-                    const values = Object.values(sn).map(v => (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+                    const values = Object.values(sn).map(v => {
+                        if (v === null || v === undefined) return null;
+                        if (typeof v === 'object') return JSON.stringify(v);
+                        return v;
+                    });
                     
                     const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
                     const updateClause = keys.filter(k => k !== 'id').map(k => `${k} = EXCLUDED.${k}`).join(', ');
@@ -812,6 +834,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
                 }
             };
+
+            // Global tables first if applicable
+            if (isOwnerGlobalView) {
+                await processTable('schools', rawData.schools, 20, 5);
+                await processTable('profiles', rawData.users, 25, 5);
+            }
 
             await processTable('fee_heads', rawData.feeHeads, 30, 5);
             await processTable('subjects', rawData.subjects, 35, 5);
@@ -847,10 +875,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         updateUser, deleteUser, addUserByAdmin, addStudent, updateStudent, deleteStudent,
         addClass, updateClass, deleteClass, addSubject, updateSubject, deleteSubject,
         addExam, updateExam, deleteExam, setAttendance, recordFeePayment, updateFeePayment, cancelChallan,
-        generateChallansForMonth, deleteChallansForMonth, addFeeHead, updateFeeHead, deleteFeeHead,
-        issueLeavingCertificate, saveResults, addSchool, updateSchool, deleteSchool,
+        generateChallansForMonth, deleteChallansForMonth, addSchool, updateSchool, deleteSchool,
         addEvent, updateEvent, deleteEvent, bulkAddStudents, bulkAddUsers, bulkAddClasses,
-        backupData, restoreData, promoteAllStudents, increaseTuitionFees, sendFeeReminders, bulkUpdateClassOrder
+        backupData, restoreData, promoteAllStudents, increaseTuitionFees, sendFeeReminders, bulkUpdateClassOrder, addFeeHead, updateFeeHead, deleteFeeHead,
+        issueLeavingCertificate, saveResults
     };
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

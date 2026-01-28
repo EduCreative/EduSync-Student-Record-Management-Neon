@@ -21,6 +21,10 @@ const GoogleIcon = () => (
     </svg>
 );
 
+const CloudIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>
+);
+
 const SettingsPage: React.FC = () => {
     const { toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, syncMode, setSyncMode, sidebarMode, setSidebarMode } = useTheme();
     const { user, effectiveRole, activeSchoolId } = useAuth();
@@ -200,72 +204,105 @@ const SettingsPage: React.FC = () => {
             <div className="max-w-4xl mx-auto space-y-8">
                 <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Settings</h1>
 
+                {/* WHATSAPP STYLE BACKUP SECTION */}
                 <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Cloud Backup (Google Drive)</h2>
-                    <div className="space-y-6">
-                        <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg flex items-start gap-4">
-                            <div className="p-2 bg-white dark:bg-secondary-800 rounded-full shadow-sm flex-shrink-0 border dark:border-secondary-700"><GoogleIcon /></div>
-                            <div className="flex-1">
-                                <h3 className="font-semibold text-secondary-900 dark:text-white">External Cloud Vault</h3>
-                                <p className="text-sm text-secondary-600 dark:text-secondary-400 mt-1">
-                                    Secure your institution's records in your private Google Drive. This acts as an immutable second layer of safety.
-                                </p>
-                                <div className="mt-4 flex flex-wrap gap-3">
-                                    <button onClick={handleManualDriveBackup} disabled={isCloudBackingUp} className="btn-primary">
-                                        {isCloudBackingUp ? 'Securing...' : 'Backup Now'}
-                                    </button>
-                                    <button onClick={handleFetchCloudBackups} disabled={isFetchingCloud} className="btn-secondary">
-                                        {isFetchingCloud ? 'Searching...' : 'Restore from Cloud'}
-                                    </button>
-                                </div>
+                    <div className="flex items-start gap-4 mb-6">
+                        <div className="p-3 bg-primary-100 dark:bg-primary-900/30 rounded-full">
+                            <CloudIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-secondary-900 dark:text-white leading-tight">Google Drive Backup</h2>
+                            <p className="text-sm text-secondary-500 mt-1 max-w-lg">
+                                Backup institutional records to your private Google Drive vault. You can restore them when switching devices or reinstalling the app.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="bg-secondary-50 dark:bg-secondary-900/40 rounded-xl p-5 mb-6 border dark:border-secondary-700">
+                        <h3 className="text-xs font-bold text-secondary-400 uppercase tracking-widest mb-3">Last Backup</h3>
+                        <div className="space-y-2">
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-sm font-medium text-secondary-600 dark:text-secondary-400">Timestamp:</span>
+                                <span className="text-sm font-bold text-secondary-900 dark:text-white">
+                                    {autoBackupSettings.lastBackup ? new Date(autoBackupSettings.lastBackup).toLocaleString() : 'Never'}
+                                </span>
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-sm font-medium text-secondary-600 dark:text-secondary-400">File Size:</span>
+                                <span className="text-sm font-bold text-secondary-900 dark:text-white">
+                                    {autoBackupSettings.lastBackupSize || 'N/A'}
+                                </span>
                             </div>
                         </div>
 
-                        <div className="border-t dark:border-secondary-700 pt-6">
-                            <h3 className="font-semibold text-secondary-900 dark:text-white mb-4 uppercase text-xs tracking-widest">Scheduled Automation</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-secondary-900/50 rounded-lg border dark:border-secondary-700">
-                                    <div>
-                                        <p className="font-medium text-sm">Background Snapshots</p>
-                                        <p className="text-[10px] text-secondary-500 uppercase font-bold">Safe Automatic Sync</p>
-                                    </div>
-                                    <button 
-                                        onClick={() => updateAutoBackupSettings({ enabled: !autoBackupSettings.enabled })}
-                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${autoBackupSettings.enabled ? 'bg-primary-600 shadow-[0_0_8px_rgba(37,99,235,0.5)]' : 'bg-secondary-300 dark:bg-secondary-600'}`}
-                                    >
-                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoBackupSettings.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                                    </button>
-                                </div>
+                        <div className="mt-6 flex flex-wrap gap-4">
+                            <button 
+                                onClick={handleManualDriveBackup} 
+                                disabled={isCloudBackingUp}
+                                className="px-10 py-3 bg-[#25D366] hover:bg-[#20bd5b] text-white font-black rounded-lg shadow-lg shadow-green-500/20 transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
+                            >
+                                {isCloudBackingUp ? (
+                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                ) : 'BACKUP'}
+                            </button>
+                            <button 
+                                onClick={handleFetchCloudBackups} 
+                                disabled={isFetchingCloud}
+                                className="px-6 py-3 bg-secondary-200 dark:bg-secondary-700 hover:bg-secondary-300 dark:hover:bg-secondary-600 text-secondary-800 dark:text-secondary-100 font-bold rounded-lg transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {isFetchingCloud ? 'Searching...' : 'Restore from Drive'}
+                            </button>
+                        </div>
+                    </div>
 
-                                <div className={`p-3 bg-secondary-50 dark:bg-secondary-900/50 rounded-lg border dark:border-secondary-700 transition-opacity ${!autoBackupSettings.enabled ? 'opacity-50 pointer-events-none' : ''}`}>
-                                    <label className="text-[10px] font-extrabold text-secondary-500 uppercase block mb-1">Rotation Interval</label>
-                                    <select 
-                                        value={autoBackupSettings.frequency}
-                                        onChange={(e) => updateAutoBackupSettings({ frequency: e.target.value as any })}
-                                        className="bg-transparent border-none text-sm font-semibold focus:ring-0 w-full p-0 cursor-pointer"
-                                    >
-                                        <option value="weekly">Weekly Reconstruction</option>
-                                        <option value="monthly">Monthly Snapshot</option>
-                                    </select>
-                                </div>
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between p-1">
+                            <div className="flex-1">
+                                <h4 className="font-bold text-secondary-800 dark:text-secondary-100">Include Photos</h4>
+                                <p className="text-xs text-secondary-500 mt-0.5">Toggle to include student photos and school logos. Disabling this saves significant Drive storage and speeds up backups.</p>
                             </div>
+                            <button 
+                                onClick={() => updateAutoBackupSettings({ includePhotos: !autoBackupSettings.includePhotos })}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${autoBackupSettings.includePhotos ? 'bg-primary-600' : 'bg-secondary-300 dark:bg-secondary-600'}`}
+                            >
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoBackupSettings.includePhotos ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </button>
+                        </div>
 
+                        <div className="flex items-center justify-between p-1 border-t dark:border-secondary-700 pt-6">
+                            <div className="flex-1">
+                                <h4 className="font-bold text-secondary-800 dark:text-secondary-100">Auto Backup to Google Drive</h4>
+                                <p className="text-xs text-secondary-500 mt-0.5">Automatically secure your institution records based on the rotation frequency below.</p>
+                            </div>
+                            <button 
+                                onClick={() => updateAutoBackupSettings({ enabled: !autoBackupSettings.enabled })}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${autoBackupSettings.enabled ? 'bg-primary-600 shadow-[0_0_8px_rgba(37,99,235,0.5)]' : 'bg-secondary-300 dark:bg-secondary-600'}`}
+                            >
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoBackupSettings.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </button>
+                        </div>
+
+                        <div className={`p-4 bg-secondary-50 dark:bg-secondary-900/50 rounded-lg border dark:border-secondary-700 transition-all ${!autoBackupSettings.enabled ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
+                            <label className="text-[10px] font-black text-primary-600 uppercase block mb-1.5">Backup Frequency</label>
+                            <select 
+                                value={autoBackupSettings.frequency}
+                                onChange={(e) => updateAutoBackupSettings({ frequency: e.target.value as any })}
+                                className="bg-transparent border-none text-sm font-bold text-secondary-900 dark:text-white focus:ring-0 w-full p-0 cursor-pointer"
+                            >
+                                <option value="weekly">Every Week</option>
+                                <option value="monthly">Every Month</option>
+                            </select>
                             {autoBackupSettings.enabled && (
-                                <div className="mt-4 flex items-center gap-4 text-xs text-secondary-500 bg-secondary-50 dark:bg-secondary-900/50 p-2.5 rounded border border-dashed dark:border-secondary-700">
-                                    <div className="flex-1">
-                                        <span className="font-bold uppercase mr-1 opacity-60">Last Sync:</span>
-                                        {autoBackupSettings.lastBackup ? new Date(autoBackupSettings.lastBackup).toLocaleString() : 'Not synced yet'}
-                                    </div>
-                                    <div className="flex-1 text-right">
-                                        <span className="font-bold uppercase mr-1 text-primary-600">Next Due:</span>
-                                        {nextBackupDate}
-                                    </div>
-                                </div>
+                                <p className="text-[10px] text-secondary-500 mt-3 flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-primary-500"></span>
+                                    Next scheduled run: <span className="font-bold text-primary-600">{nextBackupDate}</span>
+                                </p>
                             )}
                         </div>
                     </div>
                 </div>
 
+                {/* INTERFACE & OTHER SETTINGS - Standard Style */}
                 <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
                     <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Interface Options</h2>
                      <div className="space-y-4">
