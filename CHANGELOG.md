@@ -1,6 +1,11 @@
 
 # Changelog
 
+## [3.5.5] - 2025-02-21
+
+### Fixed
+- **Vercel Build**: Resolved `TS6133` errors by removing unused component declarations and imports in `SettingsPage` and `DataContext`.
+
 ## [3.5.4] - 2025-02-21
 
 ### Added

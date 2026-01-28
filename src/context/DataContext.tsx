@@ -7,7 +7,7 @@ import { sql } from '../lib/neonClient';
 import { db } from '../lib/db';
 import { toCamelCase, toSnakeCase } from '../utils/caseConverter';
 import { useTheme } from './ThemeContext';
-import { driveService, DriveFile } from '../utils/googleDriveService';
+import { driveService } from '../utils/googleDriveService';
 
 interface SyncProgress {
     percentage: number;
@@ -155,9 +155,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         try {
             // Conditionally strip photos to save memory if requested
-            const finalSchools = autoBackupSettings.includePhotos ? schools : schools.map(s => { const { logoUrl, ...rest } = s; return rest as School; });
-            const finalUsers = autoBackupSettings.includePhotos ? users : users.map(u => { const { avatarUrl, ...rest } = u; return rest as User; });
-            const finalStudents = autoBackupSettings.includePhotos ? students : students.map(s => { const { avatarUrl, ...rest } = s; return rest as Student; });
+            const finalSchools = autoBackupSettings.includePhotos ? schools : schools.map(s => { const { logoUrl: _logo, ...rest } = s; return rest as School; });
+            const finalUsers = autoBackupSettings.includePhotos ? users : users.map(u => { const { avatarUrl: _avatar, ...rest } = u; return rest as User; });
+            const finalStudents = autoBackupSettings.includePhotos ? students : students.map(s => { const { avatarUrl: _avatar, ...rest } = s; return rest as Student; });
 
             const payload = {
                 schools: finalSchools, 

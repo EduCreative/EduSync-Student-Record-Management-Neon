@@ -5,7 +5,7 @@
 
 ---
 
-## ✨ Key Features (v3.5.3)
+## ✨ Key Features (v3.5.5)
 - **Hybrid Sync**: Support for Offline-First (Dexie.js) and Online-Only database modes.
 - **Smart Broadcasts**: Send targeted announcements to specific classes, parents, or student groups.
 - **Google Drive Backup**: Securely save snapshots to your personal cloud, including logos and photos.
