@@ -15,6 +15,7 @@ import { PWAInstallProvider } from './context/PWAInstallContext';
 import { SyncProvider } from './context/SyncContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { Analytics } from '@vercel/analytics/react';
+import { UpdateChecker } from './components/common/UpdateChecker';
 
 type AuthView = 'login' | 'register' | 'requestReset';
 
@@ -75,6 +76,7 @@ const App: React.FC = () => {
                         <PrintProvider>
                             <PWAInstallProvider>
                                 <AppContent />
+                                <UpdateChecker />
                                 <Analytics />
                             </PWAInstallProvider>
                         </PrintProvider>

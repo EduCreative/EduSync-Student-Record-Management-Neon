@@ -1,12 +1,15 @@
 
 # EduSync - Modern Student Record Management System (Neon Edition)
 
-**EduSync** is a high-performance school management platform powered 100% by **Neon Serverless Postgres**.
+**EduSync** is a high-performance school management platform powered by **Neon Serverless Postgres** with an intelligent local-fallback sandbox.
 
 ---
 
-## ✨ Key Features (v3.5.5)
-- **Hybrid Sync**: Support for Offline-First (Dexie.js) and Online-Only database modes.
+## ✨ Key Features (v3.6.1)
+- **Zero-Config Sandbox Fallback**: Seamless, crash-free execution using an advanced client-side SQLite-on-Dexie translation layer if `VITE_NEON_DATABASE_URL` is omitted.
+- **Auto-Seeded Demo Mode**: Instantly launches pre-loaded test data (Oakridge School) for easy testing and exploration of Owner, Admin, Accountant, Teacher, and Student roles.
+- **Automatic Live Update Engine**: Intelligent checking against the static release registry to prompt users whenever a new update is deployed.
+- **Hybrid Sync**: Active replication support for Offline-First (Dexie.js) and Online-Only database states.
 - **Smart Broadcasts**: Send targeted announcements to specific classes, parents, or student groups.
 - **Google Drive Backup**: Securely save snapshots to your personal cloud, including logos and photos.
 - **Global Owner Control**: Full system backup and restoration for Owners.

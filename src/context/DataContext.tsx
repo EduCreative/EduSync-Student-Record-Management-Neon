@@ -256,7 +256,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }));
             setStudents(transformedStudents);
             
-            const sIds = studentsData.map(s => s.id);
+            const sIds = studentsData.map((s: any) => s.id);
             if (sIds.length > 0) {
                 setSyncProgress({ percentage: 60, status: 'Syncing Financial Ledgers...' });
                 const feesData = await sql`SELECT * FROM fee_challans WHERE student_id = ANY(${sIds})`;
@@ -318,6 +318,39 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (error: any) {
             console.error("Sync Error:", error);
             setSyncError(error.message);
+            try {
+                setSyncProgress({ percentage: 50, status: 'Loading offline database fallback...' });
+                const [localSchools, localUsers, localClasses, localStudents, localFees, localAttendance, localResults, localLogs, localFeeHeads, localEvents, localSubjects, localExams] = await Promise.all([
+                    db.schools.toArray(),
+                    db.users.toArray(),
+                    db.classes.toArray(),
+                    db.students.toArray(),
+                    db.fees.toArray(),
+                    db.attendance.toArray(),
+                    db.results.toArray(),
+                    db.logs.toArray(),
+                    db.feeHeads.toArray(),
+                    db.events.toArray(),
+                    db.subjects.toArray(),
+                    db.exams.toArray(),
+                ]);
+
+                setSchools(localSchools);
+                setUsers(localUsers);
+                setClasses(localClasses);
+                setStudents(localStudents);
+                setFees(localFees);
+                setAttendanceState(localAttendance);
+                setResults(localResults);
+                setLogs(localLogs);
+                setFeeHeads(localFeeHeads);
+                setEvents(localEvents);
+                setSubjects(localSubjects);
+                setExams(localExams);
+                setSyncProgress({ percentage: 100, status: 'Loaded from local DB (Offline fallback)' });
+            } catch (fallbackError) {
+                console.error("Fallback to Dexie failed:", fallbackError);
+            }
         } finally {
             setLoading(false);
             if (isInitialLoad) setIsInitialLoad(false);

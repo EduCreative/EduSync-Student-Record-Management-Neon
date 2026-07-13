@@ -1,5 +1,5 @@
 
-# EduSync: Comprehensive User Manual (v3.3.6)
+# EduSync: Comprehensive User Manual (v3.6.0)
 
 Welcome to **EduSync**, your modern solution for school administration. This manual covers all system modules and best practices for different user roles.
 
