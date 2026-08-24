@@ -1,9 +1,8 @@
 {
-  "version": "3.6.1",
-  "releaseDate": "2026-07-13",
+  "version": "3.6.5",
+  "releaseDate": "2026-08-24",
   "changelog": [
-    "Fixed: Dropped obsolete auth.users foreign key constraint preventing custom registrations and user creation.",
-    "Fixed: Created missing notifications schema table in the active Neon database.",
-    "Database Sync: Restored full custom credentials saving and database integration features."
+    "QR Code Integration: Added a Desk Scan QR code to fee challan print view embedding Student ID, payment due date, total amount, and challan number for quick scanning at the school account desk.",
+    "School Logo & Dark Theme Enhancements: Embedded school logo/emblem in challan header and applied dark slate background styling to School Copy and Parent Copy for sharp contrast."
   ]
 }

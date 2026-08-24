@@ -4,7 +4,6 @@
  * Requires VITE_GOOGLE_CLIENT_ID environment variable
  */
 
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
 export interface DriveFile {
@@ -19,8 +18,17 @@ class GoogleDriveService {
     private resolveToken: ((token: string) => void) | null = null;
     private rejectToken: ((reason: any) => void) | null = null;
 
+    private getClientId(): string {
+        return import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+    }
+
     init() {
         return new Promise<void>((resolve, reject) => {
+            const clientId = this.getClientId();
+            if (!clientId) {
+                return reject(new Error('Google Client ID is missing. Please ensure VITE_GOOGLE_CLIENT_ID is configured in your environment variables.'));
+            }
+
             if (this.tokenClient) return resolve();
             
             if (!(window as any).google) {
@@ -29,11 +37,15 @@ class GoogleDriveService {
 
             try {
                 this.tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
-                    client_id: CLIENT_ID,
+                    client_id: clientId,
                     scope: SCOPES,
                     callback: (response: any) => {
                         if (response.error) {
-                            if (this.rejectToken) this.rejectToken(new Error(response.error_description || response.error));
+                            let msg = response.error_description || response.error;
+                            if (response.error === 'origin_mismatch') {
+                                msg = `OAuth Origin Mismatch Error: The URL origin (${window.location.origin}) is not registered under 'Authorized JavaScript origins' for Client ID ${clientId}.`;
+                            }
+                            if (this.rejectToken) this.rejectToken(new Error(msg));
                         } else {
                             this.accessToken = response.access_token;
                             if (this.resolveToken) this.resolveToken(response.access_token);

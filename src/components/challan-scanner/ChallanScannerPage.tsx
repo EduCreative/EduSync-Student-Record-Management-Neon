@@ -59,13 +59,25 @@ const ChallanScannerPage: React.FC = () => {
         setIsScanning(false);
     }, []);
 
-    const processChallanNumber = useCallback((challanNumber: string) => {
-        const challan = feesMapRef.current.get(challanNumber);
+    const processChallanNumber = useCallback((rawInput: string) => {
+        let challanNum = rawInput.trim();
+        try {
+            if (rawInput.startsWith('{') && rawInput.endsWith('}')) {
+                const parsed = JSON.parse(rawInput);
+                if (parsed.challan) challanNum = String(parsed.challan);
+                else if (parsed.challanNo) challanNum = String(parsed.challanNo);
+                else if (parsed.challanNumber) challanNum = String(parsed.challanNumber);
+            }
+        } catch (e) {
+            // Keep rawInput
+        }
+
+        const challan = feesMapRef.current.get(challanNum);
         if (challan) {
             const student = studentMapRef.current.get(challan.studentId);
             setScannedChallan(challan);
             setScannedStudent(student || null);
-            showToast('Success', `Challan #${challanNumber} found!`, 'success');
+            showToast('Success', `Challan #${challanNum} found!`, 'success');
             stopScan();
             return true;
         }

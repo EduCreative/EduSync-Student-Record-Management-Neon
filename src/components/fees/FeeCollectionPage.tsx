@@ -12,6 +12,8 @@ import SingleChallanGenerationModal from './SingleChallanGenerationModal';
 import { getClassLevel } from '../../utils/sorting';
 import { formatDate, formatMonthDisplay } from '../../constants';
 import StudentFeeHistory from '../students/StudentFeeHistory';
+import PrintableChallan from '../reports/PrintableChallan';
+import { usePrint } from '../../context/PrintContext';
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -25,8 +27,28 @@ const getTodayString = () => {
 
 const FeeCollectionPage: React.FC = () => {
     const { user, activeSchoolId, hasPermission } = useAuth();
-    const { students, fees, classes, cancelChallan } = useData();
+    const { students, fees, classes, cancelChallan, getSchoolById } = useData();
+    const { showPrintPreview } = usePrint();
     const [searchTerm, setSearchTerm] = useState('');
+
+    const handlePrintSingleChallan = (challan: FeeChallan, student: Student) => {
+        const school = getSchoolById(effectiveSchoolId || '');
+        if (!school) return;
+        const content = (
+            <div className="printable-challan-container">
+                <div className="challan-wrapper">
+                    <PrintableChallan
+                        challan={challan}
+                        student={student}
+                        school={school}
+                        studentClass={classMap.get(student.classId)}
+                        copies={2}
+                    />
+                </div>
+            </div>
+        );
+        showPrintPreview(content, `EduSync - Fee Challan - ${student.name} (${challan.challanNumber})`);
+    };
     
     const [challanToManage, setChallanToManage] = useState<{ challan: FeeChallan, student: Student, mode: 'pay' | 'edit' } | null>(null);
     const [challanToCancel, setChallanToCancel] = useState<FeeChallan | null>(null);
@@ -430,9 +452,18 @@ const FeeCollectionPage: React.FC = () => {
                                                             )}
                                                         </div>
                                                     )}
-                                                    <button onClick={() => setViewHistoryStudent(student)} className="text-xs text-secondary-500 hover:text-primary-600 hover:underline">
-                                                        View Fee History
-                                                    </button>
+                                                    <div className="flex items-center gap-2 text-xs">
+                                                        <button 
+                                                            onClick={() => handlePrintSingleChallan(challan, student)} 
+                                                            className="font-semibold text-primary-600 dark:text-primary-400 hover:underline"
+                                                        >
+                                                            Print
+                                                        </button>
+                                                        <span className="text-secondary-300">|</span>
+                                                        <button onClick={() => setViewHistoryStudent(student)} className="text-secondary-500 hover:text-primary-600 hover:underline">
+                                                            View Fee History
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>
