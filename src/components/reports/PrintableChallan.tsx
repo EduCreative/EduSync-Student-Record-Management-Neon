@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { GraduationCap } from 'lucide-react';
 import { FeeChallan, Student, School } from '../../types';
 import { formatDate } from '../../constants';
+import { useData } from '../../context/DataContext';
 
 export interface LastPaymentDetail {
     challanNumber?: string;
@@ -21,6 +22,7 @@ interface PrintableChallanProps {
     copies?: 2 | 3;
     lateFee?: number;
     lastPaymentDetail?: LastPaymentDetail;
+    allFees?: FeeChallan[];
 }
 
 const PrintableChallan: FC<PrintableChallanProps> = ({
@@ -29,7 +31,8 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
     school,
     studentClass,
     copies = 2,
-    lastPaymentDetail
+    lastPaymentDetail,
+    allFees
 }) => {
     const copyLabels = copies === 2
         ? ["Parent Copy", "School Copy"]
@@ -70,24 +73,115 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
     const totalDues = challan.totalAmount;
     const discountAmount = challan.discount || 0;
 
+    // Safely attempt to retrieve fees from DataContext if allFees prop is not passed
+    let contextFees: FeeChallan[] = [];
+    try {
+        const data = useData();
+        if (data && data.fees) {
+            contextFees = data.fees;
+        }
+    } catch {
+        // Fallback when rendered outside DataProvider context
+    }
+
+    const feesToSearch = allFees && allFees.length > 0 ? allFees : contextFees;
+
+    // Helper to compute numeric month index
+    const getMonthIndex = (monthStr?: string) => {
+        if (!monthStr) return 0;
+        const MONTH_NAMES = [
+            "january", "february", "march", "april", "may", "june",
+            "july", "august", "september", "october", "november", "december"
+        ];
+        const str = monthStr.toLowerCase().trim();
+        for (let i = 0; i < MONTH_NAMES.length; i++) {
+            if (str.includes(MONTH_NAMES[i]) || str.includes(MONTH_NAMES[i].substring(0, 3))) {
+                return i;
+            }
+        }
+        const num = parseInt(str, 10);
+        if (!isNaN(num) && num >= 1 && num <= 12) {
+            return num - 1;
+        }
+        return 0;
+    };
+
+    // Helper to compute numeric order for a fee challan (Year * 12 + Month)
+    const getChallanVal = (f: FeeChallan) => {
+        const monthIdx = getMonthIndex(f.month);
+        const yearVal = f.year || (f.dueDate ? new Date(f.dueDate).getFullYear() : new Date().getFullYear());
+        return yearVal * 12 + monthIdx;
+    };
+
     // Resolve Last Payment Detail values
-    const lastChallanId = lastPaymentDetail?.challanNumber ||
-        (challan.paymentHistory && challan.paymentHistory.length > 0 ? (challan.challanNumber) : '-');
-    const lastDate = lastPaymentDetail?.date
-        ? formatDate(lastPaymentDetail.date)
-        : (challan.paidDate ? formatDate(challan.paidDate) : '-');
-    const lastAmount = lastPaymentDetail?.amount !== undefined
-        ? lastPaymentDetail.amount
-        : (challan.paidAmount > 0 ? challan.totalAmount : 0);
-    const lastPaid = lastPaymentDetail?.paid !== undefined
-        ? lastPaymentDetail.paid
-        : (challan.paidAmount || 0);
-    const lastDA = lastPaymentDetail?.discount !== undefined
-        ? lastPaymentDetail.discount
-        : (challan.discount || 0);
-    const lastBalance = lastPaymentDetail?.balance !== undefined
-        ? lastPaymentDetail.balance
-        : (challan.paidAmount > 0 ? Math.max(0, lastAmount - lastPaid - lastDA) : 0);
+    let computedLastDetail = lastPaymentDetail;
+
+    if (!computedLastDetail && feesToSearch.length > 0) {
+        const currentVal = getChallanVal(challan);
+        const studentId = student?.id || challan.studentId;
+
+        // Find candidate previous paid/partially-paid challans for this student
+        const candidateChallans = feesToSearch.filter(f => {
+            if (f.studentId !== studentId) return false;
+            if (f.id === challan.id) return false; // Strictly exclude current challan!
+
+            const hasPayment = (f.paidAmount && f.paidAmount > 0) || f.status === 'Paid' || f.status === 'Partial' || (f.paymentHistory && f.paymentHistory.length > 0);
+            if (!hasPayment) return false;
+
+            const fVal = getChallanVal(f);
+            if (fVal < currentVal) return true;
+            if (fVal === currentVal && f.paidDate && challan.paidDate && f.paidDate < challan.paidDate) return true;
+
+            return false;
+        });
+
+        // Sort candidates descending: most recent month/year first, then paidDate
+        candidateChallans.sort((a, b) => {
+            const valA = getChallanVal(a);
+            const valB = getChallanVal(b);
+            if (valB !== valA) return valB - valA;
+
+            const dateA = a.paidDate || '';
+            const dateB = b.paidDate || '';
+            if (dateB !== dateA) return dateB.localeCompare(dateA);
+
+            return b.challanNumber.localeCompare(a.challanNumber);
+        });
+
+        if (candidateChallans.length > 0) {
+            const prev = candidateChallans[0];
+            const prevTotal = prev.totalAmount || 0;
+            const prevPaid = prev.paidAmount || 0;
+            const prevDiscount = prev.discount || 0;
+            const prevBal = Math.max(0, prevTotal - prevPaid - prevDiscount);
+
+            computedLastDetail = {
+                challanNumber: prev.challanNumber,
+                date: prev.paidDate || prev.dueDate,
+                amount: prevTotal,
+                paid: prevPaid,
+                discount: prevDiscount,
+                balance: prevBal
+            };
+        }
+    }
+
+    const lastChallanId = computedLastDetail?.challanNumber || '-';
+    const lastDate = computedLastDetail?.date
+        ? formatDate(computedLastDetail.date)
+        : '-';
+    const lastAmount = computedLastDetail?.amount !== undefined
+        ? computedLastDetail.amount
+        : 0;
+    const lastPaid = computedLastDetail?.paid !== undefined
+        ? computedLastDetail.paid
+        : 0;
+    const lastDA = computedLastDetail?.discount !== undefined
+        ? computedLastDetail.discount
+        : 0;
+    const lastBalance = computedLastDetail?.balance !== undefined
+        ? computedLastDetail.balance
+        : 0;
 
     const studentRollOrId = student.rollNumber || student.grNumber || student.id.slice(0, 6);
     const formattedDueDate = challan.dueDate ? formatDate(challan.dueDate) : 'N/A';
@@ -102,25 +196,25 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
 
     const ChallanBody: FC<{ copyName: string }> = ({ copyName }) => {
         const isSchoolCopy = copyName.toLowerCase().includes('school');
-        const headerBgClass = isSchoolCopy ? 'bg-slate-900 text-white' : 'bg-slate-800 text-white';
+        const headerBgClass = isSchoolCopy ? 'bg-slate-700 text-white' : 'bg-slate-600 text-white';
         const copyBadgeClass = isSchoolCopy 
-            ? 'bg-amber-400 text-slate-950 border-amber-500' 
-            : 'bg-sky-400 text-slate-950 border-sky-500';
+            ? 'bg-amber-300 text-slate-900 border-amber-500' 
+            : 'bg-sky-300 text-slate-900 border-sky-500';
 
         return (
-            <div className="printable-challan bg-white text-black font-sans leading-tight p-2 flex flex-col justify-between h-full border-2 border-slate-900 box-border rounded-sm">
-                {/* Top Header with Dark Background */}
+            <div className="printable-challan bg-white text-black font-sans leading-tight p-2 flex flex-col justify-between h-full border-2 border-slate-800 box-border rounded-xs">
+                {/* Top Header with Soft Slate Background */}
                 <div>
-                    <div className={`${headerBgClass} p-1.5 flex justify-between items-center rounded-t-sm mb-1.5 border-b-2 border-black`}>
+                    <div className={`${headerBgClass} p-1.5 flex justify-between items-center rounded-t-xs mb-1.5 border-b-2 border-slate-800`}>
                         <div className="flex items-center gap-1.5 min-w-0">
                             {school.logoUrl ? (
                                 <img 
                                     src={school.logoUrl} 
                                     alt="School Logo" 
-                                    className="w-7 h-7 sm:w-8 sm:h-8 object-contain bg-white rounded-sm p-0.5 flex-shrink-0 border border-slate-300" 
+                                    className="w-7 h-7 sm:w-8 sm:h-8 object-contain bg-white rounded-xs p-0.5 flex-shrink-0 border border-slate-300" 
                                 />
                             ) : (
-                                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-700 text-amber-300 flex items-center justify-center rounded-sm flex-shrink-0 border border-slate-500">
+                                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-slate-800 text-amber-300 flex items-center justify-center rounded-xs flex-shrink-0 border border-slate-500">
                                     <GraduationCap className="w-5 h-5" />
                                 </div>
                             )}
@@ -128,13 +222,13 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                                 <h2 className="font-extrabold text-xs sm:text-sm uppercase tracking-tight leading-none truncate text-white">
                                     {school.name}
                                 </h2>
-                                <p className="text-[8.5px] text-slate-200 leading-tight mt-0.5 truncate font-normal">
+                                <p className="text-[8.5px] text-slate-100 leading-tight mt-0.5 truncate font-normal">
                                     {school.address}
                                 </p>
                             </div>
                         </div>
                         <div className="flex-shrink-0 ml-1.5">
-                            <span className={`border px-1.5 py-0.5 text-[9px] font-black uppercase rounded-xs tracking-wider shadow-xs ${copyBadgeClass}`}>
+                            <span className={`border px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded-2xs tracking-wider shadow-2xs ${copyBadgeClass}`}>
                                 {copyName}
                             </span>
                         </div>
@@ -178,7 +272,7 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                         <div className="col-span-7 flex flex-col justify-between">
                             <div>
                                 {/* Header */}
-                                <div className="flex justify-between font-bold text-white bg-slate-800 px-1 py-0.5 border-b border-black mb-1 rounded-xs">
+                                <div className="flex justify-between font-bold text-slate-900 bg-slate-200 px-1 py-0.5 border border-slate-700 mb-1 rounded-2xs">
                                     <span>Description</span>
                                     <span>{formattedMonthYear}</span>
                                 </div>
@@ -223,7 +317,7 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                                     <span>Rs. {totalDues.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between text-gray-800">
-                                    <span>D. A.</span>
+                                    <span>Discount Amount (D.A.)</span>
                                     <span>{discountAmount.toLocaleString()}</span>
                                 </div>
                             </div>
@@ -232,8 +326,8 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                         {/* Right Column: LAST PAYMENT DETAIL Box + QR Code */}
                         <div className="col-span-5 flex flex-col justify-between space-y-1">
                             {/* LAST PAYMENT DETAIL Table */}
-                            <div className="border border-black bg-white rounded-xs overflow-hidden">
-                                <div className="border-b border-black text-center font-bold text-[8px] uppercase py-0.5 px-0.5 bg-slate-800 text-white">
+                            <div className="border border-slate-800 bg-white rounded-2xs overflow-hidden">
+                                <div className="border-b border-slate-800 text-center font-bold text-[8px] uppercase py-0.5 px-0.5 bg-slate-200 text-slate-900">
                                     LAST PAYMENT DETAIL
                                 </div>
                                 <div className="divide-y divide-gray-300 text-[8.5px] text-black">
@@ -254,7 +348,7 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                                         <span>{lastPaid > 0 ? lastPaid.toLocaleString() : '-'}</span>
                                     </div>
                                     <div className="flex justify-between px-1 py-0.5">
-                                        <span className="font-medium text-gray-700">D.A.</span>
+                                        <span className="font-medium text-gray-700">Discount (D.A.)</span>
                                         <span>{lastDA > 0 ? lastDA.toLocaleString() : '0'}</span>
                                     </div>
                                     <div className="flex justify-between px-1 py-0.5 font-bold bg-slate-50">
@@ -265,11 +359,11 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                             </div>
 
                             {/* Account Desk Quick Scan QR Code Box */}
-                            <div className="border border-slate-900 bg-slate-50 p-1 flex flex-col items-center justify-center rounded-xs">
-                                <div className="bg-white p-1 border border-slate-300 rounded-xs shadow-2xs">
+                            <div className="border border-slate-800 bg-slate-50 p-1 flex flex-col items-center justify-center rounded-2xs">
+                                <div className="bg-white p-1 border border-slate-300 rounded-2xs shadow-2xs">
                                     <QRCodeSVG 
                                         value={qrData}
-                                        size={54}
+                                        size={52}
                                         level="M"
                                         includeMargin={false}
                                     />
@@ -283,23 +377,42 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                 </div>
 
                 {/* Bottom Payment Acknowledgment Row Box */}
-                <div className="mt-1.5 border-2 border-slate-900 grid grid-cols-3 divide-x-2 divide-slate-900 text-[9.5px] text-black font-bold rounded-xs overflow-hidden bg-white">
-                    <div className="p-1 flex items-center justify-between min-h-[22px]">
+                {/* Cashier fills these by hand upon payment; when recorded in app, values print automatically */}
+                <div className="mt-1.5 border-2 border-slate-800 grid grid-cols-3 divide-x-2 divide-slate-800 text-[9.5px] text-black font-bold rounded-2xs overflow-hidden bg-white">
+                    <div className="p-1 flex items-center justify-between min-h-[24px]">
                         <span className="text-slate-800">Pay Date:</span>
-                        <span className="font-normal text-[9px]">
-                            {challan.paidDate ? formatDate(challan.paidDate) : ''}
+                        <span className="font-semibold text-[9px] text-right">
+                            {challan.paidDate ? (
+                                formatDate(challan.paidDate)
+                            ) : (
+                                <span className="inline-block border-b border-slate-500 min-w-[55px] text-center text-slate-300 font-normal">
+                                    &nbsp;
+                                </span>
+                            )}
                         </span>
                     </div>
-                    <div className="p-1 flex items-center justify-between min-h-[22px]">
+                    <div className="p-1 flex items-center justify-between min-h-[24px]">
                         <span className="text-slate-800">Paid:</span>
-                        <span className="font-normal text-[9px]">
-                            {challan.paidAmount > 0 ? challan.paidAmount.toLocaleString() : ''}
+                        <span className="font-semibold text-[9px] text-right">
+                            {challan.paidAmount > 0 ? (
+                                `Rs. ${challan.paidAmount.toLocaleString()}`
+                            ) : (
+                                <span className="inline-block border-b border-slate-500 min-w-[55px] text-center text-slate-300 font-normal">
+                                    &nbsp;
+                                </span>
+                            )}
                         </span>
                     </div>
-                    <div className="p-1 flex items-center justify-between min-h-[22px]">
+                    <div className="p-1 flex items-center justify-between min-h-[24px]">
                         <span className="text-slate-800">Bal.:</span>
-                        <span className="font-normal text-[9px]">
-                            {challan.paidAmount > 0 ? Math.max(0, totalDues - challan.paidAmount - discountAmount).toLocaleString() : ''}
+                        <span className="font-semibold text-[9px] text-right">
+                            {challan.paidAmount > 0 ? (
+                                `Rs. ${Math.max(0, totalDues - challan.paidAmount - discountAmount).toLocaleString()}`
+                            ) : (
+                                <span className="inline-block border-b border-slate-500 min-w-[55px] text-center text-slate-300 font-normal">
+                                    &nbsp;
+                                </span>
+                            )}
                         </span>
                     </div>
                 </div>

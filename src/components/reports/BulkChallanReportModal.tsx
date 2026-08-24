@@ -63,6 +63,7 @@ const BulkChallanReportModal: React.FC<BulkChallanReportModalProps> = ({ isOpen,
                                 studentClass={classMap.get(student.classId)}
                                 copies={copies}
                                 lateFee={penaltyAmount}
+                                allFees={fees}
                             />
                         </div>
                     );

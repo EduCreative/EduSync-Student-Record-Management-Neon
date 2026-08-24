@@ -43,6 +43,7 @@ const FeeCollectionPage: React.FC = () => {
                         school={school}
                         studentClass={classMap.get(student.classId)}
                         copies={2}
+                        allFees={fees}
                     />
                 </div>
             </div>

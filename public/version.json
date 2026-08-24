@@ -1,8 +1,9 @@
 {
-  "version": "3.6.5",
+  "version": "3.6.7",
   "releaseDate": "2026-08-24",
   "changelog": [
-    "QR Code Integration: Added a Desk Scan QR code to fee challan print view embedding Student ID, payment due date, total amount, and challan number for quick scanning at the school account desk.",
-    "School Logo & Dark Theme Enhancements: Embedded school logo/emblem in challan header and applied dark slate background styling to School Copy and Parent Copy for sharp contrast."
+    "Prior Payment Historical Lookup in Challans: Updated LAST PAYMENT DETAIL to strictly lookup and display the student's previous paid/partially-paid challan prior to the current month.",
+    "Correct Month-to-Month Last Payment Context: Dec 2025 challan now correctly displays Nov 2025 payment details, and Jan 2026 challan accurately displays Dec 2025 paid challan details.",
+    "Strict Exclusion of Current Month Payment: Prevented current month payment data from echoing inside its own LAST PAYMENT DETAIL box."
   ]
 }

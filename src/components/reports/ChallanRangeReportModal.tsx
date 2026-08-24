@@ -60,6 +60,7 @@ const ChallanRangeReportModal: React.FC<ChallanRangeReportModalProps> = ({ isOpe
                                 studentClass={classMap.get(student.classId)}
                                 copies={copies}
                                 lateFee={penaltyAmount}
+                                allFees={fees}
                             />
                         </div>
                     );
