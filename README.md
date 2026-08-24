@@ -5,7 +5,11 @@
 
 ---
 
-## ✨ Key Features (v3.6.9)
+## ✨ Key Features (v3.8.0)
+- **Challans per A4 Page Setting (1, 2, or 3 per Page)**: Added radio selector for 1, 2, or 3 challans per page (defaulting to 3 per page) alongside Copies per Challan (2 or 3 copies) across Bulk Fee Challans and Range Fee Challans modals.
+- **Dynamic Print Layout Scaling & Height Adjustments**: Automatically adjusts vertical container heights (`.per-page-1`, `.per-page-2`, `.per-page-3`), card padding, and QR code sizes for clean, balanced layouts on A4 paper and PDF downloads.
+- **Print / Save Acknowledgment Bar Fix**: Optimized print box paddings and overflow rules (`overflow: visible` with `min-height: 94mm`) to ensure `Pay Date:`, `Paid:`, and `Bal.:` fields render with 100% visibility both in Print Preview and in Print / Save PDF output.
+- **Standardized Challan ID Format (`yyyymm-stdid`)**: Formatted Challan IDs strictly as `yyyymm-stdid` (e.g. `202601-1099`) across print metadata headers, last payment records, desk scan QR code payloads, and newly generated fee challans.
 - **Payment Date Future Date Validation**: HTML5 date limits (`max={today}`) and real-time form validation prevent cashiers/accountants from selecting future payment dates when recording or updating payments.
 - **Chronological Prior Payment Lookup & Multi-Month Carry-Over**: Evaluates the student's entire fee ledger to retrieve the chronologically preceding paid or partially-paid transaction in the `LAST PAYMENT DETAIL` section.
 - **Cashier Fillable Receipt Fields**: Provides clean pen-writing lines (`Pay Date:`, `Paid:`, `Bal.:`) on printed monthly challans so cashiers can fill them by hand at the counter, which then print automatically once entered into the app.

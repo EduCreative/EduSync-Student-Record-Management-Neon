@@ -268,14 +268,36 @@
 
   /* Specific tweaks for better print appearance */
   .challan-wrapper {
-    height: 94mm; /* Fits 3 per A4 page vertically */
-    overflow: hidden;
+    min-height: 94mm;
+    max-height: 98mm;
+    overflow: visible;
     border-bottom: 1px dashed #666;
-    padding: 2mm 0;
+    padding: 1.5mm 0;
     display: flex;
     flex-direction: row;
     align-items: stretch;
     page-break-inside: avoid;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .challan-wrapper.per-page-3 {
+    min-height: 94mm;
+    max-height: 98mm;
+    padding: 1.5mm 0;
+  }
+
+  .challan-wrapper.per-page-2 {
+    min-height: 138mm;
+    max-height: 144mm;
+    padding: 2.5mm 0;
+  }
+
+  .challan-wrapper.per-page-1 {
+    min-height: 270mm;
+    max-height: 282mm;
+    padding: 3.5mm 0;
   }
   
   .challan-wrapper:last-child {

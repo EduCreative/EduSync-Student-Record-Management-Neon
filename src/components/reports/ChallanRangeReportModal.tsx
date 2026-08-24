@@ -20,6 +20,7 @@ const ChallanRangeReportModal: React.FC<ChallanRangeReportModalProps> = ({ isOpe
     const [startChallan, setStartChallan] = useState('');
     const [endChallan, setEndChallan] = useState('');
     const [copies, setCopies] = useState<2 | 3>(2);
+    const [challansPerPage, setChallansPerPage] = useState<1 | 2 | 3>(3);
     const [penaltyAmount, setPenaltyAmount] = useState(0);
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
@@ -48,17 +49,28 @@ const ChallanRangeReportModal: React.FC<ChallanRangeReportModalProps> = ({ isOpe
 
         const content = (
              <div className="printable-challan-container">
-                {reportData.map((challan) => {
+                {reportData.map((challan, index) => {
                     const student = studentMap.get(challan.studentId);
                     if (!student) return null;
+
+                    const isLastOnPage = (index + 1) % challansPerPage === 0;
+
                     return (
-                        <div key={challan.id} className="challan-wrapper">
+                        <div 
+                            key={challan.id} 
+                            className={`challan-wrapper per-page-${challansPerPage}`}
+                            style={{
+                                pageBreakAfter: isLastOnPage ? 'always' : 'auto',
+                                breakAfter: isLastOnPage ? 'page' : 'auto'
+                            }}
+                        >
                             <PrintableChallan
                                 challan={challan}
                                 student={student}
                                 school={school}
                                 studentClass={classMap.get(student.classId)}
                                 copies={copies}
+                                challansPerPage={challansPerPage}
                                 lateFee={penaltyAmount}
                                 allFees={fees}
                             />
@@ -94,17 +106,37 @@ const ChallanRangeReportModal: React.FC<ChallanRangeReportModalProps> = ({ isOpe
                         />
                     </div>
                 </div>
-                <div>
-                    <label className="input-label">Copies per Challan</label>
-                    <div className="flex items-center space-x-4 mt-1">
-                        <label className="flex items-center cursor-pointer">
-                            <input type="radio" name="copiesRange" value={3} checked={copies === 3} onChange={() => setCopies(3)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
-                            <span className="ml-2 text-sm">3 Copies (Bank, School, Parent)</span>
-                        </label>
-                        <label className="flex items-center cursor-pointer">
-                            <input type="radio" name="copiesRange" value={2} checked={copies === 2} onChange={() => setCopies(2)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
-                            <span className="ml-2 text-sm">2 Copies (School, Parent)</span>
-                        </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-secondary-200 dark:border-secondary-700">
+                    <div>
+                        <label className="input-label font-semibold">Copies per Challan</label>
+                        <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                            <label className="flex items-center cursor-pointer">
+                                <input type="radio" name="copiesRange" value={3} checked={copies === 3} onChange={() => setCopies(3)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
+                                <span className="ml-2 text-sm">3 Copies <span className="text-xs text-secondary-500">(Bank, Parent, School)</span></span>
+                            </label>
+                            <label className="flex items-center cursor-pointer">
+                                <input type="radio" name="copiesRange" value={2} checked={copies === 2} onChange={() => setCopies(2)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
+                                <span className="ml-2 text-sm">2 Copies <span className="text-xs text-secondary-500">(Parent, School)</span></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="input-label font-semibold">Challans per A4 Page</label>
+                        <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                            <label className="flex items-center cursor-pointer">
+                                <input type="radio" name="challansPerPageRange" value={3} checked={challansPerPage === 3} onChange={() => setChallansPerPage(3)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
+                                <span className="ml-1.5 text-sm">3 per Page <span className="text-xs text-secondary-500">(Default)</span></span>
+                            </label>
+                            <label className="flex items-center cursor-pointer">
+                                <input type="radio" name="challansPerPageRange" value={2} checked={challansPerPage === 2} onChange={() => setChallansPerPage(2)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
+                                <span className="ml-1.5 text-sm">2 per Page</span>
+                            </label>
+                            <label className="flex items-center cursor-pointer">
+                                <input type="radio" name="challansPerPageRange" value={1} checked={challansPerPage === 1} onChange={() => setChallansPerPage(1)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
+                                <span className="ml-1.5 text-sm">1 per Page</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div className="p-4 bg-secondary-50 dark:bg-secondary-700 rounded-md text-center">

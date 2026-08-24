@@ -20,6 +20,7 @@ interface PrintableChallanProps {
     school: School;
     studentClass?: string;
     copies?: 2 | 3;
+    challansPerPage?: 1 | 2 | 3;
     lateFee?: number;
     lastPaymentDetail?: LastPaymentDetail;
     allFees?: FeeChallan[];
@@ -31,6 +32,7 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
     school,
     studentClass,
     copies = 2,
+    challansPerPage = 3,
     lastPaymentDetail,
     allFees
 }) => {
@@ -198,7 +200,48 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
         }
     }
 
-    const lastChallanId = computedLastDetail?.challanNumber || '-';
+    const studentRollOrId = student.rollNumber || student.grNumber || student.id.replace(/\D/g, '').slice(-4) || '1001';
+    const formattedDueDate = challan.dueDate ? formatDate(challan.dueDate) : 'N/A';
+
+    const ALL_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+    // Helper to format Challan ID as yyyymm-stdid (ex: 202601-1099)
+    const formatChallanId = (rawChallanNum?: string, monthStrName?: string, yearValNum?: number, dueDateStr?: string): string => {
+        if (rawChallanNum && /^\d{6}-/.test(rawChallanNum)) {
+            return rawChallanNum;
+        }
+
+        let yVal = yearValNum;
+        if (!yVal && dueDateStr) {
+            const parts = String(dueDateStr).split('-');
+            if (parts.length >= 1) yVal = parseInt(parts[0], 10);
+        }
+        if (!yVal || isNaN(yVal)) {
+            yVal = new Date().getFullYear();
+        }
+
+        let monthIdx = 1;
+        if (monthStrName) {
+            const lower = monthStrName.toLowerCase();
+            const idx = ALL_MONTHS.findIndex(m => m.toLowerCase() === lower || lower.includes(m.toLowerCase()));
+            if (idx >= 0) {
+                monthIdx = idx + 1;
+            } else {
+                const parsed = parseInt(monthStrName, 10);
+                if (!isNaN(parsed) && parsed >= 1 && parsed <= 12) monthIdx = parsed;
+            }
+        }
+        const monthNumStr = String(monthIdx).padStart(2, '0');
+
+        return `${yVal}${monthNumStr}-${studentRollOrId}`;
+    };
+
+    const displayChallanId = formatChallanId(challan.challanNumber, challan.month, challan.year, challan.dueDate);
+
+    const lastChallanId = computedLastDetail?.challanNumber 
+        ? formatChallanId(computedLastDetail.challanNumber, undefined, undefined, computedLastDetail.date)
+        : '-';
+
     const lastDate = computedLastDetail?.date
         ? formatDate(computedLastDetail.date)
         : '-';
@@ -215,12 +258,9 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
         ? computedLastDetail.balance
         : 0;
 
-    const studentRollOrId = student.rollNumber || student.grNumber || student.id.slice(0, 6);
-    const formattedDueDate = challan.dueDate ? formatDate(challan.dueDate) : 'N/A';
-
-    // QR Code Payload embedding student ID, payment due date, total amount, and challan number
+    // QR Code Payload embedding student ID, payment due date, total amount, and formatted challan number
     const qrData = JSON.stringify({
-        challan: challan.challanNumber,
+        challan: displayChallanId,
         stdId: studentRollOrId,
         dueDate: formattedDueDate,
         amount: totalDues
@@ -233,11 +273,14 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
             ? 'bg-amber-300 text-slate-900 border-amber-500' 
             : 'bg-sky-300 text-slate-900 border-sky-500';
 
+        const qrSize = challansPerPage === 1 ? 60 : challansPerPage === 2 ? 52 : 46;
+        const cardPadding = challansPerPage === 1 ? 'p-2 sm:p-2.5' : challansPerPage === 2 ? 'p-2' : 'p-1.5';
+
         return (
-            <div className="printable-challan bg-white text-black font-sans leading-tight p-2 flex flex-col justify-between h-full border-2 border-slate-800 box-border rounded-xs">
+            <div className={`printable-challan bg-white text-black font-sans leading-tight ${cardPadding} flex flex-col justify-between h-full border-2 border-slate-900 box-border rounded-xs`}>
                 {/* Top Header with Soft Slate Background */}
                 <div>
-                    <div className={`${headerBgClass} p-1.5 flex justify-between items-center rounded-t-xs mb-1.5 border-b-2 border-slate-800`}>
+                    <div className={`${headerBgClass} p-1 flex justify-between items-center rounded-t-xs mb-1 border-b-2 border-slate-800`}>
                         <div className="flex items-center gap-1.5 min-w-0">
                             {school.logoUrl ? (
                                 <img 
@@ -267,11 +310,11 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                     </div>
 
                     {/* Metadata Header Line */}
-                    <div className="text-[10px] space-y-0.5 mb-1.5 border-b border-slate-400 pb-1 px-0.5">
+                    <div className="text-[10px] space-y-0.5 mb-1 border-b border-slate-400 pb-1 px-0.5">
                         <div className="flex justify-between items-center text-[10px] font-semibold">
                             <div>
                                 <span className="text-gray-700 font-normal">Challan ID: </span>
-                                <span className="font-bold text-black ml-1">{challan.challanNumber}</span>
+                                <span className="font-bold text-black ml-1">{displayChallanId}</span>
                             </div>
                             <div>
                                 <span className="text-gray-700 font-normal">Std.ID </span>
@@ -299,12 +342,12 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                     </div>
 
                     {/* Main Content Grid: Fee Breakdown (Left) + LAST PAYMENT DETAIL & QR Code (Right) */}
-                    <div className="grid grid-cols-12 gap-1.5 text-[9.5px]">
+                    <div className="grid grid-cols-12 gap-1 text-[9.5px]">
                         {/* Left Column: Description & Breakdown */}
                         <div className="col-span-7 flex flex-col justify-between">
                             <div>
                                 {/* Header */}
-                                <div className="flex justify-between font-bold text-slate-900 bg-slate-200 px-1 py-0.5 border border-slate-700 mb-1 rounded-2xs">
+                                <div className="flex justify-between font-bold text-slate-900 bg-slate-200 px-1 py-0.5 border border-slate-700 mb-0.5 rounded-2xs">
                                     <span>Description</span>
                                     <span>{formattedMonthYear}</span>
                                 </div>
@@ -335,7 +378,7 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                             </div>
 
                             {/* Breakdown Totals */}
-                            <div className="mt-1 pt-1 border-t border-gray-400 space-y-0.5 px-0.5">
+                            <div className="mt-1 pt-0.5 border-t border-gray-400 space-y-0.5 px-0.5">
                                 <div className="flex justify-between text-gray-900">
                                     <span>Current Fees</span>
                                     <span>{currentFees.toLocaleString()}</span>
@@ -344,7 +387,7 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                                     <span>PreviousDues</span>
                                     <span>{previousDues.toLocaleString()}</span>
                                 </div>
-                                <div className="flex justify-between font-bold text-black text-[10.5px]">
+                                <div className="flex justify-between font-bold text-black text-[10px]">
                                     <span>Total Dues</span>
                                     <span>Rs. {totalDues.toLocaleString()}</span>
                                 </div>
@@ -391,11 +434,11 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                             </div>
 
                             {/* Account Desk Quick Scan QR Code Box */}
-                            <div className="border border-slate-800 bg-slate-50 p-1 flex flex-col items-center justify-center rounded-2xs">
-                                <div className="bg-white p-1 border border-slate-300 rounded-2xs shadow-2xs">
+                            <div className="border border-slate-800 bg-slate-50 p-0.5 flex flex-col items-center justify-center rounded-2xs">
+                                <div className="bg-white p-0.5 border border-slate-300 rounded-2xs shadow-2xs">
                                     <QRCodeSVG 
                                         value={qrData}
-                                        size={52}
+                                        size={qrSize}
                                         level="M"
                                         includeMargin={false}
                                     />
@@ -410,38 +453,38 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
 
                 {/* Bottom Payment Acknowledgment Row Box */}
                 {/* Cashier fills these by hand upon payment; when recorded in app, values print automatically */}
-                <div className="mt-1.5 border-2 border-slate-800 grid grid-cols-3 divide-x-2 divide-slate-800 text-[9.5px] text-black font-bold rounded-2xs overflow-hidden bg-white">
-                    <div className="p-1 flex items-center justify-between min-h-[24px]">
-                        <span className="text-slate-800">Pay Date:</span>
-                        <span className="font-semibold text-[9px] text-right">
+                <div className="mt-1 border-2 border-slate-900 grid grid-cols-3 divide-x-2 divide-slate-900 text-[9.5px] text-black font-extrabold rounded-2xs overflow-hidden bg-white shrink-0">
+                    <div className="p-1 flex items-center justify-between min-h-[22px]">
+                        <span className="text-slate-900 font-extrabold">Pay Date:</span>
+                        <span className="font-extrabold text-[9px] text-right text-black">
                             {challan.paidDate ? (
                                 formatDate(challan.paidDate)
                             ) : (
-                                <span className="inline-block border-b border-slate-500 min-w-[55px] text-center text-slate-300 font-normal">
+                                <span className="inline-block border-b border-slate-600 min-w-[50px] text-center text-slate-400 font-normal">
                                     &nbsp;
                                 </span>
                             )}
                         </span>
                     </div>
-                    <div className="p-1 flex items-center justify-between min-h-[24px]">
-                        <span className="text-slate-800">Paid:</span>
-                        <span className="font-semibold text-[9px] text-right">
+                    <div className="p-1 flex items-center justify-between min-h-[22px]">
+                        <span className="text-slate-900 font-extrabold">Paid:</span>
+                        <span className="font-extrabold text-[9px] text-right text-black">
                             {challan.paidAmount > 0 ? (
                                 `Rs. ${challan.paidAmount.toLocaleString()}`
                             ) : (
-                                <span className="inline-block border-b border-slate-500 min-w-[55px] text-center text-slate-300 font-normal">
+                                <span className="inline-block border-b border-slate-600 min-w-[50px] text-center text-slate-400 font-normal">
                                     &nbsp;
                                 </span>
                             )}
                         </span>
                     </div>
-                    <div className="p-1 flex items-center justify-between min-h-[24px]">
-                        <span className="text-slate-800">Bal.:</span>
-                        <span className="font-semibold text-[9px] text-right">
+                    <div className="p-1 flex items-center justify-between min-h-[22px]">
+                        <span className="text-slate-900 font-extrabold">Bal.:</span>
+                        <span className="font-extrabold text-[9px] text-right text-black">
                             {challan.paidAmount > 0 ? (
                                 `Rs. ${Math.max(0, totalDues - challan.paidAmount - discountAmount).toLocaleString()}`
                             ) : (
-                                <span className="inline-block border-b border-slate-500 min-w-[55px] text-center text-slate-300 font-normal">
+                                <span className="inline-block border-b border-slate-600 min-w-[50px] text-center text-slate-400 font-normal">
                                     &nbsp;
                                 </span>
                             )}

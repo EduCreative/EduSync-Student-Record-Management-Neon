@@ -1,9 +1,9 @@
 {
-  "version": "3.6.9",
+  "version": "3.8.0",
   "releaseDate": "2026-08-24",
   "changelog": [
-    "Client-Side Payment Date Validation: Restricts cashier and accountant payment date entry to today or past dates using HTML5 max attribute and real-time form validation.",
-    "Form Error Alerts & Reset: Prevents submission if a future payment date is entered and auto-resets the picker to today with a clear user notice.",
-    "Data Service Safety Net: Validates and caps payment dates at the data persistence layer to ensure database records maintain complete date integrity."
+    "Challans Per A4 Page Setting: Added user-selectable layout configuration for 1, 2, or 3 challans per A4 page across both 2-copy and 3-copy modes (defaulting to 3 per page).",
+    "Dynamic Print Heights & Page Breaks: Automatically adjusts vertical container heights, card padding, and QR code sizing based on selected challans-per-page option with exact page-break rules.",
+    "Enhanced Report Modals: Integrated side-by-side print layout settings into Bulk Fee Challans and Range Fee Challans report modals."
   ]
 }
