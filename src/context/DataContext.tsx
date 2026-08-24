@@ -494,16 +494,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const challan = fees.find(f => f.id === challanId);
         if (!challan) return;
 
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const validatedPaidDate = (paidDate && paidDate > todayStr) ? todayStr : paidDate;
+
         const newTotalPaid = challan.paidAmount + amount;
         const netPayable = challan.totalAmount - discount;
         const status = newTotalPaid >= netPayable ? 'Paid' : 'Partial';
         
         const history = challan.paymentHistory || [];
-        const newRecord = { amount, date: paidDate };
+        const newRecord = { amount, date: validatedPaidDate };
 
         await sql`
             UPDATE fee_challans 
-            SET paid_amount = ${newTotalPaid}, discount = ${discount}, status = ${status}, paid_date = ${paidDate}, payment_history = ${JSON.stringify([...history, newRecord])}
+            SET paid_amount = ${newTotalPaid}, discount = ${discount}, status = ${status}, paid_date = ${validatedPaidDate}, payment_history = ${JSON.stringify([...history, newRecord])}
             WHERE id = ${challanId}
         `;
         await fetchData();
@@ -512,12 +515,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const updateFeePayment = async (challanId: string, paidAmount: number, discount: number, paidDate: string, paymentHistory?: any[]) => {
         const challan = fees.find(f => f.id === challanId);
         if (!challan) return;
+
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const validatedPaidDate = (paidDate && paidDate > todayStr) ? todayStr : paidDate;
+
         const status = paidAmount >= (challan.totalAmount - discount) ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Unpaid');
         const historyToSave = paymentHistory || challan.paymentHistory || [];
 
         await sql`
             UPDATE fee_challans 
-            SET paid_amount = ${paidAmount}, discount = ${discount}, status = ${status}, paid_date = ${paidDate}, payment_history = ${JSON.stringify(historyToSave)}
+            SET paid_amount = ${paidAmount}, discount = ${discount}, status = ${status}, paid_date = ${validatedPaidDate}, payment_history = ${JSON.stringify(historyToSave)}
             WHERE id = ${challanId}
         `;
         await fetchData();

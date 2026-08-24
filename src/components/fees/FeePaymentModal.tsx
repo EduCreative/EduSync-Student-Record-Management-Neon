@@ -96,6 +96,12 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
             setError('Discount cannot be negative.');
             return;
         }
+
+        const todayStr = getTodayString();
+        if (paidDate > todayStr) {
+            setError('Payment Date cannot be in the future. Please select today or a past date.');
+            return;
+        }
         
         if (remainingBalance < 0) {
             if (!window.confirm(`This payment will result in an overpayment of Rs. ${Math.abs(remainingBalance)}. Do you want to proceed?`)) {
@@ -239,16 +245,28 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
                             />
                         </div>
                         <div>
-                            <label htmlFor="paidDate" className="input-label">Last Payment Date</label>
+                            <label htmlFor="paidDate" className="input-label">Payment Date</label>
                             <input
                                 type="date"
                                 id="paidDate"
                                 value={paidDate}
-                                onChange={e => setPaidDate(e.target.value)}
+                                max={getTodayString()}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    const todayStr = getTodayString();
+                                    if (val > todayStr) {
+                                        setError('Payment Date cannot be in the future.');
+                                        setPaidDate(todayStr);
+                                    } else {
+                                        setError('');
+                                        setPaidDate(val);
+                                    }
+                                }}
                                 className="input-field"
                                 required
                                 disabled={isSubmitting}
                             />
+                            <p className="text-[10px] text-secondary-500 mt-1">Future dates are not allowed.</p>
                         </div>
                     </div>
 

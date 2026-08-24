@@ -1,9 +1,9 @@
 {
-  "version": "3.6.7",
+  "version": "3.6.9",
   "releaseDate": "2026-08-24",
   "changelog": [
-    "Prior Payment Historical Lookup in Challans: Updated LAST PAYMENT DETAIL to strictly lookup and display the student's previous paid/partially-paid challan prior to the current month.",
-    "Correct Month-to-Month Last Payment Context: Dec 2025 challan now correctly displays Nov 2025 payment details, and Jan 2026 challan accurately displays Dec 2025 paid challan details.",
-    "Strict Exclusion of Current Month Payment: Prevented current month payment data from echoing inside its own LAST PAYMENT DETAIL box."
+    "Client-Side Payment Date Validation: Restricts cashier and accountant payment date entry to today or past dates using HTML5 max attribute and real-time form validation.",
+    "Form Error Alerts & Reset: Prevents submission if a future payment date is entered and auto-resets the picker to today with a clear user notice.",
+    "Data Service Safety Net: Validates and caps payment dates at the data persistence layer to ensure database records maintain complete date integrity."
   ]
 }

@@ -109,8 +109,34 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
     // Helper to compute numeric order for a fee challan (Year * 12 + Month)
     const getChallanVal = (f: FeeChallan) => {
         const monthIdx = getMonthIndex(f.month);
-        const yearVal = f.year || (f.dueDate ? new Date(f.dueDate).getFullYear() : new Date().getFullYear());
+        let yearVal = 0;
+        if (typeof f.year === 'number') {
+            yearVal = f.year;
+        } else if (typeof f.year === 'string') {
+            yearVal = parseInt(f.year, 10);
+        }
+        if (!yearVal || isNaN(yearVal)) {
+            if (f.dueDate) {
+                const parts = String(f.dueDate).split('-');
+                if (parts.length >= 1) yearVal = parseInt(parts[0], 10);
+            }
+        }
+        if (!yearVal || isNaN(yearVal)) {
+            yearVal = new Date().getFullYear();
+        }
         return yearVal * 12 + monthIdx;
+    };
+
+    // Helper to extract the most recent payment date for a fee challan
+    const getLatestPaymentDate = (f: FeeChallan) => {
+        if (f.paymentHistory && f.paymentHistory.length > 0) {
+            const dates = f.paymentHistory.map(p => p.date).filter(Boolean);
+            if (dates.length > 0) {
+                dates.sort();
+                return dates[dates.length - 1];
+            }
+        }
+        return f.paidDate || f.dueDate || '';
     };
 
     // Resolve Last Payment Detail values
@@ -119,30 +145,35 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
     if (!computedLastDetail && feesToSearch.length > 0) {
         const currentVal = getChallanVal(challan);
         const studentId = student?.id || challan.studentId;
+        const currentPayDate = getLatestPaymentDate(challan);
 
         // Find candidate previous paid/partially-paid challans for this student
         const candidateChallans = feesToSearch.filter(f => {
             if (f.studentId !== studentId) return false;
             if (f.id === challan.id) return false; // Strictly exclude current challan!
+            if (f.challanNumber && challan.challanNumber && f.challanNumber === challan.challanNumber) return false;
 
             const hasPayment = (f.paidAmount && f.paidAmount > 0) || f.status === 'Paid' || f.status === 'Partial' || (f.paymentHistory && f.paymentHistory.length > 0);
             if (!hasPayment) return false;
 
             const fVal = getChallanVal(f);
             if (fVal < currentVal) return true;
-            if (fVal === currentVal && f.paidDate && challan.paidDate && f.paidDate < challan.paidDate) return true;
+            if (fVal === currentVal) {
+                const fDate = getLatestPaymentDate(f);
+                if (fDate && currentPayDate && fDate < currentPayDate) return true;
+            }
 
             return false;
         });
 
-        // Sort candidates descending: most recent month/year first, then paidDate
+        // Sort candidates descending: most recent month/year first, then latest payment date
         candidateChallans.sort((a, b) => {
             const valA = getChallanVal(a);
             const valB = getChallanVal(b);
             if (valB !== valA) return valB - valA;
 
-            const dateA = a.paidDate || '';
-            const dateB = b.paidDate || '';
+            const dateA = getLatestPaymentDate(a);
+            const dateB = getLatestPaymentDate(b);
             if (dateB !== dateA) return dateB.localeCompare(dateA);
 
             return b.challanNumber.localeCompare(a.challanNumber);
@@ -154,10 +185,11 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
             const prevPaid = prev.paidAmount || 0;
             const prevDiscount = prev.discount || 0;
             const prevBal = Math.max(0, prevTotal - prevPaid - prevDiscount);
+            const prevDate = getLatestPaymentDate(prev) || prev.paidDate || prev.dueDate;
 
             computedLastDetail = {
                 challanNumber: prev.challanNumber,
-                date: prev.paidDate || prev.dueDate,
+                date: prevDate,
                 amount: prevTotal,
                 paid: prevPaid,
                 discount: prevDiscount,

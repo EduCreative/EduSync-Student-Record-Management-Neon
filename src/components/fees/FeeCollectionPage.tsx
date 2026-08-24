@@ -372,14 +372,23 @@ const FeeCollectionPage: React.FC = () => {
                         </select>
                     </div>
                     <div className="col-span-1">
-                        <label htmlFor="session-date" className="input-label">Payment Date</label>
+                        <label htmlFor="session-date" className="input-label">Default Payment Date</label>
                         <input
                             id="session-date"
                             type="date"
                             value={sessionDate}
-                            onChange={e => setSessionDate(e.target.value)}
+                            max={getTodayString()}
+                            onChange={e => {
+                                const val = e.target.value;
+                                const todayStr = getTodayString();
+                                if (val > todayStr) {
+                                    setSessionDate(todayStr);
+                                } else {
+                                    setSessionDate(val);
+                                }
+                            }}
                             className="input-field"
-                            title="Default date for new payments"
+                            title="Default date for new payments (future dates restricted)"
                         />
                     </div>
                 </div>

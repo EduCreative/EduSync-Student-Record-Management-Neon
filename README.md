@@ -5,8 +5,9 @@
 
 ---
 
-## ✨ Key Features (v3.6.7)
-- **Prior Payment Historical Lookup**: Automatically searches student payment history to display the last paid or partially-paid challan in the `LAST PAYMENT DETAIL` section (e.g., Dec 2025 challan displays Nov 2025 payment, and Jan 2026 challan displays Dec 2025 payment).
+## ✨ Key Features (v3.6.9)
+- **Payment Date Future Date Validation**: HTML5 date limits (`max={today}`) and real-time form validation prevent cashiers/accountants from selecting future payment dates when recording or updating payments.
+- **Chronological Prior Payment Lookup & Multi-Month Carry-Over**: Evaluates the student's entire fee ledger to retrieve the chronologically preceding paid or partially-paid transaction in the `LAST PAYMENT DETAIL` section.
 - **Cashier Fillable Receipt Fields**: Provides clean pen-writing lines (`Pay Date:`, `Paid:`, `Bal.:`) on printed monthly challans so cashiers can fill them by hand at the counter, which then print automatically once entered into the app.
 - **Clarified Discount Amount (D.A.) Labels**: Explicitly labeled `Discount Amount (D.A.)` and `Discount (D.A.)` across fee breakdown tables.
 - **Ink-Friendly Soft Theme**: Soft slate header banners (`bg-slate-700` / `bg-slate-600`) and high-contrast light table headers (`bg-slate-200`) for clear readability and optimal printer ink usage.
