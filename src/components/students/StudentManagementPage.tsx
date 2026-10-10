@@ -13,6 +13,7 @@ import { exportToCsv } from '../../utils/csvHelper';
 import ImportModal from '../common/ImportModal';
 import { Permission } from '../../permissions';
 import { getClassLevel } from '../../utils/sorting';
+import GraduatedStudentsModal from '../classes/GraduatedStudentsModal';
 
 interface StudentManagementPageProps {
     setActiveView: (view: ActiveView) => void;
@@ -49,7 +50,7 @@ const parseCurrency = (value: any): number | null => {
 
 const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActiveView }) => {
     const { user, activeSchoolId, hasPermission } = useAuth();
-    const { students, classes, addStudent, updateStudent, deleteStudent, loading, bulkAddStudents, feeHeads, fees } = useData();
+    const { students, classes, results, addStudent, updateStudent, deleteStudent, loading, bulkAddStudents, feeHeads, fees, reactivateGraduatedStudents, revertLastPromotion } = useData();
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
 
@@ -60,6 +61,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
     
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isGraduatedModalOpen, setIsGraduatedModalOpen] = useState(false);
     const [studentToEdit, setStudentToEdit] = useState<Student | null>(null);
     const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -67,6 +69,14 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
     
     const canEdit = hasPermission(Permission.CAN_EDIT_STUDENTS);
     const canDelete = hasPermission(Permission.CAN_DELETE_STUDENTS);
+
+    const graduatedStudents = useMemo(() => {
+        return students.filter(s => s.schoolId === effectiveSchoolId && s.status === 'Graduated');
+    }, [students, effectiveSchoolId]);
+
+    const hasRollbackSnapshot = useMemo(() => {
+        return Boolean(localStorage.getItem('edusync_last_promotion_snapshot'));
+    }, [students]);
 
     const schoolClasses = useMemo(() => classes.filter(c => c.schoolId === effectiveSchoolId)
         .sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name)), 
@@ -369,11 +379,22 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                     </div>
                 </div>
             </Modal>
+            <GraduatedStudentsModal
+                isOpen={isGraduatedModalOpen}
+                onClose={() => setIsGraduatedModalOpen(false)}
+                graduatedStudents={graduatedStudents}
+                classes={schoolClasses}
+                fees={fees}
+                results={results}
+                onReactivate={reactivateGraduatedStudents}
+                onRevertPromotion={revertLastPromotion}
+                hasRollbackSnapshot={hasRollbackSnapshot}
+            />
 
             <div className="space-y-6">
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Student Management</h1>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         {canEdit && (
                             <button onClick={() => setIsImportModalOpen(true)} className="btn-secondary">
                                 <UploadIcon className="w-4 h-4" /> Import CSV
@@ -382,9 +403,40 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                         <button onClick={handleExport} className="btn-secondary">
                             <DownloadIcon className="w-4 h-4" /> Export CSV
                         </button>
+                        {graduatedStudents.length > 0 && (
+                            <button
+                                onClick={() => setIsGraduatedModalOpen(true)}
+                                className="btn-secondary text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40 font-medium"
+                            >
+                                🎓 Graduated ({graduatedStudents.length})
+                            </button>
+                        )}
                         {canEdit && <button onClick={() => handleOpenModal()} className="btn-primary">+ Add Student</button>}
                     </div>
                 </div>
+
+                {graduatedStudents.length > 0 && statusFilter === 'Active' && (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm text-amber-900 dark:text-amber-200 shadow-xs">
+                        <div>
+                            <span className="font-semibold">Notice:</span> {graduatedStudents.length} students are currently marked as &apos;Graduated&apos; and hidden from this Active view.
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button 
+                                onClick={() => setStatusFilter('Graduated')} 
+                                className="text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline"
+                            >
+                                View Graduated
+                            </button>
+                            <span className="text-secondary-400">|</span>
+                            <button 
+                                onClick={() => setIsGraduatedModalOpen(true)} 
+                                className="btn-primary text-xs py-1 px-2.5 bg-amber-600 hover:bg-amber-700 text-white border-none"
+                            >
+                                Reactivate Students
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 <div className="p-4 bg-white dark:bg-secondary-800 rounded-lg shadow-md">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -396,6 +448,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="input-field">
                             <option value="all">All Statuses</option>
                             <option value="Active">Active</option>
+                            <option value="Graduated">Graduated</option>
                             <option value="Inactive">Inactive</option>
                             <option value="Left">Left</option>
                             <option value="Deleted">Deleted</option>
@@ -443,7 +496,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4">{classMap.get(student.classId) || 'N/A'}</td>
-                                                    <td className="px-6 py-4"><Badge color={student.status === 'Active' ? 'green' : 'secondary'}>{student.status}</Badge></td>
+                                                    <td className="px-6 py-4"><Badge color={student.status === 'Active' ? 'green' : student.status === 'Graduated' ? 'purple' : 'secondary'}>{student.status}</Badge></td>
                                                     <td className={`px-6 py-4 text-right font-semibold ${balance > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
                                                         Rs. {balance.toLocaleString()}
                                                     </td>

@@ -247,6 +247,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onClose, on
                             <select name="status" id="status" value={formData.status} onChange={handleChange} className="w-full input-field" disabled={formData.status === 'Left' || formData.status.includes('Passed')}>
                                 <option value="Active">Active</option>
                                 <option value="Inactive">Inactive</option>
+                                <option value="Graduated">Graduated</option>
                                 {formData.status === 'Left' && <option value="Left">Left</option>}
                                 {formData.status.includes('Passed') && <option value={formData.status}>{formData.status}</option>}
                             </select>

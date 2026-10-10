@@ -13,6 +13,7 @@ import PromotionPreviewModal from './PromotionPreviewModal';
 import { useToast } from '../../context/ToastContext';
 import { getClassLevel } from '../../utils/sorting';
 import Avatar from '../common/Avatar';
+import GraduatedStudentsModal from './GraduatedStudentsModal';
 
 const GraduationCapIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>;
 const DragHandleIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>;
@@ -20,7 +21,7 @@ const DragHandleIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props}
 
 const ClassManagementPage: React.FC = () => {
     const { user: currentUser, activeSchoolId, effectiveRole, hasPermission } = useAuth();
-    const { classes, users, students, addClass, updateClass, deleteClass, loading, bulkAddClasses, promoteAllStudents, bulkUpdateClassOrder } = useData();
+    const { classes, users, students, fees, results, addClass, updateClass, deleteClass, loading, bulkAddClasses, promoteAllStudents, reactivateGraduatedStudents, revertLastPromotion, bulkUpdateClassOrder } = useData();
     const { showToast } = useToast();
 
     const effectiveSchoolId = currentUser?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : currentUser?.schoolId;
@@ -28,6 +29,7 @@ const ClassManagementPage: React.FC = () => {
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
+    const [isGraduatedModalOpen, setIsGraduatedModalOpen] = useState(false);
     const [promotionPlan, setPromotionPlan] = useState<any[]>([]);
     const [isPromoting, setIsPromoting] = useState(false);
     const [classToEdit, setClassToEdit] = useState<Class | null>(null);
@@ -39,6 +41,14 @@ const ClassManagementPage: React.FC = () => {
     const canDeleteClasses = hasPermission(Permission.CAN_DELETE_CLASSES);
     const canPromote = hasPermission(Permission.CAN_PROMOTE_STUDENTS);
     const canReorder = hasPermission(Permission.CAN_EDIT_CLASSES);
+
+    const graduatedStudents = useMemo(() => {
+        return students.filter(s => s.schoolId === effectiveSchoolId && s.status === 'Graduated');
+    }, [students, effectiveSchoolId]);
+
+    const hasRollbackSnapshot = useMemo(() => {
+        return Boolean(localStorage.getItem('edusync_last_promotion_snapshot'));
+    }, [students]);
 
     const schoolClasses = useMemo(() => {
         let filteredClasses: Class[];
@@ -294,6 +304,17 @@ const ClassManagementPage: React.FC = () => {
                     allClasses={schoolClasses}
                 />
             )}
+            <GraduatedStudentsModal
+                isOpen={isGraduatedModalOpen}
+                onClose={() => setIsGraduatedModalOpen(false)}
+                graduatedStudents={graduatedStudents}
+                classes={schoolClasses}
+                fees={fees}
+                results={results}
+                onReactivate={reactivateGraduatedStudents}
+                onRevertPromotion={revertLastPromotion}
+                hasRollbackSnapshot={hasRollbackSnapshot}
+            />
             <Modal isOpen={!!classToDelete} onClose={() => setClassToDelete(null)} title="Confirm Class Deletion">
                 <div>
                     <p className="text-sm text-secondary-600 dark:text-secondary-400">
@@ -351,6 +372,14 @@ const ClassManagementPage: React.FC = () => {
                         <button onClick={handleExport} className="btn-secondary">
                            <DownloadIcon className="w-4 h-4" /> Export CSV
                         </button>
+                        {graduatedStudents.length > 0 && (
+                            <button
+                                onClick={() => setIsGraduatedModalOpen(true)}
+                                className="btn-secondary text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40 font-medium"
+                            >
+                                🎓 Graduated ({graduatedStudents.length})
+                            </button>
+                        )}
                         {canPromote && (
                             <button onClick={handleCalculateAndShowPreview} className="btn-danger flex items-center gap-2">
                                 <GraduationCapIcon className="w-4 h-4" /> 
@@ -364,6 +393,26 @@ const ClassManagementPage: React.FC = () => {
                         )}
                     </div>
                 </div>
+
+                {graduatedStudents.length > 0 && (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                        <div>
+                            <p className="font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                                <span>🎓</span> {graduatedStudents.length} Graduated Students in School
+                            </p>
+                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                                These students are currently marked as &apos;Graduated&apos; and hidden from active class counts. Click to restore or reactivate them back into classes.
+                            </p>
+                        </div>
+                        <button 
+                            type="button"
+                            onClick={() => setIsGraduatedModalOpen(true)}
+                            className="btn-primary text-xs whitespace-nowrap self-start sm:self-center bg-amber-600 hover:bg-amber-700 text-white border-none"
+                        >
+                            Manage / Reactivate Students
+                        </button>
+                    </div>
+                )}
 
                 <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md">
                     {loading ? (

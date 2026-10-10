@@ -5,7 +5,12 @@
 
 ---
 
-## ✨ Key Features (v3.8.0)
+## ✨ Key Features (v3.10.0)
+- **High-Fidelity Google Drive Cloud Backup**: Built on RFC 2387 `multipart/related` compliant uploads with automatic token refreshing and descriptive API error diagnostics.
+- **Instant, Lossless Local Backup & Restore**: Robust local file import and JSON export engine backed by atomic IndexedDB transactions, guaranteeing 100% data integrity for all students, ledgers, challans, and academic transcripts.
+- **Safe, Atomic Student Promotion**: Promotes active students concurrently to destination classes based on initial state snapshots, completely eliminating cascading chain promotions.
+- **Graduated Students Recovery & Reactivation Hub**: Full-featured recovery interface (`GraduatedStudentsModal`) to restore graduated students back to `Active` status, automatically reconstruct previous class assignments from fee or exam history, or revert the last promotion in 1 click.
+- **Archived Student Visibility**: Added `Graduated` status filtering and notification banners in Class Management and Student Management so administrators always have complete clarity over their student body counts.
 - **Challans per A4 Page Setting (1, 2, or 3 per Page)**: Added radio selector for 1, 2, or 3 challans per page (defaulting to 3 per page) alongside Copies per Challan (2 or 3 copies) across Bulk Fee Challans and Range Fee Challans modals.
 - **Dynamic Print Layout Scaling & Height Adjustments**: Automatically adjusts vertical container heights (`.per-page-1`, `.per-page-2`, `.per-page-3`), card padding, and QR code sizes for clean, balanced layouts on A4 paper and PDF downloads.
 - **Print / Save Acknowledgment Bar Fix**: Optimized print box paddings and overflow rules (`overflow: visible` with `min-height: 94mm`) to ensure `Pay Date:`, `Paid:`, and `Bal.:` fields render with 100% visibility both in Print Preview and in Print / Save PDF output.

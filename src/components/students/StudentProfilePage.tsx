@@ -89,7 +89,7 @@ const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setA
                         <div className="flex-1">
                             <div className="flex items-center gap-4">
                                 <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">{student.name}</h1>
-                                <Badge color={student.status === 'Active' ? 'green' : 'secondary'}>{student.status}</Badge>
+                                <Badge color={student.status === 'Active' ? 'green' : student.status === 'Graduated' ? 'purple' : 'secondary'}>{student.status}</Badge>
                             </div>
                             <div className="flex items-center flex-wrap gap-x-4 gap-y-2 mt-2">
                                 <p className="text-secondary-500 dark:text-secondary-400">{studentClass?.fullName || 'N/A'}</p>

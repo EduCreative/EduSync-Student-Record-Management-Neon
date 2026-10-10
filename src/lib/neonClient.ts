@@ -387,52 +387,74 @@ const executeSqlOffline = async (queryText: string, params: any[]): Promise<any[
     if (cleanQuery.startsWith('update')) {
         if (!dexieTable) return [];
 
-        const idMatch = queryText.match(/where\s+id\s*=\s*(?:\$([0-9]+)|'([^']+)')/i);
-        let targetId = '';
-        if (idMatch) {
-            if (idMatch[1]) {
-                targetId = params[parseInt(idMatch[1], 10) - 1];
-            } else {
-                targetId = idMatch[2];
+        const setMatch = queryText.match(/set\s+(.*?)\s+where/i);
+        if (!setMatch) return [];
+
+        const setParts = setMatch[1].split(',');
+        const updatesToApply: Record<string, any> = {};
+        for (const part of setParts) {
+            const match = part.match(/(\w+)\s*=\s*(?:\$([0-9]+)|'([^']+)'|"(.*?)"|(.*?))/);
+            if (match) {
+                const col = match[1].trim();
+                const paramIdx = match[2];
+                let val: any;
+                if (paramIdx) {
+                    val = params[parseInt(paramIdx, 10) - 1];
+                } else {
+                    val = match[3] || match[4] || match[5]?.trim();
+                }
+                
+                // Parse potential JSON values
+                if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
+                    try { val = JSON.parse(val); } catch {}
+                }
+
+                const camelKey = col.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+                updatesToApply[camelKey] = val;
             }
         }
 
-        if (targetId) {
-            const existing = await dexieTable.get(targetId);
-            if (existing) {
-                const setMatch = queryText.match(/set\s+(.*?)\s+where/i);
-                if (setMatch) {
-                    const setParts = setMatch[1].split(',');
-                    for (const part of setParts) {
-                        const match = part.match(/(\w+)\s*=\s*(?:\$([0-9]+)|'([^']+)'|"(.*?)"|(.*?))/);
-                        if (match) {
-                            const col = match[1].trim();
-                            const paramIdx = match[2];
-                            let val: any;
-                            if (paramIdx) {
-                                val = params[parseInt(paramIdx, 10) - 1];
-                            } else {
-                                val = match[3] || match[4] || match[5]?.trim();
-                            }
-                            
-                            // Parse potential JSON values
-                            if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
-                                try { val = JSON.parse(val); } catch {}
-                            }
+        let targetRecords: any[] = [];
+        const anyIdMatch = queryText.match(/where\s+id\s*=\s*any\s*\(\s*\$([0-9]+)\s*\)/i);
+        const inIdMatch = queryText.match(/where\s+id\s+in\s*\(\s*\$([0-9]+)\s*\)/i);
+        const classIdMatch = queryText.match(/where\s+class_id\s*=\s*(?:\$([0-9]+)|'([^']+)')/i);
+        const idMatch = queryText.match(/where\s+id\s*=\s*(?:\$([0-9]+)|'([^']+)')/i);
 
-                            const camelKey = col.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-                            existing[camelKey] = val;
-                        }
-                    }
-                    await dexieTable.put(existing);
-                    return [toSnakeCase(existing)];
-                }
+        if (anyIdMatch || inIdMatch) {
+            const paramIdx = parseInt((anyIdMatch || inIdMatch)![1], 10) - 1;
+            const rawParam = params[paramIdx];
+            const idsList = Array.isArray(rawParam) ? rawParam : [rawParam];
+            const idSet = new Set(idsList);
+            const allItems = await dexieTable.toArray();
+            targetRecords = allItems.filter((item: any) => idSet.has(item.id));
+        } else if (classIdMatch) {
+            const targetClassId = classIdMatch[1] ? params[parseInt(classIdMatch[1], 10) - 1] : classIdMatch[2];
+            const allItems = await dexieTable.toArray();
+            targetRecords = allItems.filter((item: any) => item.classId === targetClassId);
+        } else if (idMatch) {
+            const targetId = idMatch[1] ? params[parseInt(idMatch[1], 10) - 1] : idMatch[2];
+            const existing = await dexieTable.get(targetId);
+            if (existing) targetRecords = [existing];
+        }
+
+        if (targetRecords.length > 0) {
+            for (const item of targetRecords) {
+                Object.assign(item, updatesToApply);
+                await dexieTable.put(item);
             }
+            return targetRecords.map(r => toSnakeCase(r));
         }
         return [];
     }
 
-    // 4. DELETE
+    // 4. TRUNCATE
+    if (cleanQuery.startsWith('truncate')) {
+        if (!dexieTable) return [];
+        await dexieTable.clear();
+        return [];
+    }
+
+    // 5. DELETE
     if (cleanQuery.startsWith('delete')) {
         if (!dexieTable) return [];
         
@@ -446,6 +468,60 @@ const executeSqlOffline = async (queryText: string, params: any[]): Promise<any[
                 await db.fees.delete(f.id);
             }
             return toDelete.map(f => toSnakeCase(f));
+        }
+
+        // Subquery or student_id bulk delete (e.g. DELETE FROM results WHERE student_id IN (SELECT id FROM students WHERE school_id = $1))
+        if (cleanQuery.includes('student_id')) {
+            const sidMatch = queryText.match(/where\s+school_id\s*=\s*(?:\$([0-9]+)|'([^']+)')/i);
+            if (sidMatch) {
+                const sid = sidMatch[1] ? params[parseInt(sidMatch[1], 10) - 1] : sidMatch[2];
+                const allStudents = await db.students.toArray();
+                const schoolStudentIds = new Set(allStudents.filter(s => s.schoolId === sid).map(s => s.id));
+                const allItems = await dexieTable.toArray();
+                const toDelete = allItems.filter((i: any) => schoolStudentIds.has(i.studentId || i.student_id));
+                for (const item of toDelete) {
+                    await dexieTable.delete(item.id);
+                }
+                return toDelete.map((i: any) => toSnakeCase(i));
+            }
+        }
+
+        // School ID based delete (e.g. DELETE FROM classes WHERE school_id = $1)
+        const schoolIdMatch = queryText.match(/where\s+school_id\s*=\s*(?:\$([0-9]+)|'([^']+)')/i);
+        if (schoolIdMatch) {
+            const sid = schoolIdMatch[1] ? params[parseInt(schoolIdMatch[1], 10) - 1] : schoolIdMatch[2];
+            const notIdMatch = queryText.match(/and\s+id\s*!=\s*(?:\$([0-9]+)|'([^']+)')/i);
+            const notId = notIdMatch ? (notIdMatch[1] ? params[parseInt(notIdMatch[1], 10) - 1] : notIdMatch[2]) : null;
+
+            const allItems = await dexieTable.toArray();
+            const toDelete = allItems.filter((item: any) => {
+                const itemSid = item.schoolId || item.school_id;
+                if (itemSid !== sid) return false;
+                if (notId && item.id === notId) return false;
+                return true;
+            });
+            for (const item of toDelete) {
+                await dexieTable.delete(item.id);
+            }
+            return toDelete.map((i: any) => toSnakeCase(i));
+        }
+
+        // Role exclusion delete (e.g. DELETE FROM profiles WHERE role != 'Owner')
+        const notRoleMatch = queryText.match(/where\s+role\s*!=\s*(?:\$([0-9]+)|'([^']+)')/i);
+        if (notRoleMatch) {
+            const roleVal = notRoleMatch[1] ? params[parseInt(notRoleMatch[1], 10) - 1] : notRoleMatch[2];
+            const allProfiles = await db.users.toArray();
+            const toDelete = allProfiles.filter((p: any) => p.role !== roleVal);
+            for (const p of toDelete) {
+                await db.users.delete(p.id);
+            }
+            return toDelete.map((p: any) => toSnakeCase(p));
+        }
+
+        // Check for DELETE without WHERE (wipe whole table)
+        if (!cleanQuery.includes('where')) {
+            await dexieTable.clear();
+            return [];
         }
 
         const idMatch = queryText.match(/where\s+id\s*=\s*(?:\$([0-9]+)|'([^']+)')/i);
@@ -470,10 +546,16 @@ const executeSqlOffline = async (queryText: string, params: any[]): Promise<any[
 // Tagged template string literal support for query execution
 export const sql = (strings: TemplateStringsArray | string, ...values: any[]) => {
     let queryText = '';
-    let params = values;
+    let params: any[] = [];
 
     if (typeof strings === 'string') {
         queryText = strings;
+        // If values was passed as an array e.g. sql(query, [v1, v2, ...]) or query(sql, params)
+        if (values.length === 1 && Array.isArray(values[0])) {
+            params = values[0];
+        } else {
+            params = values;
+        }
     } else {
         for (let i = 0; i < strings.length; i++) {
             queryText += strings[i];
@@ -481,6 +563,7 @@ export const sql = (strings: TemplateStringsArray | string, ...values: any[]) =>
                 queryText += `$${i + 1}`;
             }
         }
+        params = values;
     }
 
     if (originalSql) {

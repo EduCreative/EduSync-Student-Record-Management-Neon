@@ -1,9 +1,10 @@
 {
-  "version": "3.8.0",
-  "releaseDate": "2026-08-24",
+  "version": "3.10.0",
+  "releaseDate": "2026-10-10",
   "changelog": [
-    "Challans Per A4 Page Setting: Added user-selectable layout configuration for 1, 2, or 3 challans per A4 page across both 2-copy and 3-copy modes (defaulting to 3 per page).",
-    "Dynamic Print Heights & Page Breaks: Automatically adjusts vertical container heights, card padding, and QR code sizing based on selected challans-per-page option with exact page-break rules.",
-    "Enhanced Report Modals: Integrated side-by-side print layout settings into Bulk Fee Challans and Range Fee Challans report modals."
+    "Google Drive Backup Fix: Resolved 'Upload failed:' error by constructing standard RFC 2387 multipart/related payloads instead of unsupported browser FormData, with descriptive error parsing.",
+    "Manual File Import / Local Restore Fix: Fixed parameter unpacking bug in the SQL layer and implemented direct atomic Dexie transactions with bulk inserts, ensuring 100% data retention of students, attendance, fee challans, and exam results upon restoration.",
+    "Non-Cascading Student Promotion: Resolved the cascade bug in Class Management by snapshotting class assignments and promoting without chain contamination.",
+    "Graduated Students Management & Reactivation: Full recovery interface with 1-click student reactivation, smart historical class reconstruction from fee/exam records, and undo promotion support."
   ]
 }

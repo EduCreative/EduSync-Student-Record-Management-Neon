@@ -141,10 +141,10 @@ const PromotionPreviewModal: React.FC<PromotionPreviewModalProps> = ({ isOpen, o
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Confirm Student Promotion">
             <div>
-                <div className="bg-yellow-50 dark:bg-yellow-900/50 border-l-4 border-yellow-400 p-4 rounded-r-lg mb-4">
-                    <h4 className="font-bold text-yellow-800 dark:text-yellow-200">Warning!</h4>
-                    <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                        This action will permanently update records for all selected students. Review each step carefully.
+                <div className="bg-blue-50 dark:bg-blue-900/40 border-l-4 border-blue-500 p-3.5 rounded-r-lg mb-4">
+                    <h4 className="font-bold text-sm text-blue-900 dark:text-blue-200">Promotion Rules</h4>
+                    <p className="text-xs text-blue-800 dark:text-blue-300 mt-0.5">
+                        Students are promoted concurrently to their mapped destination. Students promoted to another class remain <strong>Active</strong> in that class. Only select <strong>🎓 Graduate</strong> for the outgoing senior grade; graduated students are archived from active class counts.
                     </p>
                 </div>
                 

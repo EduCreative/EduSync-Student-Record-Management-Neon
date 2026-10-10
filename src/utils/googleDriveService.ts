@@ -91,14 +91,26 @@ class GoogleDriveService {
             mimeType: 'application/json',
         };
 
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        form.append('file', new Blob([content], { type: 'application/json' }));
+        const boundary = '-------314159265358979323846';
+        const delimiter = `\r\n--${boundary}\r\n`;
+        const closeDelimiter = `\r\n--${boundary}--`;
+
+        const multipartRequestBody =
+            delimiter +
+            'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+            JSON.stringify(metadata) +
+            delimiter +
+            'Content-Type: application/json\r\n\r\n' +
+            content +
+            closeDelimiter;
 
         const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-            body: form,
+            headers: { 
+                Authorization: `Bearer ${token}`,
+                'Content-Type': `multipart/related; boundary=${boundary}`,
+            },
+            body: multipartRequestBody,
         });
 
         if (!response.ok) {
@@ -106,7 +118,14 @@ class GoogleDriveService {
                 this.accessToken = null; // Token likely expired
                 throw new Error("Session expired. Please try the backup again to re-authorize.");
             }
-            throw new Error(`Upload failed: ${response.statusText}`);
+            let errorDetail = '';
+            try {
+                const errJson = await response.json();
+                errorDetail = errJson.error?.message || JSON.stringify(errJson);
+            } catch {
+                errorDetail = await response.text();
+            }
+            throw new Error(`Upload failed (${response.status}): ${errorDetail || response.statusText || 'Unknown Drive API error'}`);
         }
     }
 
@@ -121,7 +140,14 @@ class GoogleDriveService {
 
         if (!response.ok) {
             if (response.status === 401) this.accessToken = null;
-            throw new Error(`Failed to list files: ${response.statusText}`);
+            let errorDetail = '';
+            try {
+                const errJson = await response.json();
+                errorDetail = errJson.error?.message || JSON.stringify(errJson);
+            } catch {
+                errorDetail = await response.text();
+            }
+            throw new Error(`Failed to list files (${response.status}): ${errorDetail || response.statusText || 'Unknown Drive error'}`);
         }
 
         const data = await response.json();
@@ -136,7 +162,14 @@ class GoogleDriveService {
 
         if (!response.ok) {
             if (response.status === 401) this.accessToken = null;
-            throw new Error(`Download failed: ${response.statusText}`);
+            let errorDetail = '';
+            try {
+                const errJson = await response.json();
+                errorDetail = errJson.error?.message || JSON.stringify(errJson);
+            } catch {
+                errorDetail = await response.text();
+            }
+            throw new Error(`Download failed (${response.status}): ${errorDetail || response.statusText || 'Unknown Drive error'}`);
         }
 
         return await response.text();

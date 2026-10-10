@@ -84,6 +84,8 @@ interface DataContextType {
     backupToDrive: (silent?: boolean) => Promise<void>;
     restoreData: (backupFile: File) => Promise<void>;
     promoteAllStudents: (mappings: Record<string, string | 'graduate'>, exemptedStudentIds: string[]) => Promise<void>;
+    reactivateGraduatedStudents: (options?: { studentIds?: string[]; targetClassId?: string; restoreFromHistory?: boolean }) => Promise<number>;
+    revertLastPromotion: () => Promise<boolean>;
     increaseTuitionFees: (studentIds: string[], increaseAmount: number) => Promise<void>;
     sendFeeReminders: (challanIds: string[]) => Promise<void>;
     bulkUpdateClassOrder: (classes: { id: string; sortOrder: number }[]) => Promise<void>;
@@ -724,22 +726,236 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const promoteAllStudents = async (mappings: Record<string, string | 'graduate'>, exemptedIds: string[]) => {
         const exemptSet = new Set(exemptedIds);
-        const totalClasses = Object.keys(mappings).length;
-        let index = 0;
+        const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
 
-        for (const [fromId, to] of Object.entries(mappings)) {
-            index++;
-            const progress = Math.round((index / totalClasses) * 100);
-            setOperationProgress({ percentage: progress, status: `Promoting class ${index} of ${totalClasses}...` });
+        // 1. Snapshot all active students to promote BEFORE applying any mutations.
+        // This eliminates the cascading bug where students promoted to class B get promoted again when class B is processed.
+        const targetStudents = students.filter(s => 
+            (effectiveSchoolId ? s.schoolId === effectiveSchoolId : true) &&
+            s.status === 'Active' && 
+            Boolean(mappings[s.classId]) && 
+            !exemptSet.has(s.id)
+        );
 
-            if (to === 'graduate') {
-                await sql`UPDATE students SET status = 'Graduated' WHERE class_id = ${fromId} AND id != ALL(${Array.from(exemptSet)})`;
-            } else {
-                await sql`UPDATE students SET class_id = ${to} WHERE class_id = ${fromId} AND id != ALL(${Array.from(exemptSet)})`;
+        if (targetStudents.length === 0) {
+            showToast('Info', 'No active students found to promote.', 'info');
+            return;
+        }
+
+        // Save rollback snapshot to localStorage
+        try {
+            const rollbackSnapshot = targetStudents.map(s => ({
+                id: s.id,
+                classId: s.classId,
+                status: s.status,
+            }));
+            localStorage.setItem('edusync_last_promotion_snapshot', JSON.stringify({
+                timestamp: new Date().toISOString(),
+                schoolId: effectiveSchoolId,
+                students: rollbackSnapshot
+            }));
+        } catch (e) {
+            console.warn('Could not save rollback snapshot', e);
+        }
+
+        // Partition students by destination: graduation vs destination class
+        const graduatingStudentIds: string[] = [];
+        const classTargetMap: Record<string, string[]> = {};
+
+        for (const s of targetStudents) {
+            const dest = mappings[s.classId];
+            if (dest === 'graduate') {
+                graduatingStudentIds.push(s.id);
+            } else if (dest) {
+                if (!classTargetMap[dest]) {
+                    classTargetMap[dest] = [];
+                }
+                classTargetMap[dest].push(s.id);
             }
         }
+
+        const totalSteps = (graduatingStudentIds.length > 0 ? 1 : 0) + Object.keys(classTargetMap).length;
+        let stepCount = 0;
+
+        // Apply graduations
+        if (graduatingStudentIds.length > 0) {
+            stepCount++;
+            setOperationProgress({ 
+                percentage: Math.round((stepCount / totalSteps) * 85), 
+                status: `Graduating ${graduatingStudentIds.length} students...` 
+            });
+
+            const CHUNK_SIZE = 50;
+            for (let i = 0; i < graduatingStudentIds.length; i += CHUNK_SIZE) {
+                const chunk = graduatingStudentIds.slice(i, i + CHUNK_SIZE);
+                await sql`UPDATE students SET status = 'Graduated' WHERE id = ANY(${chunk})`;
+            }
+        }
+
+        // Apply class promotions (each student updated by ID, never cascaded)
+        for (const [targetClassId, stdIds] of Object.entries(classTargetMap)) {
+            stepCount++;
+            setOperationProgress({ 
+                percentage: Math.round((stepCount / totalSteps) * 85), 
+                status: `Promoting ${stdIds.length} students to next class...` 
+            });
+
+            const CHUNK_SIZE = 50;
+            for (let i = 0; i < stdIds.length; i += CHUNK_SIZE) {
+                const chunk = stdIds.slice(i, i + CHUNK_SIZE);
+                await sql`UPDATE students SET class_id = ${targetClassId}, status = 'Active' WHERE id = ANY(${chunk})`;
+            }
+        }
+
+        setOperationProgress({ percentage: 95, status: 'Finalizing promotion...' });
         await fetchData();
         setOperationProgress({ percentage: 0, status: '' });
+        showToast('Success', `Successfully promoted ${targetStudents.length} students.`, 'success');
+    };
+
+    const reactivateGraduatedStudents = async (options?: { 
+        studentIds?: string[]; 
+        targetClassId?: string; 
+        restoreFromHistory?: boolean 
+    }): Promise<number> => {
+        const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+        
+        let graduated = students.filter(s => 
+            (effectiveSchoolId ? s.schoolId === effectiveSchoolId : true) && 
+            s.status === 'Graduated'
+        );
+
+        if (options?.studentIds && options.studentIds.length > 0) {
+            const filterSet = new Set(options.studentIds);
+            graduated = graduated.filter(s => filterSet.has(s.id));
+        }
+
+        if (graduated.length === 0) {
+            showToast('Info', 'No graduated students found to reactivate.', 'info');
+            return 0;
+        }
+
+        setOperationProgress({ percentage: 10, status: `Reactivating ${graduated.length} students...` });
+
+        if (options?.restoreFromHistory) {
+            // Reconstruct previous class assignments from fee challans, exam results, or admittedClass
+            const studentPrevClass = new Map<string, string>();
+            
+            for (const fee of fees) {
+                if (fee.classId) {
+                    studentPrevClass.set(fee.studentId, fee.classId);
+                }
+            }
+
+            for (const res of results) {
+                if (res.classId && !studentPrevClass.has(res.studentId)) {
+                    studentPrevClass.set(res.studentId, res.classId);
+                }
+            }
+
+            for (const s of graduated) {
+                if (!studentPrevClass.has(s.id) && s.admittedClass) {
+                    const matchedClass = classes.find(c => 
+                        c.schoolId === s.schoolId && 
+                        c.name.trim().toLowerCase() === s.admittedClass.trim().toLowerCase()
+                    );
+                    if (matchedClass) {
+                        studentPrevClass.set(s.id, matchedClass.id);
+                    }
+                }
+            }
+
+            const classGroups: Record<string, string[]> = {};
+            const keepCurrentClassIds: string[] = [];
+
+            for (const s of graduated) {
+                const resolvedClassId = studentPrevClass.get(s.id);
+                if (resolvedClassId) {
+                    if (!classGroups[resolvedClassId]) classGroups[resolvedClassId] = [];
+                    classGroups[resolvedClassId].push(s.id);
+                } else {
+                    keepCurrentClassIds.push(s.id);
+                }
+            }
+
+            for (const [clsId, sIds] of Object.entries(classGroups)) {
+                const CHUNK = 50;
+                for (let i = 0; i < sIds.length; i += CHUNK) {
+                    const chunk = sIds.slice(i, i + CHUNK);
+                    await sql`UPDATE students SET status = 'Active', class_id = ${clsId} WHERE id = ANY(${chunk})`;
+                }
+            }
+
+            if (keepCurrentClassIds.length > 0) {
+                const CHUNK = 50;
+                for (let i = 0; i < keepCurrentClassIds.length; i += CHUNK) {
+                    const chunk = keepCurrentClassIds.slice(i, i + CHUNK);
+                    await sql`UPDATE students SET status = 'Active' WHERE id = ANY(${chunk})`;
+                }
+            }
+        } else if (options?.targetClassId) {
+            const sIds = graduated.map(s => s.id);
+            const CHUNK = 50;
+            for (let i = 0; i < sIds.length; i += CHUNK) {
+                const chunk = sIds.slice(i, i + CHUNK);
+                await sql`UPDATE students SET status = 'Active', class_id = ${options.targetClassId} WHERE id = ANY(${chunk})`;
+            }
+        } else {
+            const sIds = graduated.map(s => s.id);
+            const CHUNK = 50;
+            for (let i = 0; i < sIds.length; i += CHUNK) {
+                const chunk = sIds.slice(i, i + CHUNK);
+                await sql`UPDATE students SET status = 'Active' WHERE id = ANY(${chunk})`;
+            }
+        }
+
+        setOperationProgress({ percentage: 95, status: 'Finalizing student records...' });
+        await fetchData();
+        setOperationProgress({ percentage: 0, status: '' });
+        showToast('Success', `Reactivated ${graduated.length} students to Active status.`, 'success');
+        return graduated.length;
+    };
+
+    const revertLastPromotion = async (): Promise<boolean> => {
+        try {
+            const raw = localStorage.getItem('edusync_last_promotion_snapshot');
+            if (!raw) {
+                showToast('Info', 'No promotion rollback snapshot found.', 'info');
+                return false;
+            }
+            const data = JSON.parse(raw);
+            const snapshotList: { id: string; classId: string; status: string }[] = data.students || [];
+            if (snapshotList.length === 0) return false;
+
+            setOperationProgress({ percentage: 20, status: `Reverting promotion for ${snapshotList.length} students...` });
+
+            const groups: Record<string, string[]> = {};
+            for (const s of snapshotList) {
+                const key = `${s.classId}__${s.status}`;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(s.id);
+            }
+
+            for (const [key, ids] of Object.entries(groups)) {
+                const [classId, status] = key.split('__');
+                const CHUNK = 50;
+                for (let i = 0; i < ids.length; i += CHUNK) {
+                    const chunk = ids.slice(i, i + CHUNK);
+                    await sql`UPDATE students SET class_id = ${classId}, status = ${status} WHERE id = ANY(${chunk})`;
+                }
+            }
+
+            localStorage.removeItem('edusync_last_promotion_snapshot');
+            await fetchData();
+            setOperationProgress({ percentage: 0, status: '' });
+            showToast('Success', `Reverted promotion for ${snapshotList.length} students back to their previous classes.`, 'success');
+            return true;
+        } catch (err) {
+            console.error('Failed to revert promotion:', err);
+            showToast('Error', 'Failed to revert promotion.', 'error');
+            setOperationProgress({ percentage: 0, status: '' });
+            return false;
+        }
     };
 
     const increaseTuitionFees = async (studentIds: string[], amount: number) => {
@@ -769,7 +985,66 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const backupData = async () => {
-        const data = { schools, users, classes, students, fees, attendance, results, logs, feeHeads, events, subjects, exams };
+        let finalSchools = schools;
+        let finalUsers = users;
+        let finalClasses = classes;
+        let finalStudents = students;
+        let finalFees = fees;
+        let finalAttendance = attendance;
+        let finalResults = results;
+        let finalLogs = logs;
+        let finalFeeHeads = feeHeads;
+        let finalEvents = events;
+        let finalSubjects = subjects;
+        let finalExams = exams;
+
+        if (syncMode === 'offline') {
+            try {
+                const [dbSchools, dbUsers, dbClasses, dbStudents, dbFees, dbAttendance, dbResults, dbLogs, dbFeeHeads, dbEvents, dbSubjects, dbExams] = await Promise.all([
+                    db.schools.toArray(),
+                    db.users.toArray(),
+                    db.classes.toArray(),
+                    db.students.toArray(),
+                    db.fees.toArray(),
+                    db.attendance.toArray(),
+                    db.results.toArray(),
+                    db.logs.toArray(),
+                    db.feeHeads.toArray(),
+                    db.events.toArray(),
+                    db.subjects.toArray(),
+                    db.exams.toArray(),
+                ]);
+                if (dbStudents.length > 0) finalStudents = dbStudents;
+                if (dbClasses.length > 0) finalClasses = dbClasses;
+                if (dbFees.length > 0) finalFees = dbFees;
+                if (dbAttendance.length > 0) finalAttendance = dbAttendance;
+                if (dbResults.length > 0) finalResults = dbResults;
+                if (dbSchools.length > 0) finalSchools = dbSchools;
+                if (dbUsers.length > 0) finalUsers = dbUsers;
+                if (dbFeeHeads.length > 0) finalFeeHeads = dbFeeHeads;
+                if (dbSubjects.length > 0) finalSubjects = dbSubjects;
+                if (dbExams.length > 0) finalExams = dbExams;
+                if (dbEvents.length > 0) finalEvents = dbEvents;
+                if (dbLogs.length > 0) finalLogs = dbLogs;
+            } catch (err) {
+                console.warn('Fallback to state for backup:', err);
+            }
+        }
+
+        const data = { 
+            schools: finalSchools, 
+            users: finalUsers, 
+            classes: finalClasses, 
+            students: finalStudents, 
+            fees: finalFees, 
+            attendance: finalAttendance, 
+            results: finalResults, 
+            logs: finalLogs, 
+            feeHeads: finalFeeHeads, 
+            events: finalEvents, 
+            subjects: finalSubjects, 
+            exams: finalExams 
+        };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -789,109 +1064,205 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             
             setOperationProgress({ percentage: 5, status: 'Performing deep data integrity check...' });
 
-            const wipeSchoolData = async (sid: string) => {
-                setOperationProgress({ percentage: 10, status: 'Purging existing ledgers...' });
-                await sql`DELETE FROM results WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
-                await sql`DELETE FROM attendance WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
-                await sql`DELETE FROM fee_challans WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
-                setOperationProgress({ percentage: 15, status: 'Cleaning directories...' });
-                await sql`DELETE FROM students WHERE school_id = ${sid}`;
-                setOperationProgress({ percentage: 20, status: 'Resetting school config...' });
-                await sql`DELETE FROM classes WHERE school_id = ${sid}`;
-                await sql`DELETE FROM fee_heads WHERE school_id = ${sid}`;
-                await sql`DELETE FROM school_events WHERE school_id = ${sid}`;
-                await sql`DELETE FROM subjects WHERE school_id = ${sid}`;
-                await sql`DELETE FROM exams WHERE school_id = ${sid}`;
-                setOperationProgress({ percentage: 25, status: 'Updating security profiles...' });
-                await sql`DELETE FROM profiles WHERE school_id = ${sid} AND id != ${user.id}`;
-            };
+            if (syncMode === 'offline') {
+                setOperationProgress({ percentage: 10, status: 'Preparing local database restore...' });
+                await db.transaction('rw', db.tables, async () => {
+                    if (isOwnerGlobalView) {
+                        for (const table of db.tables) {
+                            if (table.name === 'users') {
+                                const currentProfile = await db.users.get(user.id);
+                                await table.clear();
+                                if (currentProfile) await db.users.put(currentProfile);
+                            } else {
+                                await table.clear();
+                            }
+                        }
+                    } else if (effectiveSchoolId) {
+                        // Purge existing data for this school
+                        const schoolStudents = await db.students.where('schoolId').equals(effectiveSchoolId).toArray();
+                        const sIdSet = new Set(schoolStudents.map(s => s.id));
 
-            const fullSystemWipe = async () => {
-                setOperationProgress({ percentage: 10, status: 'Global system wipe initiated...' });
-                await sql`TRUNCATE TABLE results CASCADE`;
-                await sql`TRUNCATE TABLE attendance CASCADE`;
-                await sql`TRUNCATE TABLE fee_challans CASCADE`;
-                await sql`TRUNCATE TABLE students CASCADE`;
-                await sql`TRUNCATE TABLE classes CASCADE`;
-                await sql`TRUNCATE TABLE fee_heads CASCADE`;
-                await sql`TRUNCATE TABLE school_events CASCADE`;
-                await sql`TRUNCATE TABLE subjects CASCADE`;
-                await sql`TRUNCATE TABLE exams CASCADE`;
-                await sql`DELETE FROM profiles WHERE role != 'Owner'`;
-                await sql`DELETE FROM schools`;
-            };
+                        await db.results.filter(r => sIdSet.has(r.studentId)).delete();
+                        await db.attendance.filter(a => sIdSet.has(a.studentId)).delete();
+                        await db.fees.filter(f => sIdSet.has(f.studentId)).delete();
+                        await db.students.where('schoolId').equals(effectiveSchoolId).delete();
+                        await db.classes.where('schoolId').equals(effectiveSchoolId).delete();
+                        await db.feeHeads.where('schoolId').equals(effectiveSchoolId).delete();
+                        await db.events.where('schoolId').equals(effectiveSchoolId).delete();
+                        await db.subjects.where('schoolId').equals(effectiveSchoolId).delete();
+                        await db.exams.where('schoolId').equals(effectiveSchoolId).delete();
+                        await db.users.filter(u => u.schoolId === effectiveSchoolId && u.id !== user.id).delete();
+                    }
 
-            if (isOwnerGlobalView) {
-                await fullSystemWipe();
-            } else if (effectiveSchoolId) {
-                await wipeSchoolData(effectiveSchoolId);
-            } else {
-                throw new Error("Invalid restore context.");
-            }
+                    const sanitize = (arr: any[], attachSchoolId = true) => {
+                        if (!Array.isArray(arr)) return [];
+                        return arr.map(item => {
+                            const copy = { ...item };
+                            if (!isOwnerGlobalView && effectiveSchoolId && attachSchoolId && (copy.schoolId !== undefined || 'schoolId' in item || copy.school_id !== undefined)) {
+                                copy.schoolId = effectiveSchoolId;
+                            }
+                            return copy;
+                        });
+                    };
 
-            const processTable = async (tableName: string, dataArray: any[], basePercentage: number, weight: number) => {
-                if (!dataArray || !Array.isArray(dataArray)) return;
-                const total = dataArray.length;
-                for (let i = 0; i < total; i++) {
-                    const record = { ...dataArray[i] };
-                    
-                    // Filter: Skip current owner profile during global restore to prevent session loss
-                    if (tableName === 'profiles' && record.id === user.id) continue;
+                    setOperationProgress({ percentage: 25, status: 'Reconstructing classes & subjects...' });
+                    if (rawData.classes?.length) await db.classes.bulkPut(sanitize(rawData.classes));
+                    if (rawData.feeHeads?.length) await db.feeHeads.bulkPut(sanitize(rawData.feeHeads));
+                    if (rawData.subjects?.length) await db.subjects.bulkPut(sanitize(rawData.subjects));
+                    if (rawData.exams?.length) await db.exams.bulkPut(sanitize(rawData.exams));
+                    if (rawData.events?.length) await db.events.bulkPut(sanitize(rawData.events));
 
-                    // If not global restore, force the current school ID onto the records
-                    if (!isOwnerGlobalView && effectiveSchoolId) {
-                        // These tables have school_id columns
-                        const schoolLinkedTables = ['fee_heads', 'subjects', 'exams', 'classes', 'students', 'school_events', 'profiles'];
-                        if (schoolLinkedTables.includes(tableName)) {
-                            record.schoolId = effectiveSchoolId;
+                    setOperationProgress({ percentage: 50, status: 'Reconstructing student directories...' });
+                    if (rawData.students?.length) {
+                        const cleanStudents = sanitize(rawData.students).map((s: any) => ({
+                            ...s,
+                            schoolId: effectiveSchoolId || s.schoolId,
+                            openingBalance: Number(s.openingBalance || 0),
+                            feeStructure: (s.feeStructure || []).map((f: any) => ({ ...f, amount: Number(f.amount || 0) }))
+                        }));
+                        await db.students.bulkPut(cleanStudents);
+                    }
+
+                    setOperationProgress({ percentage: 70, status: 'Reconstructing financial ledgers...' });
+                    if (rawData.fees?.length) {
+                        const cleanFees = sanitize(rawData.fees, false).map((f: any) => {
+                            let history = f.paymentHistory;
+                            if (typeof history === 'string') { try { history = JSON.parse(history); } catch { history = []; } }
+                            if (!Array.isArray(history)) history = [];
+                            return {
+                                ...f,
+                                previousBalance: Number(f.previousBalance || 0),
+                                totalAmount: Number(f.totalAmount || 0),
+                                discount: Number(f.discount || 0),
+                                paidAmount: Number(f.paidAmount || 0),
+                                fineAmount: Number(f.fineAmount || 0),
+                                paymentHistory: history.map((p: any) => ({ ...p, amount: Number(p.amount || 0) }))
+                            };
+                        });
+                        await db.fees.bulkPut(cleanFees);
+                    }
+
+                    setOperationProgress({ percentage: 85, status: 'Reconstructing attendance & results...' });
+                    if (rawData.attendance?.length) await db.attendance.bulkPut(sanitize(rawData.attendance, false));
+                    if (rawData.results?.length) {
+                        const cleanResults = sanitize(rawData.results, false).map((r: any) => ({
+                            ...r,
+                            marks: Number(r.marks || 0),
+                            totalMarks: Number(r.totalMarks || 100),
+                        }));
+                        await db.results.bulkPut(cleanResults);
+                    }
+
+                    if (isOwnerGlobalView) {
+                        if (rawData.schools?.length) await db.schools.bulkPut(rawData.schools);
+                        if (rawData.users?.length) {
+                            const usersToRestore = rawData.users.filter((u: any) => u.id !== user.id);
+                            await db.users.bulkPut(usersToRestore);
                         }
                     }
-                    
-                    const sn = toSnakeCase(record);
-                    setOperationProgress({ 
-                        percentage: basePercentage + Math.floor((i/total) * weight), 
-                        status: `Reconstructing ${tableName.replace('_', ' ')} (${i+1}/${total})...` 
-                    });
+                });
+            } else {
+                // Online sync mode with PostgreSQL
+                const wipeSchoolData = async (sid: string) => {
+                    setOperationProgress({ percentage: 10, status: 'Purging existing ledgers...' });
+                    await sql`DELETE FROM results WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
+                    await sql`DELETE FROM attendance WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
+                    await sql`DELETE FROM fee_challans WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
+                    setOperationProgress({ percentage: 15, status: 'Cleaning directories...' });
+                    await sql`DELETE FROM students WHERE school_id = ${sid}`;
+                    setOperationProgress({ percentage: 20, status: 'Resetting school config...' });
+                    await sql`DELETE FROM classes WHERE school_id = ${sid}`;
+                    await sql`DELETE FROM fee_heads WHERE school_id = ${sid}`;
+                    await sql`DELETE FROM school_events WHERE school_id = ${sid}`;
+                    await sql`DELETE FROM subjects WHERE school_id = ${sid}`;
+                    await sql`DELETE FROM exams WHERE school_id = ${sid}`;
+                    setOperationProgress({ percentage: 25, status: 'Updating security profiles...' });
+                    await sql`DELETE FROM profiles WHERE school_id = ${sid} AND id != ${user.id}`;
+                };
 
-                    const keys = Object.keys(sn);
-                    const values = Object.values(sn).map(v => {
-                        if (v === null || v === undefined) return null;
-                        if (typeof v === 'object') return JSON.stringify(v);
-                        return v;
-                    });
-                    
-                    const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
-                    const updateClause = keys.filter(k => k !== 'id').map(k => `${k} = EXCLUDED.${k}`).join(', ');
-                    
-                    const query = `INSERT INTO ${tableName} (${keys.join(', ')}) 
-                                   VALUES (${placeholders}) 
-                                   ON CONFLICT (id) DO UPDATE SET ${updateClause}`;
-                                   
-                    try {
-                        await (sql as any)(query, values);
-                    } catch (e) {
-                        console.error(`Row insertion failed in ${tableName}:`, sn, e);
-                    }
+                const fullSystemWipe = async () => {
+                    setOperationProgress({ percentage: 10, status: 'Global system wipe initiated...' });
+                    await sql`TRUNCATE TABLE results CASCADE`;
+                    await sql`TRUNCATE TABLE attendance CASCADE`;
+                    await sql`TRUNCATE TABLE fee_challans CASCADE`;
+                    await sql`TRUNCATE TABLE students CASCADE`;
+                    await sql`TRUNCATE TABLE classes CASCADE`;
+                    await sql`TRUNCATE TABLE fee_heads CASCADE`;
+                    await sql`TRUNCATE TABLE school_events CASCADE`;
+                    await sql`TRUNCATE TABLE subjects CASCADE`;
+                    await sql`TRUNCATE TABLE exams CASCADE`;
+                    await sql`DELETE FROM profiles WHERE role != 'Owner'`;
+                    await sql`DELETE FROM schools`;
+                };
+
+                if (isOwnerGlobalView) {
+                    await fullSystemWipe();
+                } else if (effectiveSchoolId) {
+                    await wipeSchoolData(effectiveSchoolId);
+                } else {
+                    throw new Error("Invalid restore context.");
                 }
-            };
 
-            // Global tables first if applicable
-            if (isOwnerGlobalView) {
-                await processTable('schools', rawData.schools, 20, 5);
-                await processTable('profiles', rawData.users, 25, 5);
+                const processTable = async (tableName: string, dataArray: any[], basePercentage: number, weight: number) => {
+                    if (!dataArray || !Array.isArray(dataArray)) return;
+                    const total = dataArray.length;
+                    for (let i = 0; i < total; i++) {
+                        const record = { ...dataArray[i] };
+                        
+                        if (tableName === 'profiles' && record.id === user.id) continue;
+
+                        if (!isOwnerGlobalView && effectiveSchoolId) {
+                            const schoolLinkedTables = ['fee_heads', 'subjects', 'exams', 'classes', 'students', 'school_events', 'profiles'];
+                            if (schoolLinkedTables.includes(tableName)) {
+                                record.schoolId = effectiveSchoolId;
+                            }
+                        }
+                        
+                        const sn = toSnakeCase(record);
+                        setOperationProgress({ 
+                            percentage: basePercentage + Math.floor((i/total) * weight), 
+                            status: `Reconstructing ${tableName.replace('_', ' ')} (${i+1}/${total})...` 
+                        });
+
+                        const keys = Object.keys(sn);
+                        const values = Object.values(sn).map(v => {
+                            if (v === null || v === undefined) return null;
+                            if (typeof v === 'object') return JSON.stringify(v);
+                            return v;
+                        });
+                        
+                        const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
+                        const updateClause = keys.filter(k => k !== 'id').map(k => `${k} = EXCLUDED.${k}`).join(', ');
+                        
+                        const queryStr = `INSERT INTO ${tableName} (${keys.join(', ')}) 
+                                       VALUES (${placeholders}) 
+                                       ON CONFLICT (id) DO UPDATE SET ${updateClause}`;
+                                       
+                        try {
+                            await (sql as any)(queryStr, ...values);
+                        } catch (e) {
+                            console.error(`Row insertion failed in ${tableName}:`, sn, e);
+                        }
+                    }
+                };
+
+                if (isOwnerGlobalView) {
+                    await processTable('schools', rawData.schools, 20, 5);
+                    await processTable('profiles', rawData.users, 25, 5);
+                }
+
+                await processTable('fee_heads', rawData.feeHeads, 30, 5);
+                await processTable('subjects', rawData.subjects, 35, 5);
+                await processTable('exams', rawData.exams, 40, 5);
+                await processTable('classes', rawData.classes, 45, 10);
+                await processTable('students', rawData.students, 55, 15);
+                await processTable('fee_challans', rawData.fees, 70, 15);
+                await processTable('attendance', rawData.attendance, 85, 10);
+                await processTable('results', rawData.results, 95, 5);
             }
 
-            await processTable('fee_heads', rawData.feeHeads, 30, 5);
-            await processTable('subjects', rawData.subjects, 35, 5);
-            await processTable('exams', rawData.exams, 40, 5);
-            await processTable('classes', rawData.classes, 45, 10);
-            await processTable('students', rawData.students, 55, 15);
-            await processTable('fee_challans', rawData.fees, 70, 15);
-            await processTable('attendance', rawData.attendance, 85, 10);
-            await processTable('results', rawData.results, 95, 5);
-
             setOperationProgress({ percentage: 100, status: 'Reconstruction complete!' });
-            showToast('Success', 'Cloud database reconstruction complete!', 'success');
+            showToast('Success', 'Database restoration successfully completed!', 'success');
             await fetchData();
         } catch (error: any) {
             console.error('Restore Crash:', error);
@@ -917,7 +1288,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         addExam, updateExam, deleteExam, setAttendance, recordFeePayment, updateFeePayment, cancelChallan,
         generateChallansForMonth, deleteChallansForMonth, addSchool, updateSchool, deleteSchool,
         addEvent, updateEvent, deleteEvent, bulkAddStudents, bulkAddUsers, bulkAddClasses,
-        backupData, restoreData, promoteAllStudents, increaseTuitionFees, sendFeeReminders, bulkUpdateClassOrder, addFeeHead, updateFeeHead, deleteFeeHead,
+        backupData, restoreData, promoteAllStudents, reactivateGraduatedStudents, revertLastPromotion, increaseTuitionFees, sendFeeReminders, bulkUpdateClassOrder, addFeeHead, updateFeeHead, deleteFeeHead,
         issueLeavingCertificate, saveResults
     };
 
