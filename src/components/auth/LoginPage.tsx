@@ -65,10 +65,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchToRegister, onForgotPassw
         setLoading(false);
     };
 
-    const handleQuickLogin = (demoEmail: string) => {
-        setEmail(demoEmail);
-        setPassword('password123');
-    };
 
     return (
         <div className="min-h-screen w-full bg-gradient-to-br from-primary-800 via-primary-900 to-primary-950 text-white lg:grid lg:grid-cols-2 relative overflow-x-hidden">
@@ -189,30 +185,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchToRegister, onForgotPassw
                         </button>
                     </form>
 
-                    {/* Quick Demo Login Pills */}
-                    <div className="mt-6 pt-5 border-t border-white/15">
-                        <p className="text-[11px] text-primary-200 uppercase tracking-widest text-center mb-3 font-semibold">Quick Demo Logins</p>
-                        <div className="grid grid-cols-3 gap-2">
-                            <button onClick={() => handleQuickLogin('owner@edusync.com')} className="text-[11px] bg-white/15 hover:bg-white/25 py-1.5 px-2 rounded-lg font-medium transition border border-white/20 text-center truncate">
-                                Owner
-                            </button>
-                            <button onClick={() => handleQuickLogin('admin@edusync.com')} className="text-[11px] bg-white/15 hover:bg-white/25 py-1.5 px-2 rounded-lg font-medium transition border border-white/20 text-center truncate">
-                                Admin
-                            </button>
-                            <button onClick={() => handleQuickLogin('accountant@edusync.com')} className="text-[11px] bg-white/15 hover:bg-white/25 py-1.5 px-2 rounded-lg font-medium transition border border-white/20 text-center truncate">
-                                Accountant
-                            </button>
-                            <button onClick={() => handleQuickLogin('teacher@edusync.com')} className="text-[11px] bg-white/15 hover:bg-white/25 py-1.5 px-2 rounded-lg font-medium transition border border-white/20 text-center truncate">
-                                Teacher
-                            </button>
-                            <button onClick={() => handleQuickLogin('parent@edusync.com')} className="text-[11px] bg-white/15 hover:bg-white/25 py-1.5 px-2 rounded-lg font-medium transition border border-white/20 text-center truncate">
-                                Parent
-                            </button>
-                            <button onClick={() => handleQuickLogin('student@edusync.com')} className="text-[11px] bg-white/15 hover:bg-white/25 py-1.5 px-2 rounded-lg font-medium transition border border-white/20 text-center truncate">
-                                Student
-                            </button>
-                        </div>
-                    </div>
 
                     <div className="my-5 flex items-center">
                         <div className="flex-grow border-t border-white/15"></div>

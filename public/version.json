@@ -1,7 +1,7 @@
 {
-  "version": "3.16.5",
+  "version": "3.23.0",
   "releaseDate": "2026-11-01",
   "changelog": [
-    "Pre-Bundled Serverless Backend (v3.16.5): Configured automated esbuild bundling during build (`npm run build`) to produce a single self-contained `api/index.js` bundle for Vercel, eliminating runtime TypeScript resolution errors (FUNCTION_INVOCATION_FAILED)."
+    "Database Migration (v3.23.0): Added missing `school_id` columns to `attendance` and `results`, added `created_at` timestamp and `check_amounts` constraint to `fee_challans`, and added `phone_number` to `profiles`. Added unique partial indexes for `fee_challans` to prevent duplicate challan generation."
   ]
 }

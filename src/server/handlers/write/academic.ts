@@ -7,7 +7,7 @@ export default async function handler(req: any, res: any) {
         return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
     }
 
-    const auth = verifySession(req, res);
+    const auth = await verifySession(req, res);
     if (!auth) return;
     const { session, sql } = auth;
 

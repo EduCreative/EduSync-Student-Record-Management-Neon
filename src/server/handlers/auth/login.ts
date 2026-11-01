@@ -141,8 +141,7 @@ export default async function handler(req: any, res: any) {
 
         return res.status(200).json({
             success: true,
-            user: safeUser,
-            token // Also provided for cross-origin or fallback header authentication
+            user: safeUser
         });
 
     } catch (err: any) {

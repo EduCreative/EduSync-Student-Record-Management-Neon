@@ -6,7 +6,7 @@ export default async function handler(req: any, res: any) {
         return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
     }
 
-    const auth = verifySession(req, res);
+    const auth = await verifySession(req, res);
     if (!auth) return;
     const { session, sql } = auth;
 
@@ -200,7 +200,7 @@ export default async function handler(req: any, res: any) {
             const headRows = await sql`
                 SELECT id, default_amount FROM fee_heads 
                 WHERE LOWER(name) = 'tuition fee' 
-                AND (${effectiveSchoolId ? sql`school_id = ${effectiveSchoolId}` : sql`TRUE`})
+                AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
                 LIMIT 1
             `;
 

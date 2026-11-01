@@ -1,4 +1,4 @@
-import { verifySession, isAuthorized, writeServerAuditLog } from './_helpers';
+import { verifySession, isAuthorized, writeServerAuditLog, requireSameSchool } from './_helpers';
 import crypto from 'crypto';
 
 export default async function handler(req: any, res: any) {
@@ -7,7 +7,7 @@ export default async function handler(req: any, res: any) {
         return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
     }
 
-    const auth = verifySession(req, res);
+    const auth = await verifySession(req, res);
     if (!auth) return;
     const { session, sql } = auth;
 
@@ -34,6 +34,9 @@ export default async function handler(req: any, res: any) {
 
         } else if (action === 'update-class') {
             const { id, name, section, teacherId, sortOrder } = body;
+            const records = await sql`SELECT school_id FROM classes WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Class not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`
                 UPDATE classes 
                 SET name = ${name}, section = ${section || null}, teacher_id = ${teacherId || null}, sort_order = ${sortOrder || 0}
@@ -43,6 +46,9 @@ export default async function handler(req: any, res: any) {
 
         } else if (action === 'delete-class') {
             const { id } = body;
+            const records = await sql`SELECT school_id FROM classes WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Class not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`DELETE FROM classes WHERE id = ${id}`;
             return res.status(200).json({ success: true });
 
@@ -72,11 +78,17 @@ export default async function handler(req: any, res: any) {
 
         } else if (action === 'update-subject') {
             const { id, name } = body;
+            const records = await sql`SELECT school_id FROM subjects WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Subject not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`UPDATE subjects SET name = ${name} WHERE id = ${id}`;
             return res.status(200).json({ success: true });
 
         } else if (action === 'delete-subject') {
             const { id } = body;
+            const records = await sql`SELECT school_id FROM subjects WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Subject not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`DELETE FROM subjects WHERE id = ${id}`;
             return res.status(200).json({ success: true });
 
@@ -90,11 +102,17 @@ export default async function handler(req: any, res: any) {
 
         } else if (action === 'update-exam') {
             const { id, name } = body;
+            const records = await sql`SELECT school_id FROM exams WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Exam not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`UPDATE exams SET name = ${name} WHERE id = ${id}`;
             return res.status(200).json({ success: true });
 
         } else if (action === 'delete-exam') {
             const { id } = body;
+            const records = await sql`SELECT school_id FROM exams WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Exam not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`DELETE FROM exams WHERE id = ${id}`;
             return res.status(200).json({ success: true });
 
@@ -112,6 +130,9 @@ export default async function handler(req: any, res: any) {
 
         } else if (action === 'update-fee-head') {
             const { id, name, defaultAmount } = body;
+            const records = await sql`SELECT school_id FROM fee_heads WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Fee head not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`
                 UPDATE fee_heads 
                 SET name = ${name}, default_amount = ${Number(defaultAmount) || 0}
@@ -121,6 +142,9 @@ export default async function handler(req: any, res: any) {
 
         } else if (action === 'delete-fee-head') {
             const { id } = body;
+            const records = await sql`SELECT school_id FROM fee_heads WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Fee head not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`DELETE FROM fee_heads WHERE id = ${id}`;
             return res.status(200).json({ success: true });
 
@@ -137,6 +161,9 @@ export default async function handler(req: any, res: any) {
 
         } else if (action === 'update-event') {
             const { id, title, date, category, description } = body;
+            const records = await sql`SELECT school_id FROM school_events WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Event not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`
                 UPDATE school_events 
                 SET title = ${title}, date = ${date}, category = ${category || 'general'}, description = ${description || ''}
@@ -146,6 +173,9 @@ export default async function handler(req: any, res: any) {
 
         } else if (action === 'delete-event') {
             const { id } = body;
+            const records = await sql`SELECT school_id FROM school_events WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Event not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`DELETE FROM school_events WHERE id = ${id}`;
             return res.status(200).json({ success: true });
 

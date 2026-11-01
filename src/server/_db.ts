@@ -1,7 +1,10 @@
 import { neon } from '@neondatabase/serverless';
 import jwt from 'jsonwebtoken';
 
-export const SESSION_SECRET = process.env.SESSION_SECRET || 'edusync_session_secret_default_key_change_in_production_2026';
+if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
+    throw new Error("SESSION_SECRET must be configured in environment and be at least 32 characters long.");
+}
+export const SESSION_SECRET = process.env.SESSION_SECRET;
 export const COOKIE_NAME = 'edusync_session';
 
 // Server-only database connection
@@ -99,10 +102,9 @@ export function authenticateRequest(req: any): TokenPayload | null {
 }
 
 export function setSessionCookie(res: any, token: string) {
-    const isProd = process.env.NODE_ENV === 'production';
     const cookieStr = serializeCookie(COOKIE_NAME, token, {
         httpOnly: true,
-        secure: isProd,
+        secure: true,
         sameSite: 'strict',
         path: '/',
         maxAge: 12 * 60 * 60 // 12 hours
@@ -111,10 +113,9 @@ export function setSessionCookie(res: any, token: string) {
 }
 
 export function clearSessionCookie(res: any) {
-    const isProd = process.env.NODE_ENV === 'production';
     const cookieStr = serializeCookie(COOKIE_NAME, '', {
         httpOnly: true,
-        secure: isProd,
+        secure: true,
         sameSite: 'strict',
         path: '/',
         maxAge: 0

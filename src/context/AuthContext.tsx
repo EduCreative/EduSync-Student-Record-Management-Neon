@@ -30,15 +30,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const verifySessionWithServer = async () => {
             try {
-                const token = localStorage.getItem('edusync_token');
-                const headers: Record<string, string> = {};
-                if (token) {
-                    headers['Authorization'] = `Bearer ${token}`;
-                }
-
                 const res = await fetch('/api/auth/me', {
                     method: 'GET',
-                    headers,
                     credentials: 'include'
                 });
 
@@ -58,7 +51,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (isMounted) {
                     setUser(null);
                     localStorage.removeItem('edusync_user');
-                    localStorage.removeItem('edusync_token');
                 }
             } catch (error) {
                 console.error("Auth server verification failed:", error);
@@ -111,9 +103,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 };
             }
 
-            if (data.token) {
-                localStorage.setItem('edusync_token', data.token);
-            }
             if (data.user) {
                 setUser(data.user);
                 localStorage.setItem('edusync_user', JSON.stringify(data.user));
@@ -143,7 +132,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUser(null);
         setActiveSchoolId(null);
         localStorage.removeItem('edusync_user');
-        localStorage.removeItem('edusync_token');
         window.location.reload();
     };
 
@@ -177,13 +165,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!user) return { success: false, error: 'Not authenticated.' };
 
         try {
-            const token = localStorage.getItem('edusync_token');
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json'
             };
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
 
             const res = await fetch('/api/auth/change-password', {
                 method: 'POST',

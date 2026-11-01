@@ -221,15 +221,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             setSyncProgress({ percentage: 20, status: 'Downloading Scoped Data from Secure API...' });
 
-            const token = localStorage.getItem('edusync_token');
-            const headers: Record<string, string> = {};
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
-
             const response = await fetch(`/api/data${queryParam}`, {
                 method: 'GET',
-                headers,
                 credentials: 'include'
             });
 
@@ -295,11 +288,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, autoBackupSettings, loading, isInitialLoad, backupToDrive]);
 
     const apiWrite = useCallback(async (endpoint: string, payload: any): Promise<any> => {
-        const token = localStorage.getItem('edusync_token');
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
         const res = await fetch(endpoint, {
             method: 'POST',
             headers,

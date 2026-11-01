@@ -7,7 +7,7 @@ export default async function handler(req: any, res: any) {
         return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
     }
 
-    const auth = verifySession(req, res);
+    const auth = await verifySession(req, res);
     if (!auth) return;
     const { session, sql } = auth;
 
@@ -233,7 +233,7 @@ export default async function handler(req: any, res: any) {
                         UPDATE students 
                         SET status = 'Graduated' 
                         WHERE id = ANY(${chunk})
-                        AND (${effectiveSchoolId ? sql`school_id = ${effectiveSchoolId}` : sql`TRUE`})
+                        AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
                     `;
                 }
                 updatedCount += graduations.length;
@@ -249,7 +249,7 @@ export default async function handler(req: any, res: any) {
                                 UPDATE students 
                                 SET class_id = ${targetClassId}, status = 'Active' 
                                 WHERE id = ANY(${chunk})
-                                AND (${effectiveSchoolId ? sql`school_id = ${effectiveSchoolId}` : sql`TRUE`})
+                                AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
                             `;
                         }
                         updatedCount += stdIds.length;
@@ -283,14 +283,14 @@ export default async function handler(req: any, res: any) {
                         UPDATE students 
                         SET status = 'Active', class_id = ${targetClassId} 
                         WHERE id = ANY(${chunk})
-                        AND (${effectiveSchoolId ? sql`school_id = ${effectiveSchoolId}` : sql`TRUE`})
+                        AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
                     `;
                 } else {
                     await sql`
                         UPDATE students 
                         SET status = 'Active' 
                         WHERE id = ANY(${chunk})
-                        AND (${effectiveSchoolId ? sql`school_id = ${effectiveSchoolId}` : sql`TRUE`})
+                        AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
                     `;
                 }
             }
@@ -325,7 +325,7 @@ export default async function handler(req: any, res: any) {
                             UPDATE students 
                             SET class_id = ${classId}, status = ${status} 
                             WHERE id = ANY(${chunk})
-                            AND (${effectiveSchoolId ? sql`school_id = ${effectiveSchoolId}` : sql`TRUE`})
+                            AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
                         `;
                     }
                     revertedCount += idList.length;

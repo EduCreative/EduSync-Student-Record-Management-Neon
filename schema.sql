@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS profiles (
     last_login TIMESTAMP WITH TIME ZONE,
     child_student_ids UUID[] DEFAULT '{}',
     disabled_nav_links TEXT[] DEFAULT '{}',
-    permissions_overrides JSONB DEFAULT '{}'
+    permissions_overrides JSONB DEFAULT '{}',
+    phone_number TEXT
 );
 
 -- Classes table
@@ -85,6 +86,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     student_id UUID REFERENCES students(id) NOT NULL,
     date DATE NOT NULL,
     status TEXT NOT NULL, -- 'Present', 'Absent', 'Leave'
+    school_id UUID REFERENCES schools(id),
     UNIQUE(student_id, date)
 );
 
@@ -113,7 +115,9 @@ CREATE TABLE IF NOT EXISTS fee_challans (
     paid_amount NUMERIC DEFAULT 0,
     paid_date DATE,
     payment_history JSONB DEFAULT '[]',
-    fine_amount NUMERIC DEFAULT 0
+    fine_amount NUMERIC DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT check_amounts CHECK (paid_amount >= 0 AND discount >= 0 AND total_amount >= 0)
 );
 
 -- Results table
@@ -125,6 +129,7 @@ CREATE TABLE IF NOT EXISTS results (
     subject TEXT NOT NULL,
     marks NUMERIC NOT NULL,
     total_marks NUMERIC NOT NULL,
+    school_id UUID REFERENCES schools(id),
     UNIQUE(student_id, class_id, exam, subject)
 );
 
@@ -194,3 +199,7 @@ CREATE INDEX IF NOT EXISTS idx_classes_school_id ON classes(school_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_school_id ON profiles(school_id);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_school_id ON activity_logs(school_id);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_timestamp ON activity_logs(timestamp DESC);
+
+-- Unique Indexes for Fee Challans
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_student_challan ON fee_challans (student_id, month, year) WHERE status <> 'Cancelled';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_challan_number ON fee_challans (challan_number) WHERE status <> 'Cancelled';

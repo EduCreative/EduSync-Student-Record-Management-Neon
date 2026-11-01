@@ -1,6 +1,82 @@
 
 # Changelog
 
+## [3.23.0] - 2026-11-01
+
+### Database Migration & Schema Hardening
+- **Schema Updates**:
+  - Added missing `school_id` columns to `attendance` and `results`.
+  - Added `created_at` timestamp and `check_amounts` constraint (`CHECK (paid_amount >= 0 AND discount >= 0 AND total_amount >= 0)`) to `fee_challans`.
+  - Added `phone_number` to `profiles`.
+- **Duplicate Prevention**:
+  - Added unique partial indexes for `fee_challans` to prevent duplicate active challan generation per student per month and duplicate `challan_number` generation.
+
+## [3.22.0] - 2026-11-01
+
+### Fix Nested SQL Queries
+- **Driver Compatibility Fix (`students.ts`, `challans.ts`, `payments.ts`)**:
+  - Replaced nested `sql` template literal patterns (`${effectiveSchoolId ? sql`...` : sql`TRUE`}`) with a standard `AND` clause utilizing plain SQL parameters (`AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)`) to bypass @neondatabase/serverless driver limitations.
+
+## [3.21.0] - 2026-11-01
+
+### Session Handling & Secure Cookie Authentication
+- **HttpOnly Cookie Authentication & Token Removal (`AuthContext.tsx`, `DataContext.tsx`, `login.ts`)**:
+  - Removed storing or sending the login token via `localStorage` (`edusync_token`) and `Authorization` headers across frontend clients.
+  - Rely exclusively on HttpOnly session cookies with `credentials: 'include'`.
+  - Removed token return from the login response body.
+- **Dynamic Database Status Verification (`_helpers.ts`, `data/index.ts`)**:
+  - Updated `verifySession` and `/api/data` to re-read the user's current status from the database on every request.
+  - If a user's status is `Inactive` or `Suspended`, returns HTTP 401 and clears the session cookie.
+- **Audit Logging Security (`users.ts`)**:
+  - Restricted the `add-log` action to `Owner`, `Admin`, and `Accountant` roles.
+  - Ignored any user name passed in the request body (relying strictly on verified session credentials).
+
+## [3.20.0] - 2026-11-01
+
+### School Ownership Enforcement & Record Pre-Loading
+- **`requireSameSchool` Helper & `isAuthorized` Hardening (`_helpers.ts`)**:
+  - Added `requireSameSchool(session, recordSchoolId)` helper (returns false unless session is Owner or recordSchoolId matches session.schoolId).
+  - Updated `isAuthorized` to deny access when the caller is not an Owner and has no `schoolId`.
+- **User Management Hardening (`users.ts`)**:
+  - `update-user` and `delete-user` now pre-load the record first and enforce `requireSameSchool`.
+  - `update-user` strictly prohibits changing user roles, and blocks Admins from touching Owner accounts.
+  - `update-school` pre-loads the school record and enforces `requireSameSchool`.
+- **School Configuration Hardening (`classes.ts`)**:
+  - Every update/delete by ID action (`update-class`, `delete-class`, `update-subject`, `delete-subject`, `update-exam`, `delete-exam`, `update-fee-head`, `delete-fee-head`, `update-event`, `delete-event`) now pre-loads the record and enforces `requireSameSchool`.
+
+## [3.19.0] - 2026-11-01
+
+### Password Reset Security & Audit Hardening
+- **Strict Password Reset Rules (`auth/change-password.ts`)**:
+  - Changing your own password requires `currentPassword` (rejected if missing or incorrect).
+  - Resetting someone else's password is allowed only for Owners (any non-Owner user) or Admins (only users of the same school whose role is below Admin: Accountant, Teacher, Parent, Student).
+  - Protected Owner passwords: Nobody may reset an Owner's password except that Owner.
+  - Returns HTTP 403 on permission violations.
+- **Password Change Audit Logging**:
+  - Writes a server audit log entry (`activity_logs`) for every successful password change or reset operation.
+
+## [3.18.0] - 2026-11-01
+
+### Role Creation & Registration Allow-List Enforcement
+- **Strict Role Allow-Lists & School Isolation (`add-user` & `bulk-add-users`)**:
+  - Admins may create only `Accountant`, `Teacher`, `Parent`, or `Student` accounts, and only within their own school (`session.schoolId`), ignoring any `schoolId` passed in the body.
+  - Only Owners may create `Admin` or `Owner` roles.
+  - Returns HTTP 403 otherwise.
+- **Public Registration Allow-List (`auth/register.ts`)**:
+  - Public registration is strictly restricted to `Teacher`, `Parent`, or `Student` roles (never `Admin` or `Owner`). Returns HTTP 403 otherwise.
+
+## [3.17.0] - 2026-11-01
+
+### Security Hardening & Secret Protection
+- **Strict `SESSION_SECRET` Validation**:
+  - Removed default fallback secret in `src/server/_db.ts` and `src/server/handlers/_db.ts`. Throws a startup error if `SESSION_SECRET` is missing or shorter than 32 characters.
+- **Removal of Demo Login Shortcuts**:
+  - Removed "Quick Demo Logins" section and `handleQuickLogin` helper from `LoginPage.tsx`.
+- **Bulk User Import Hardening**:
+  - Removed `'password123'` fallback default in `bulk-add-users` (`src/server/handlers/write/users.ts`); rows without a password are now strictly rejected.
+- **Git & Environment Hygiene**:
+  - Deleted untracked `cookies.txt` and added both `api/index.js` and `cookies.txt` to `.gitignore`.
+
 ## [3.16.5] - 2026-11-01
 
 ### Fixed & Resolved (Pre-Bundled Vercel Serverless Backend)

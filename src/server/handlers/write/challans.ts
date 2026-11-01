@@ -12,7 +12,7 @@ export default async function handler(req: any, res: any) {
         return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
     }
 
-    const auth = verifySession(req, res);
+    const auth = await verifySession(req, res);
     if (!auth) return;
     const { session, sql } = auth;
 
@@ -39,7 +39,7 @@ export default async function handler(req: any, res: any) {
                 SELECT id, name, roll_number, class_id, school_id, opening_balance, fee_structure
                 FROM students
                 WHERE id = ANY(${studentIds})
-                AND (${effectiveSchoolId ? sql`school_id = ${effectiveSchoolId}` : sql`TRUE`})
+                AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
                 AND status = 'Active'
             `;
 
@@ -165,7 +165,7 @@ export default async function handler(req: any, res: any) {
                 AND paid_amount = 0 
                 AND student_id IN (
                     SELECT id FROM students 
-                    WHERE (${effectiveSchoolId ? sql`school_id = ${effectiveSchoolId}` : sql`TRUE`})
+                    WHERE (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
                 )
                 RETURNING id
             `;

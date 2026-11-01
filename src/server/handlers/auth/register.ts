@@ -16,6 +16,10 @@ export default async function handler(req: any, res: any) {
             return res.status(400).json({ error: 'All fields (name, email, password, role) are required.' });
         }
 
+        if (!['Teacher', 'Parent', 'Student'].includes(role)) {
+            return res.status(403).json({ error: 'Registration is only permitted for Teacher, Parent, or Student roles.' });
+        }
+
         const normalizedEmail = email.trim().toLowerCase();
 
         if (password.length < 6) {

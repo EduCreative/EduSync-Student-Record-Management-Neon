@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { getDb, verifyToken, extractToken } from '../../_db';
+import { writeServerAuditLog } from '../write/_helpers';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST') {
@@ -27,17 +28,14 @@ export default async function handler(req: any, res: any) {
 
         const sql = getDb();
 
-        // If targetUserId is provided and different from logged in user, only Owner or Admin can change it
         const userIdToUpdate = (targetUserId && targetUserId !== payload.userId) 
             ? targetUserId 
             : payload.userId;
 
-        if (userIdToUpdate !== payload.userId && payload.role !== 'Owner' && payload.role !== 'Admin') {
-            return res.status(403).json({ error: 'Forbidden: Insufficient permissions to change other user passwords' });
-        }
+        const isSelf = (userIdToUpdate === payload.userId);
 
         const users = await sql`
-            SELECT id, password, role FROM profiles WHERE id = ${userIdToUpdate} LIMIT 1
+            SELECT id, password, role, school_id FROM profiles WHERE id = ${userIdToUpdate} LIMIT 1
         `;
 
         if (!users || users.length === 0) {
@@ -46,8 +44,34 @@ export default async function handler(req: any, res: any) {
 
         const targetUser = users[0];
 
-        // If user is changing their own password, verify current password if supplied
-        if (userIdToUpdate === payload.userId && currentPassword) {
+        // Nobody may reset an Owner's password except that Owner
+        if (targetUser.role === 'Owner' && !isSelf) {
+            return res.status(403).json({ error: 'Forbidden: Nobody may reset an Owner password except that Owner.' });
+        }
+
+        if (!isSelf) {
+            if (payload.role === 'Owner') {
+                if (targetUser.role === 'Owner') {
+                    return res.status(403).json({ error: 'Forbidden: Owner cannot reset another Owner password.' });
+                }
+            } else if (payload.role === 'Admin') {
+                if (targetUser.school_id !== payload.schoolId) {
+                    return res.status(403).json({ error: 'Forbidden: Admin can only reset passwords for users in their own school.' });
+                }
+                const rolesBelowAdmin = ['Accountant', 'Teacher', 'Parent', 'Student'];
+                if (!rolesBelowAdmin.includes(targetUser.role)) {
+                    return res.status(403).json({ error: 'Forbidden: Admin can only reset passwords for users with a role below Admin.' });
+                }
+            } else {
+                return res.status(403).json({ error: 'Forbidden: Insufficient permissions to change other user passwords' });
+            }
+        }
+
+        // Changing your own password requires currentPassword (reject if missing)
+        if (isSelf) {
+            if (!currentPassword) {
+                return res.status(400).json({ error: 'Current password is required.' });
+            }
             const storedHash = targetUser.password || '';
             let isCurrentValid = false;
             if (storedHash.startsWith('$2a$') || storedHash.startsWith('$2b$') || storedHash.startsWith('$2y$')) {
@@ -69,6 +93,14 @@ export default async function handler(req: any, res: any) {
             SET password = ${hashedNewPassword} 
             WHERE id = ${userIdToUpdate}
         `;
+
+        await writeServerAuditLog(
+            sql,
+            payload,
+            isSelf ? 'Change Password' : 'Reset Password',
+            isSelf ? 'User changed their own password' : `Reset password for user ID ${userIdToUpdate} (${targetUser.role})`,
+            targetUser.school_id
+        );
 
         return res.status(200).json({
             success: true,
