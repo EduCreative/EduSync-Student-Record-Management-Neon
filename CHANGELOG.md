@@ -1,6 +1,12 @@
 
 # Changelog
 
+## [3.16.4] - 2026-11-01
+
+### Fixed & Hardened (Vercel Serverless Function Runtime Compatibility)
+- **Explicit Vercel Handler Wrapper (`api/index.ts`)**:
+  - Wrapped the Express app inside an explicit Vercel serverless function signature (`export default function handler(req, res) { return app(req, res); }`) to ensure 100% reliable execution and protocol compatibility on Vercel's Node.js runtime.
+
 ## [3.16.3] - 2026-11-01
 
 ### Fixed & Hardened (Vercel Production Deployment Routing)
