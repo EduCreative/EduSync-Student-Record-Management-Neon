@@ -1,7 +1,7 @@
 {
-  "version": "3.16.2",
+  "version": "3.16.3",
   "releaseDate": "2026-11-01",
   "changelog": [
-    "Enhanced Sign-In Page (v3.16.2): Redesigned LoginPage with prominent version display (`v3.16.2`), modern glassmorphism styling, responsive layout, and convenient one-click Quick Demo Login buttons for Owner, Admin, Accountant, Teacher, Parent, and Student roles for instant testing."
+    "Vercel Production Deployment Fix (v3.16.3): Updated `api/index.ts` to mount `apiRouter` at both `/api` and `/` and added explicit rewrite rules in `vercel.json` to ensure 100% routing parity between local preview and Vercel serverless deployment."
   ]
 }

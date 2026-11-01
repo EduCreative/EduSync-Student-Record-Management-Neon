@@ -1,6 +1,13 @@
 
 # Changelog
 
+## [3.16.3] - 2026-11-01
+
+### Fixed & Hardened (Vercel Production Deployment Routing)
+- **Vercel Serverless Function Routing (`api/index.ts` & `vercel.json`)**:
+  - Configured `api/index.ts` to mount `apiRouter` at both `/api` and `/` to gracefully handle Vercel's URL path routing differences.
+  - Added explicit `/api/(.*)` rewrite rules in `vercel.json` ensuring 100% routing parity between local preview and Vercel serverless deployment.
+
 ## [3.16.2] - 2026-11-01
 
 ### Added & Improved (Sign-In Page Redesign & Version Badge)
