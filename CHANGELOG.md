@@ -1,6 +1,13 @@
 
 # Changelog
 
+## [3.16.5] - 2026-11-01
+
+### Fixed & Resolved (Pre-Bundled Vercel Serverless Backend)
+- **Pre-Bundled Serverless Execution (`api/index.js`)**:
+  - Configured `esbuild` in `"build"` script to bundle `src/server/index.ts` into a self-contained JavaScript bundle (`api/index.js`) during deployment.
+  - Updated `vercel.json` rewrites to point directly to `/api/index.js`, eliminating runtime `FUNCTION_INVOCATION_FAILED` errors caused by uncompiled TypeScript path resolution on Vercel's Edge/Node runtime.
+
 ## [3.16.4] - 2026-11-01
 
 ### Fixed & Hardened (Vercel Serverless Function Runtime Compatibility)
