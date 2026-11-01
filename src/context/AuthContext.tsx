@@ -1,16 +1,13 @@
-
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { User, UserRole } from '../types';
-import { sql } from '../lib/neonClient';
 import { Permission, ROLE_PERMISSIONS } from '../permissions';
-import { toCamelCase } from '../utils/caseConverter';
 
 interface AuthContextType {
     user: User | null;
     login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
     logout: () => void;
     register: (name: string, email: string, pass: string, role: UserRole) => Promise<{ success: boolean; error?: string }>;
-    updateUserPassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+    updateUserPassword: (newPassword: string, currentPassword?: string) => Promise<{ success: boolean; error?: string }>;
     sendPasswordResetEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
     activeSchoolId: string | null;
     switchSchoolContext: (schoolId: string | null) => void;
@@ -27,102 +24,187 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [activeSchoolId, setActiveSchoolId] = useState<string | null>(null);
     const [authEvent, setAuthEvent] = useState<string | null>(null);
 
+    // Hydrate session securely from serverless API /api/auth/me
     useEffect(() => {
-        const checkInitialSession = async () => {
+        let isMounted = true;
+
+        const verifySessionWithServer = async () => {
             try {
-                const storedUser = localStorage.getItem('edusync_user');
-                if (storedUser) {
-                    const userProfile = JSON.parse(storedUser) as User;
-                    setUser(userProfile);
-                    if (userProfile.role !== UserRole.Owner) {
-                        setActiveSchoolId(userProfile.schoolId);
+                const token = localStorage.getItem('edusync_token');
+                const headers: Record<string, string> = {};
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+
+                const res = await fetch('/api/auth/me', {
+                    method: 'GET',
+                    headers,
+                    credentials: 'include'
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data?.user && isMounted) {
+                        setUser(data.user);
+                        localStorage.setItem('edusync_user', JSON.stringify(data.user));
+                        if (data.user.role !== UserRole.Owner) {
+                            setActiveSchoolId(data.user.schoolId);
+                        }
+                        return;
                     }
                 }
+
+                // If server returns 401/403 or invalid, clear local cache
+                if (isMounted) {
+                    setUser(null);
+                    localStorage.removeItem('edusync_user');
+                    localStorage.removeItem('edusync_token');
+                }
             } catch (error) {
-                console.error("Auth hydration failed:", error);
+                console.error("Auth server verification failed:", error);
+                if (isMounted) {
+                    // Fallback to cached profile only if network is completely down, but mark unverified
+                    const cachedUser = localStorage.getItem('edusync_user');
+                    if (cachedUser) {
+                        try {
+                            const parsed = JSON.parse(cachedUser);
+                            setUser(parsed);
+                            if (parsed.role !== UserRole.Owner) {
+                                setActiveSchoolId(parsed.schoolId);
+                            }
+                        } catch {
+                            setUser(null);
+                        }
+                    }
+                }
             } finally {
-                setLoading(false);
+                if (isMounted) {
+                    setLoading(false);
+                }
             }
         };
-        
-        checkInitialSession();
-    }, []);
 
+        verifySessionWithServer();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     const login = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
         try {
-            const results = await sql`SELECT * FROM profiles WHERE email = ${email} AND password = ${pass} LIMIT 1`;
-            
-            if (results.length === 0) {
-                return { success: false, error: 'Invalid email or password.' };
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({ email, password: pass })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || !data.success) {
+                return { 
+                    success: false, 
+                    error: data.error || 'Authentication failed. Please verify credentials.' 
+                };
             }
 
-            const profile = results[0];
-
-            if (profile.status === 'Pending Approval') {
-                return { success: false, error: 'Your account is pending approval.' };
+            if (data.token) {
+                localStorage.setItem('edusync_token', data.token);
             }
-            
-            if (profile.status === 'Suspended' || profile.status === 'Inactive') {
-                return { success: false, error: 'Your account is inactive.' };
-            }
-
-            const userProfile = toCamelCase(profile) as User;
-            setUser(userProfile);
-            localStorage.setItem('edusync_user', JSON.stringify(userProfile));
-
-            if (userProfile.role !== UserRole.Owner) {
-                setActiveSchoolId(userProfile.schoolId);
+            if (data.user) {
+                setUser(data.user);
+                localStorage.setItem('edusync_user', JSON.stringify(data.user));
+                if (data.user.role !== UserRole.Owner) {
+                    setActiveSchoolId(data.user.schoolId);
+                }
             }
 
-            await sql`UPDATE profiles SET last_login = ${new Date().toISOString()} WHERE id = ${profile.id}`;
-            
             setAuthEvent('SIGNED_IN');
             return { success: true };
         } catch (err: any) {
-            return { success: false, error: 'Connection failed. Please try again.' };
+            console.error("Login request failed:", err);
+            return { success: false, error: 'Connection to authentication service failed. Please check network.' };
         }
     };
-    
-    const logout = () => {
+
+    const logout = async () => {
+        try {
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                credentials: 'include'
+            });
+        } catch (err) {
+            console.error("Logout API request error:", err);
+        }
+
         setUser(null);
         setActiveSchoolId(null);
         localStorage.removeItem('edusync_user');
+        localStorage.removeItem('edusync_token');
         window.location.reload();
     };
-    
+
     const register = async (name: string, email: string, pass: string, role: UserRole): Promise<{ success: boolean; error?: string }> => {
         try {
-            const existing = await sql`SELECT id FROM profiles WHERE email = ${email}`;
-            if (existing.length > 0) {
-                return { success: false, error: "Email already registered." };
+            const res = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name, email, password: pass, role })
+            });
+
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                return { success: false, error: data.error || 'Registration failed.' };
             }
 
-            const userId = crypto.randomUUID();
-            await sql`
-                INSERT INTO profiles (id, name, email, password, role, status)
-                VALUES (${userId}, ${name}, ${email}, ${pass}, ${role}, 'Pending Approval')
-            `;
-    
             return { success: true };
         } catch (err: any) {
-            return { success: false, error: "Registration failed." };
+            console.error("Registration request error:", err);
+            return { success: false, error: 'Registration service unreachable.' };
         }
     };
-    
+
     const sendPasswordResetEmail = async (_email: string): Promise<{ success: boolean; error?: string }> => {
-        // Neon doesn't have built-in email auth service like Supabase
-        // Prefixed with underscore to indicate intent to remain unused for now
-        return { success: false, error: 'Password reset via email is currently unavailable. Please contact an Admin.' };
+        return { success: false, error: 'Password reset via email is currently unavailable. Please contact an Administrator.' };
     };
 
-    const updateUserPassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    const updateUserPassword = async (newPassword: string, currentPassword?: string): Promise<{ success: boolean; error?: string }> => {
         if (!user) return { success: false, error: 'Not authenticated.' };
+
         try {
-            await sql`UPDATE profiles SET password = ${newPassword} WHERE id = ${user.id}`;
+            const token = localStorage.getItem('edusync_token');
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json'
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const res = await fetch('/api/auth/change-password', {
+                method: 'POST',
+                headers,
+                credentials: 'include',
+                body: JSON.stringify({
+                    newPassword,
+                    currentPassword,
+                    targetUserId: user.id
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                return { success: false, error: data.error || 'Failed to update password.' };
+            }
+
             return { success: true };
         } catch (err: any) {
-            return { success: false, error: err.message };
+            console.error("Change password error:", err);
+            return { success: false, error: 'Failed to communicate with password service.' };
         }
     };
 
@@ -144,13 +226,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return userPermissions?.includes(permission) || false;
     };
 
-
     if (loading) {
-        return <div className="flex items-center justify-center h-screen bg-secondary-50 dark:bg-secondary-900 text-primary-500">Loading...</div>;
+        return (
+            <div className="flex items-center justify-center h-screen bg-secondary-50 dark:bg-secondary-900 text-primary-500">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-sm font-medium text-secondary-600 dark:text-secondary-300">Verifying session...</span>
+                </div>
+            </div>
+        );
     }
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, register, updateUserPassword, sendPasswordResetEmail, activeSchoolId, switchSchoolContext, effectiveRole, hasPermission, authEvent }}>
+        <AuthContext.Provider value={{
+            user,
+            login,
+            logout,
+            register,
+            updateUserPassword,
+            sendPasswordResetEmail,
+            activeSchoolId,
+            switchSchoolContext,
+            effectiveRole,
+            hasPermission,
+            authEvent
+        }}>
             {children}
         </AuthContext.Provider>
     );

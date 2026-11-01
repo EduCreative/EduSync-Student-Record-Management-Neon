@@ -1,10 +1,11 @@
 {
-  "version": "3.10.0",
-  "releaseDate": "2026-10-10",
+  "version": "3.16.0",
+  "releaseDate": "2026-11-01",
   "changelog": [
-    "Google Drive Backup Fix: Resolved 'Upload failed:' error by constructing standard RFC 2387 multipart/related payloads instead of unsupported browser FormData, with descriptive error parsing.",
-    "Manual File Import / Local Restore Fix: Fixed parameter unpacking bug in the SQL layer and implemented direct atomic Dexie transactions with bulk inserts, ensuring 100% data retention of students, attendance, fee challans, and exam results upon restoration.",
-    "Non-Cascading Student Promotion: Resolved the cascade bug in Class Management by snapshotting class assignments and promoting without chain contamination.",
-    "Graduated Students Management & Reactivation: Full recovery interface with 1-click student reactivation, smart historical class reconstruction from fee/exam records, and undo promotion support."
+    "Stage 4 Zero Browser Database: Completely eliminated database connection strings, database clients, and direct SQL queries from the frontend client bundle.",
+    "Removed Browser Database Drivers: Deleted src/lib/neonClient.ts, src/lib/db.ts, and removed Dexie IndexedDB client fallback from client code.",
+    "Server-Authoritative Notifications: Migrated NotificationContext to use authenticated /api/notifications serverless endpoint for fetching, marking read, and broadcasting notifications.",
+    "Server-Only Database Credentials: Removed VITE_NEON_DATABASE_URL from client environment definitions, docs, and configurations; PostgreSQL is accessed strictly via server-side DATABASE_URL.",
+    "Streamlined Settings & Data Management: Replaced offline Dexie sync and cache wipe controls with a production-grade Data Snapshots & Recovery interface powered by serverless atomic transactions."
   ]
 }

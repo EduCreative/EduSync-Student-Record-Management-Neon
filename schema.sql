@@ -1,4 +1,12 @@
 
+-- Schools table (Must be created before profiles and other child tables)
+CREATE TABLE IF NOT EXISTS schools (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    address TEXT NOT NULL,
+    logo_url TEXT
+);
+
 -- Profiles table for all user roles
 CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY,
@@ -13,14 +21,6 @@ CREATE TABLE IF NOT EXISTS profiles (
     child_student_ids UUID[] DEFAULT '{}',
     disabled_nav_links TEXT[] DEFAULT '{}',
     permissions_overrides JSONB DEFAULT '{}'
-);
-
--- Schools table
-CREATE TABLE IF NOT EXISTS schools (
-    id UUID PRIMARY KEY,
-    name TEXT NOT NULL,
-    address TEXT NOT NULL,
-    logo_url TEXT
 );
 
 -- Classes table
@@ -160,3 +160,37 @@ CREATE TABLE IF NOT EXISTS notifications (
     is_read BOOLEAN DEFAULT FALSE,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- ============================================================================
+-- PRODUCTION SCALABILITY INDEXES
+-- Critical for long-term query performance, rapid joins, and sub-millisecond filtering
+-- ============================================================================
+
+-- Students table indexes
+CREATE INDEX IF NOT EXISTS idx_students_school_id ON students(school_id);
+CREATE INDEX IF NOT EXISTS idx_students_class_id ON students(class_id);
+CREATE INDEX IF NOT EXISTS idx_students_status ON students(status);
+CREATE INDEX IF NOT EXISTS idx_students_roll_number ON students(roll_number);
+
+-- Fee Challans indexes (High-traffic ledger queries)
+CREATE INDEX IF NOT EXISTS idx_fee_challans_student_id ON fee_challans(student_id);
+CREATE INDEX IF NOT EXISTS idx_fee_challans_class_id ON fee_challans(class_id);
+CREATE INDEX IF NOT EXISTS idx_fee_challans_month_year ON fee_challans(month, year);
+CREATE INDEX IF NOT EXISTS idx_fee_challans_status ON fee_challans(status);
+CREATE INDEX IF NOT EXISTS idx_fee_challans_paid_date ON fee_challans(paid_date);
+
+-- Attendance indexes (Fast daily and historical range lookups)
+CREATE INDEX IF NOT EXISTS idx_attendance_student_id ON attendance(student_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date);
+CREATE INDEX IF NOT EXISTS idx_attendance_student_date ON attendance(student_id, date);
+
+-- Results indexes (Fast term and student card queries)
+CREATE INDEX IF NOT EXISTS idx_results_student_id ON results(student_id);
+CREATE INDEX IF NOT EXISTS idx_results_class_id ON results(class_id);
+CREATE INDEX IF NOT EXISTS idx_results_exam ON results(exam);
+
+-- Classes, Profiles & Audit Logs indexes
+CREATE INDEX IF NOT EXISTS idx_classes_school_id ON classes(school_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_school_id ON profiles(school_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_school_id ON activity_logs(school_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_timestamp ON activity_logs(timestamp DESC);

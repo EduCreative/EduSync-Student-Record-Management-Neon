@@ -6,8 +6,6 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;
   readonly VITE_SUPABASE_ANON_KEY: string;
-  // FIX: Added VITE_NEON_DATABASE_URL to satisfy TypeScript checks in src/lib/neonClient.ts
-  readonly VITE_NEON_DATABASE_URL: string;
   // FIX: Added VITE_GOOGLE_CLIENT_ID to satisfy TypeScript checks in src/utils/googleDriveService.ts
   readonly VITE_GOOGLE_CLIENT_ID: string;
 

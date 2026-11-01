@@ -32,9 +32,30 @@ const AccountantDashboard: React.FC = () => {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
 
-        const collectedThisMonth = schoolFees
-            .filter(f => f.paidDate && new Date(f.paidDate).getMonth() === currentMonth && new Date(f.paidDate).getFullYear() === currentYear)
-            .reduce((sum, f) => sum + f.paidAmount, 0);
+        let collectedThisMonth = 0;
+        schoolFees.forEach(fee => {
+            const history = fee.paymentHistory || [];
+            if (history.length > 0) {
+                history.forEach((payment: any) => {
+                    const pDate = payment.date || payment.paidDate;
+                    const pAmount = Number(payment.amount || 0);
+                    if (!pDate || pAmount <= 0) return;
+                    const normDate = String(pDate).slice(0, 10);
+                    const pYear = parseInt(normDate.slice(0, 4), 10);
+                    const pMonth = parseInt(normDate.slice(5, 7), 10) - 1;
+                    if (pYear === currentYear && pMonth === currentMonth) {
+                        collectedThisMonth += pAmount;
+                    }
+                });
+            } else if (fee.paidDate && (fee.paidAmount || 0) > 0) {
+                const normDate = String(fee.paidDate).slice(0, 10);
+                const pYear = parseInt(normDate.slice(0, 4), 10);
+                const pMonth = parseInt(normDate.slice(5, 7), 10) - 1;
+                if (pYear === currentYear && pMonth === currentMonth) {
+                    collectedThisMonth += fee.paidAmount;
+                }
+            }
+        });
 
         const unpaidChallans = schoolFees.filter(f => f.status === 'Unpaid' || f.status === 'Partial');
         

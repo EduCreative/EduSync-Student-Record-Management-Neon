@@ -3,7 +3,6 @@ import React, { createContext, useState, useContext, useEffect, ReactNode } from
 
 type Theme = 'light' | 'dark';
 type FontSize = 'sm' | 'base' | 'lg';
-type SyncMode = 'offline' | 'online';
 type SidebarMode = 'fixed' | 'collapsible';
 const FONT_SIZES: FontSize[] = ['sm', 'base', 'lg'];
 
@@ -16,8 +15,6 @@ interface ThemeContextType {
     resetFontSize: () => void;
     highlightMissingData: boolean;
     toggleHighlightMissingData: () => void;
-    syncMode: SyncMode;
-    setSyncMode: (mode: SyncMode) => void;
     sidebarMode: SidebarMode;
     setSidebarMode: (mode: SidebarMode) => void;
 }
@@ -28,7 +25,6 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const [theme, setTheme] = useState<Theme>('light');
     const [fontSize, setFontSizeState] = useState<FontSize>('base');
     const [highlightMissingData, setHighlightMissingData] = useState<boolean>(true);
-    const [syncMode, setSyncModeState] = useState<SyncMode>('offline');
     const [sidebarMode, setSidebarModeState] = useState<SidebarMode>('collapsible');
 
     useEffect(() => {
@@ -50,10 +46,6 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         // Highlight missing data initialization
         const storedHighlight = localStorage.getItem('highlightMissingData');
         setHighlightMissingData(storedHighlight === null ? true : storedHighlight === 'true');
-
-        // Sync mode initialization
-        const storedSyncMode = localStorage.getItem('syncMode') as SyncMode | null;
-        setSyncModeState(storedSyncMode || 'offline');
 
         // Sidebar mode initialization
         const storedSidebarMode = localStorage.getItem('sidebarMode') as SidebarMode | null;
@@ -116,18 +108,13 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         });
     };
     
-    const setSyncMode = (mode: SyncMode) => {
-        localStorage.setItem('syncMode', mode);
-        setSyncModeState(mode);
-    };
-
     const setSidebarMode = (mode: SidebarMode) => {
         localStorage.setItem('sidebarMode', mode);
         setSidebarModeState(mode);
-    }
+    };
 
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme, fontSize, increaseFontSize, decreaseFontSize, resetFontSize, highlightMissingData, toggleHighlightMissingData, syncMode, setSyncMode, sidebarMode, setSidebarMode }}>
+        <ThemeContext.Provider value={{ theme, toggleTheme, fontSize, increaseFontSize, decreaseFontSize, resetFontSize, highlightMissingData, toggleHighlightMissingData, sidebarMode, setSidebarMode }}>
             {children}
         </ThemeContext.Provider>
     );

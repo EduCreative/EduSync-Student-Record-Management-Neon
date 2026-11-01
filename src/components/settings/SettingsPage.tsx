@@ -8,7 +8,6 @@ import Modal from '../common/Modal';
 import { UserRole } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import ImageUpload from '../common/ImageUpload';
-import { deleteDatabase } from '../../lib/db';
 import { driveService, DriveFile } from '../../utils/googleDriveService';
 import IncreaseTuitionFeeModal from './IncreaseTuitionFeeModal';
 
@@ -17,7 +16,7 @@ const CloudIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 const SettingsPage: React.FC = () => {
-    const { toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, syncMode, setSyncMode, sidebarMode, setSidebarMode } = useTheme();
+    const { toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, sidebarMode, setSidebarMode } = useTheme();
     const { user, effectiveRole, activeSchoolId } = useAuth();
     const { schools, backupData, backupToDrive, restoreData, updateSchool, feeHeads, addFeeHead, updateFeeHead, autoBackupSettings, updateAutoBackupSettings } = useData();
     const { showToast } = useToast();
@@ -38,9 +37,8 @@ const SettingsPage: React.FC = () => {
     const [isFetchingCloud, setIsFetchingCloud] = useState(false);
     const [showCloudPicker, setShowCloudPicker] = useState(false);
 
-    // State for Class Promotion
+    // State for Tuition Fee Manager
     const [isTuitionFeeModalOpen, setIsTuitionFeeModalOpen] = useState(false);
-    const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
     // Initialize forms and preferences from user data
     useEffect(() => {
@@ -140,29 +138,10 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    const handleHardReset = async () => {
-        setIsResetModalOpen(false);
-        showToast('Resetting...', 'Clearing local environment cache.', 'info');
-        try {
-            await deleteDatabase();
-            setTimeout(() => { window.location.reload(); }, 1500);
-        } catch (error) {
-            showToast('Reset Failed', 'Clear storage manually in browser.', 'error');
-        }
-    };
-
-    const handleSyncModeChange = async (mode: 'offline' | 'online') => {
-        if (syncMode === mode) return;
-        showToast('Updating Configuration', `Swapping to ${mode} sync architecture.`, 'info');
-        if (mode === 'online') { await deleteDatabase(); }
-        setSyncMode(mode);
-        setTimeout(() => { window.location.reload(); }, 1500);
-    };
-    
     return (
         <>
             <Modal isOpen={!!restoreFile} onClose={() => setRestoreFile(null)} title="Confirm Snapshot Load">
-                <p className="text-secondary-600 dark:text-secondary-400">Restore state from <strong>{restoreFile?.name}</strong>? Existing local records will be purged before reconstruction.</p>
+                <p className="text-secondary-600 dark:text-secondary-400">Restore state from <strong>{restoreFile?.name}</strong>? Existing school records will be replaced via atomic database transaction.</p>
                 <div className="flex justify-end space-x-2 pt-4">
                     <button type="button" onClick={() => setRestoreFile(null)} className="btn-secondary">Cancel</button>
                     <button type="button" onClick={handleConfirmRestore} className="btn-danger">Start Reconstruction</button>
@@ -184,13 +163,6 @@ const SettingsPage: React.FC = () => {
             </Modal>
 
             <IncreaseTuitionFeeModal isOpen={isTuitionFeeModalOpen} onClose={() => setIsTuitionFeeModalOpen(false)} />
-            <Modal isOpen={isResetModalOpen} onClose={() => setIsResetModalOpen(false)} title="System Cache Reset">
-                <p>Delete all locally cached data? You will need to log in again to re-sync with the cloud database.</p>
-                <div className="flex justify-end space-x-2 pt-4">
-                    <button type="button" onClick={() => setIsResetModalOpen(false)} className="btn-secondary">Cancel</button>
-                    <button type="button" onClick={handleHardReset} className="btn-danger">Reset & Logout</button>
-                </div>
-            </Modal>
 
             <div className="max-w-4xl mx-auto space-y-8">
                 <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Settings</h1>
@@ -311,22 +283,6 @@ const SettingsPage: React.FC = () => {
                 </div>
 
                 <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Sync Architecture</h2>
-                     <div className="space-y-4">
-                        <div className="flex flex-col sm:flex-row gap-4">
-                            <div className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${syncMode === 'offline' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-secondary-200 dark:border-secondary-700'}`} onClick={() => handleSyncModeChange('offline')}>
-                                <h3 className="font-semibold text-sm text-primary-600">Hybrid (Recommended)</h3>
-                                <p className="text-[10px] text-secondary-500">Fast local access with background persistence.</p>
-                            </div>
-                            <div className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${syncMode === 'online' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-secondary-200 dark:border-secondary-700'}`} onClick={() => handleSyncModeChange('online')}>
-                                <h3 className="font-semibold text-sm">Direct Online</h3>
-                                <p className="text-[10px] text-secondary-500">Real-time Neon queries without local caching.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
                     <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Accessibility</h2>
                     <div className="space-y-6">
                         <div className="flex items-center justify-between">
@@ -369,22 +325,24 @@ const SettingsPage: React.FC = () => {
                     </div>
                 )}
 
-                {effectiveRole === UserRole.Admin && syncMode === 'offline' && (
-                    <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6 border-t-4 border-red-500">
-                        <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Danger Zone</h2>
+                {(effectiveRole === UserRole.Admin || effectiveRole === UserRole.Owner) && (
+                    <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6 border-t-4 border-primary-500">
+                        <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Data Snapshots & Recovery</h2>
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <p className="font-medium text-sm">Download Local Copy</p>
+                                <div>
+                                    <p className="font-medium text-sm">Download Snapshot</p>
+                                    <p className="text-xs text-secondary-500">Export current school records to a JSON file</p>
+                                </div>
                                 <button onClick={backupData} className="btn-secondary text-xs shadow-none"><DownloadIcon className="w-3 h-3 mr-1" /> JSON Export</button>
                             </div>
-                             <div className="flex items-center justify-between">
-                                <p className="font-medium text-sm">Manual File Import</p>
+                            <div className="flex items-center justify-between pt-2 border-t dark:border-secondary-700">
+                                <div>
+                                    <p className="font-medium text-sm">Restore from Snapshot</p>
+                                    <p className="text-xs text-secondary-500">Atomic server-side database restore with data integrity verification</p>
+                                </div>
                                 <input ref={fileInputRef} type="file" accept=".json" onChange={handleRestoreInitiate} className="hidden" />
                                 <button onClick={() => fileInputRef.current?.click()} className="btn-secondary text-xs shadow-none"><UploadIcon className="w-3 h-3 mr-1"/> Load File</button>
-                            </div>
-                            <div className="flex items-center justify-between pt-2">
-                                <p className="font-medium text-sm text-red-500">Troubleshoot Environment</p>
-                                <button onClick={() => setIsResetModalOpen(true)} className="text-xs text-red-600 hover:underline">Hard Reset Database</button>
                             </div>
                         </div>
                     </div>

@@ -1,9 +1,6 @@
-
 import React, { createContext, useState, useContext, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { useAuth } from './AuthContext';
-import { sql } from '../lib/neonClient';
 import { Notification } from '../types';
-import { toCamelCase } from '../utils/caseConverter';
 
 interface NotificationContextType {
     notifications: Notification[];
@@ -26,13 +23,14 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
             return;
         }
         try {
-            const data = await sql`
-                SELECT * FROM notifications 
-                WHERE user_id = ${user.id} 
-                ORDER BY timestamp DESC 
-                LIMIT 50
-            `;
-            setNotifications(toCamelCase(data) as Notification[]);
+            const res = await fetch('/api/notifications', {
+                method: 'GET',
+                credentials: 'include',
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setNotifications(data.notifications || []);
+            }
         } catch (error) {
             console.error('Error fetching notifications:', error);
         }
@@ -41,7 +39,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     useEffect(() => {
         fetchNotifications();
         
-        // Polling as a fallback for realtime
+        // Polling as a fallback for realtime updates
         const interval = setInterval(fetchNotifications, 60000); 
         return () => clearInterval(interval);
     }, [fetchNotifications]);
@@ -55,7 +53,15 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
         
         try {
-            await sql`UPDATE notifications SET is_read = true WHERE id = ${notificationId}`;
+            const res = await fetch('/api/notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ action: 'mark_read', notificationId }),
+            });
+            if (!res.ok) {
+                throw new Error('Failed to update notification status');
+            }
         } catch (error) {
             console.error('Failed to mark notification as read:', error);
             setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: false } : n));
@@ -65,14 +71,22 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const markAllAsRead = async () => {
         if (!user || unreadCount === 0) return;
 
-        const unreadIds = notifications.filter(n => !n.isRead).map(n => n.id);
+        const previousNotifications = [...notifications];
         setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
 
         try {
-            await sql`UPDATE notifications SET is_read = true WHERE id = ANY(${unreadIds})`;
+            const res = await fetch('/api/notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ action: 'mark_all_read' }),
+            });
+            if (!res.ok) {
+                throw new Error('Failed to mark all as read');
+            }
         } catch (error) {
             console.error('Failed to mark all as read:', error);
-            setNotifications(prev => prev.map(n => unreadIds.includes(n.id) ? { ...n, isRead: false } : n));
+            setNotifications(previousNotifications);
         }
     };
 
@@ -80,19 +94,23 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (userIds.length === 0) return;
 
         try {
-            // Process in chunks of 20 to balance performance and connection stability
-            const CHUNK_SIZE = 20;
-            const uniqueUserIds = Array.from(new Set(userIds));
-
-            for (let i = 0; i < uniqueUserIds.length; i += CHUNK_SIZE) {
-                const chunk = uniqueUserIds.slice(i, i + CHUNK_SIZE);
-                await Promise.all(chunk.map(id => 
-                    sql`
-                        INSERT INTO notifications (id, user_id, title, message, link, is_read, timestamp)
-                        VALUES (${crypto.randomUUID()}, ${id}, ${title}, ${message}, ${link || null}, false, NOW())
-                    `
-                ));
+            const res = await fetch('/api/notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    action: 'send',
+                    userIds,
+                    title,
+                    message,
+                    link
+                }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to send announcements');
             }
+            await fetchNotifications();
         } catch (error) {
             console.error('Failed to send announcements:', error);
             throw error;

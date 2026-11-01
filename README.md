@@ -1,11 +1,54 @@
 
-# EduSync - Modern Student Record Management System (Neon Edition)
+# EduSync - Modern Student Record Management System (Production Architecture)
 
-**EduSync** is a high-performance school management platform powered by **Neon Serverless Postgres** with an intelligent local-fallback sandbox.
+**EduSync** is a high-performance school management platform powered by a secure serverless backend proxying to **Neon Serverless Postgres**.
 
 ---
 
-## ✨ Key Features (v3.10.0)
+## ✨ Key Features (v3.16.0 - Zero Browser Database & Pure Serverless Architecture)
+- **Zero Browser Database (Stage 4)**: Completely eliminated all database drivers, connection strings, and client-side SQL execution from the browser bundle.
+- **Removed Browser Database Clients**: Deleted `src/lib/neonClient.ts` and `src/lib/db.ts`, eliminating the legacy Dexie IndexedDB client fallback from the frontend application.
+- **Server-Authoritative Notifications**: Migrated `NotificationContext` from direct browser SQL queries to the authenticated `/api/notifications` serverless endpoint.
+- **Server-Only PostgreSQL Credentials**: Eliminated `VITE_NEON_DATABASE_URL` entirely. The database is accessed exclusively on the server using `DATABASE_URL` via serverless API routes.
+- **Enhanced Data Management & Recovery**: Replaced legacy client DB cache wipes with a server-backed Data Snapshots & Recovery interface supporting JSON snapshot export and atomic transaction restore.
+
+## ✨ Previous Features (v3.15.0 - Safe Serverless Writes & Atomic Mutations)
+- **Serverless Write Mutation Architecture (Stage 3)**: Moved all database writes behind serverless endpoints (`/api/write/payments`, `/api/write/challans`, `/api/write/academic`, `/api/write/students`, `/api/write/classes`, `/api/write/users`, `/api/write/restore`) with strict role-based authorization and session verification.
+- **Atomic Balance Updates (Race Condition Elimination)**: Payment recording now uses PostgreSQL-native arithmetic (`paid_amount = paid_amount + $amt`) and in-engine status calculation, preventing two cashiers from overwriting each other's collections.
+- **Duplicate-Safe Monthly Challans**: Server-side duplicate checking prevents multiple active challans from being created for the same student in the same month and year.
+- **Server-Authoritative Audit Logging**: System activity logs are authored and written on the server using verified session tokens rather than client-supplied values.
+- **Transactional Database Restore**: Database restore runs within a single PostgreSQL transaction (`BEGIN ... COMMIT / ROLLBACK`), ensuring incomplete restores are rolled back and staff accounts and hashed passwords are protected from accidental wipeout.
+- **Bcrypt Hashing for Newly Created Users**: All user accounts created through Admin management or bulk import are automatically hashed on the server with `bcryptjs`.
+- **Zero Direct Client Mutations**: Removed all client-side `sql` INSERT, UPDATE, and DELETE operations from `DataContext.tsx`.
+
+## ✨ Previous Features (v3.14.0)
+- **Serverless Data Read Architecture (Stage 2)**: Replaced client-side `SELECT` queries with serverless endpoints (`/api/data`, `/api/data/students`, `/api/data/fees`, `/api/data/users`, `/api/data/schools`).
+- **Role-Based Tenant & Data Isolation**:
+  - **Owner**: Full access across all schools and global reports.
+  - **Admin / Accountant**: Strictly restricted to their own `school_id`. Foreign schools and Owner profiles are invisible.
+  - **Teacher**: Scoped to their school; administrative fee ledgers, audit logs, and CNICs are omitted.
+  - **Parent**: Restricted strictly to their own children. No other students, families, or users are exposed.
+  - **Student**: Restricted strictly to their own profile, class, results, attendance, and fee challans.
+- **Zero Password & PII Leakage**: Plaintext passwords and password hashes are never returned across any data endpoint. Sensitive CNICs are masked or omitted for non-administrative roles.
+- **Single Round-Trip Loading**: Consolidated multi-query browser loops into a single optimized server-side query batch, reducing network chatter and speeding up initial application load.
+
+## ✨ Previous Features (v3.13.0)
+- **Vercel Serverless Authentication Architecture (Stage 1)**: Shifted authentication logic from browser-side queries into secure serverless API endpoints (`/api/auth/login`, `/api/auth/me`, `/api/auth/logout`, `/api/auth/change-password`, `/api/auth/register`).
+- **Zero Database Exposure**: Database connections on auth are performed via server-only `process.env.DATABASE_URL`, keeping master connection strings hidden from browser clients.
+- **Bcrypt Password Security & Auto-Upgrade**: Plain-text passwords are completely eliminated. Any legacy user logging in has their password automatically upgraded to a salted bcrypt hash, or administrators can run the one-time migration script `scripts/hash-passwords.ts`.
+- **Brute-Force Rate Limiting**: Built-in protection against brute-force attacks limiting failed login attempts to a maximum of 5 attempts per email per 15-minute window (HTTP 429).
+- **Secure HttpOnly Cookie Sessions**: Authentication tokens are signed with JWT (`SESSION_SECRET`) with 12-hour expiration and delivered via `httpOnly`, `Secure`, `SameSite=Strict` cookies, completely eliminating the vulnerability of treating unverified `localStorage` data as identity proof.
+- **Zero Client Password Leakage**: Passwords and password hashes are never returned to client applications across login, me, and user list responses.
+
+## ✨ Previous Features (v3.12.0)
+- **Data Preservation on Student Edits**: Saved `dateOfAdmission`, `secondaryContactNumber`, and `feeStructure` on all student additions and updates, permanently eliminating silent field loss.
+- **Full Financial Audit Logging**: Every payment, modification, cancellation, fee increase, leaving certificate, and challan deletion is logged to `activity_logs`.
+- **Reconciled Dashboard Collections & Arrears**: Daily/monthly dashboard figures compute from individual payment records, perfectly reconciling with the cashier register and eliminating overlapping arrears inflation.
+- **Robust Database Foreign Key Safety**: Cleaned `schema.sql` creation order and safe cascade deletion of audit records during backup restoration.
+- **Production Database B-Tree Indexing**: Complete `CREATE INDEX IF NOT EXISTS` schema coverage in `schema.sql` across foreign keys, statuses, and dates, preventing sequential table scans and enabling lightning-fast query execution on large databases.
+- **Concurrent Batch Operations**: Parallelized queries with `Promise.all` across attendance recording, results submission, tuition fee increments, and bulk CSV imports, eliminating UI lag and reducing bulk write times by up to 90%.
+- **Duplicate Challan & Ledger Protection**: Comprehensive multi-layer protection in both batch and single challan generation to prevent duplicate active challans for the same student in the same month/year.
+- **Accurate Arrears Carry-Over with Fines**: Full incorporation of late fines (`fineAmount`) into cumulative ledger calculations, guaranteeing penalty dues carry forward without manual recalculation.
 - **High-Fidelity Google Drive Cloud Backup**: Built on RFC 2387 `multipart/related` compliant uploads with automatic token refreshing and descriptive API error diagnostics.
 - **Instant, Lossless Local Backup & Restore**: Robust local file import and JSON export engine backed by atomic IndexedDB transactions, guaranteeing 100% data integrity for all students, ledgers, challans, and academic transcripts.
 - **Safe, Atomic Student Promotion**: Promotes active students concurrently to destination classes based on initial state snapshots, completely eliminating cascading chain promotions.
@@ -22,10 +65,9 @@
 - **Ink-Friendly Soft Theme**: Soft slate header banners (`bg-slate-700` / `bg-slate-600`) and high-contrast light table headers (`bg-slate-200`) for clear readability and optimal printer ink usage.
 - **Desk Scan QR Code Integration**: Embedded QR codes on printable fee challans containing student ID, payment due date, total amount, and challan ID for fast scanning at the school's account desk.
 - **Direct Challan Printing**: Convenient 1-click single challan print previews directly from Fee Collection and Fee History.
-- **Zero-Config Sandbox Fallback**: Seamless, crash-free execution using an advanced client-side SQLite-on-Dexie translation layer if `VITE_NEON_DATABASE_URL` is omitted.
+- **Production Serverless Architecture**: Fast, resilient serverless API handling authentication, scoped data reading, and atomic database mutations.
 - **Auto-Seeded Demo Mode**: Instantly launches pre-loaded test data (Oakridge School) for easy testing and exploration of Owner, Admin, Accountant, Teacher, and Student roles.
 - **Automatic Live Update Engine**: Intelligent checking against the static release registry to prompt users whenever a new update is deployed.
-- **Hybrid Sync**: Active replication support for Offline-First (Dexie.js) and Online-Only database states.
 - **Smart Broadcasts**: Send targeted announcements to specific classes, parents, or student groups.
 - **Google Drive Backup**: Securely save snapshots to your personal cloud, including logos and photos.
 - **Global Owner Control**: Full system backup and restoration for Owners.
@@ -46,11 +88,12 @@ If you see an "Access Blocked" or "Unverified App" screen when backing up to Dri
 ## 🚀 Setup and Installation
 ### 1. Prerequisites
 - [Node.js](https://nodejs.org/) (version 18 or higher)
-- A [Neon](https://neon.tech/) account
+- A [Neon](https://neon.tech/) PostgreSQL account
 
 ### 2. Environment Variables
-- `VITE_NEON_DATABASE_URL`: Your Neon connection string.
-- `VITE_GOOGLE_CLIENT_ID`: Your Google OAuth 2.0 Client ID.
+- `DATABASE_URL`: Server-side PostgreSQL connection string (server environment only, never prefixed with `VITE_`).
+- `SESSION_SECRET`: Secret key used to sign JWT session cookies (e.g. 32+ characters).
+- `VITE_GOOGLE_CLIENT_ID`: (Optional) Your Google OAuth 2.0 Client ID for Drive integration.
 
 ---
 

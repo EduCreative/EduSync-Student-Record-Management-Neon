@@ -142,7 +142,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
 
     const stats = useMemo(() => {
         const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
+        const dYear = now.getFullYear();
+        const dMonth = String(now.getMonth() + 1).padStart(2, '0');
+        const dDay = String(now.getDate()).padStart(2, '0');
+        const todayStr = `${dYear}-${dMonth}-${dDay}`;
         const currentMonthIdx = now.getMonth();
         const currentMonthName = months[currentMonthIdx];
         const currentYear = now.getFullYear();
@@ -152,18 +155,56 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
             return student?.schoolId === effectiveSchoolId;
         });
 
-        const feesCollectedToday = schoolFees
-            .filter(f => f.paidDate === todayStr)
-            .reduce((sum, f) => sum + f.paidAmount, 0);
+        // Reconcile collections from payment_history to match day-end registers & Fee Collection Report
+        let feesCollectedToday = 0;
+        let collectedThisMonth = 0;
 
-        const collectedThisMonth = schoolFees
-            .filter(f => f.paidDate && new Date(f.paidDate).getMonth() === currentMonthIdx && new Date(f.paidDate).getFullYear() === currentYear)
-            .reduce((sum, f) => sum + f.paidAmount, 0);
+        schoolFees.forEach(fee => {
+            const history = fee.paymentHistory || [];
+            if (history.length > 0) {
+                history.forEach((payment: any) => {
+                    const pDate = payment.date || payment.paidDate || payment.paidAt;
+                    const pAmount = Number(payment.amount || 0);
+                    if (!pDate || pAmount <= 0) return;
+                    const normDate = String(pDate).slice(0, 10);
+                    if (normDate === todayStr) {
+                        feesCollectedToday += pAmount;
+                    }
+                    const pYear = parseInt(normDate.slice(0, 4), 10);
+                    const pMonth = parseInt(normDate.slice(5, 7), 10) - 1;
+                    if (pYear === currentYear && pMonth === currentMonthIdx) {
+                        collectedThisMonth += pAmount;
+                    }
+                });
+            } else {
+                const pAmount = Number(fee.paidAmount || 0);
+                if (pAmount > 0 && fee.paidDate) {
+                    const normDate = String(fee.paidDate).slice(0, 10);
+                    if (normDate === todayStr) {
+                        feesCollectedToday += pAmount;
+                    }
+                    const pYear = parseInt(normDate.slice(0, 4), 10);
+                    const pMonth = parseInt(normDate.slice(5, 7), 10) - 1;
+                    if (pYear === currentYear && pMonth === currentMonthIdx) {
+                        collectedThisMonth += pAmount;
+                    }
+                }
+            }
+        });
 
-        const outstandingChallans = schoolFees.filter(f => f.status === 'Unpaid' || f.status === 'Partial');
-        const totalOutstandingDues = outstandingChallans.reduce((sum, f) => {
-            const balance = f.totalAmount - f.discount - f.paidAmount;
-            return sum + balance;
+        // Calculate true net outstanding dues across active students (avoids compounding overlapping arrears)
+        const relevantStudents = students.filter(s => s.schoolId === effectiveSchoolId && s.status === 'Active');
+        const totalOutstandingDues = relevantStudents.reduce((sum, student) => {
+            const studentFees = fees.filter(f => f.studentId === student.id && f.status !== 'Cancelled');
+            const totalFeeCharged = studentFees.reduce((fSum, f) => {
+                const currentMonthFee = Number(f.totalAmount) - (Number(f.previousBalance) || 0);
+                return fSum + currentMonthFee;
+            }, 0) + (Number(student.openingBalance) || 0);
+
+            const totalPaid = studentFees.reduce((pSum, f) => pSum + Number(f.paidAmount || 0), 0);
+            const totalDiscount = studentFees.reduce((dSum, f) => dSum + Number(f.discount || 0), 0);
+            const netBalance = totalFeeCharged - totalPaid - totalDiscount;
+            return sum + (netBalance > 0.01 ? netBalance : 0);
         }, 0);
             
         const pendingApprovals = schoolUsers.filter(u => u.status === 'Pending Approval').length;

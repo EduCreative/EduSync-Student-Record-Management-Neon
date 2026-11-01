@@ -3,10 +3,6 @@ import React, { createContext, useContext, useState, ReactNode, useCallback, use
 import { School, User, UserRole, Class, Student, Attendance, FeeChallan, Result, ActivityLog, FeeHead, SchoolEvent, Subject, Exam } from '../types';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
-import { sql } from '../lib/neonClient';
-import { db } from '../lib/db';
-import { toCamelCase, toSnakeCase } from '../utils/caseConverter';
-import { useTheme } from './ThemeContext';
 import { driveService } from '../utils/googleDriveService';
 
 interface SyncProgress {
@@ -89,11 +85,10 @@ interface DataContextType {
     increaseTuitionFees: (studentIds: string[], increaseAmount: number) => Promise<void>;
     sendFeeReminders: (challanIds: string[]) => Promise<void>;
     bulkUpdateClassOrder: (classes: { id: string; sortOrder: number }[]) => Promise<void>;
+    addLog: (action: string, details: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
-
-const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export const useData = (): DataContextType => {
     const context = useContext(DataContext);
@@ -106,7 +101,6 @@ export const useData = (): DataContextType => {
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user, activeSchoolId } = useAuth();
     const { showToast } = useToast();
-    const { syncMode } = useTheme();
 
     const [loading, setLoading] = useState(true);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -219,146 +213,60 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         setLoading(true);
         setSyncError(null);
-        setSyncProgress({ percentage: 5, status: 'Accessing Neon DB...' });
+        setSyncProgress({ percentage: 5, status: 'Synchronizing records with secure API...' });
 
         try {
             const effectiveSchoolId = user.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user.schoolId;
+            const queryParam = effectiveSchoolId ? `?schoolId=${encodeURIComponent(effectiveSchoolId)}` : '';
 
-            setSyncProgress({ percentage: 10, status: 'Downloading Metadata...' });
-            const [schoolsData, classesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
-                sql`SELECT * FROM schools`,
-                effectiveSchoolId ? sql`SELECT * FROM classes WHERE school_id = ${effectiveSchoolId}` : sql`SELECT * FROM classes`,
-                effectiveSchoolId ? sql`SELECT * FROM subjects WHERE school_id = ${effectiveSchoolId}` : sql`SELECT * FROM subjects`,
-                effectiveSchoolId ? sql`SELECT * FROM exams WHERE school_id = ${effectiveSchoolId}` : sql`SELECT * FROM exams`,
-                effectiveSchoolId ? sql`SELECT * FROM fee_heads WHERE school_id = ${effectiveSchoolId}` : sql`SELECT * FROM fee_heads`,
-                effectiveSchoolId ? sql`SELECT * FROM school_events WHERE school_id = ${effectiveSchoolId}` : sql`SELECT * FROM school_events`,
-            ]);
+            setSyncProgress({ percentage: 20, status: 'Downloading Scoped Data from Secure API...' });
 
-            setSchools(toCamelCase(schoolsData));
-            setClasses(toCamelCase(classesData));
-            setSubjects(toCamelCase(subjectsData));
-            setExams(toCamelCase(examsData));
-            setFeeHeads(toCamelCase(feeHeadsData).map((fh: any) => ({ ...fh, defaultAmount: Number(fh.defaultAmount || 0) })));
-            setEvents(toCamelCase(eventsData));
-            
-            const profilesData = effectiveSchoolId 
-                ? await sql`SELECT * FROM profiles WHERE school_id = ${effectiveSchoolId} OR school_id IS NULL` 
-                : await sql`SELECT * FROM profiles`;
-            setUsers(toCamelCase(profilesData));
-
-            setSyncProgress({ percentage: 35, status: 'Fetching Student Directory...' });
-            const studentsData = effectiveSchoolId 
-                ? await sql`SELECT * FROM students WHERE school_id = ${effectiveSchoolId}` 
-                : await sql`SELECT * FROM students`;
-            
-            const transformedStudents = toCamelCase(studentsData).map((s: any) => ({ 
-                ...s, 
-                openingBalance: Number(s.openingBalance || 0),
-                feeStructure: (s.feeStructure || []).map((item: any) => ({ ...item, amount: Number(item.amount || 0) }))
-            }));
-            setStudents(transformedStudents);
-            
-            const sIds = studentsData.map((s: any) => s.id);
-            if (sIds.length > 0) {
-                setSyncProgress({ percentage: 60, status: 'Syncing Financial Ledgers...' });
-                const feesData = await sql`SELECT * FROM fee_challans WHERE student_id = ANY(${sIds})`;
-                setFees(toCamelCase(feesData).map((f: any) => {
-                    let history = f.paymentHistory;
-                    if (typeof history === 'string') { try { history = JSON.parse(history); } catch { history = []; } }
-                    if (!Array.isArray(history)) history = [];
-                    return {
-                        ...f,
-                        previousBalance: Number(f.previousBalance || 0),
-                        totalAmount: Number(f.totalAmount || 0),
-                        discount: Number(f.discount || 0),
-                        paidAmount: Number(f.paidAmount || 0),
-                        fineAmount: Number(f.fineAmount || 0),
-                        paymentHistory: history.map((p: any) => ({ ...p, amount: Number(p.amount || 0) }))
-                    };
-                }));
-
-                setSyncProgress({ percentage: 80, status: 'Syncing Academic Results...' });
-                const [attData, resData] = await Promise.all([
-                    sql`SELECT * FROM attendance WHERE student_id = ANY(${sIds})`,
-                    sql`SELECT * FROM results WHERE student_id = ANY(${sIds})`,
-                ]);
-                setAttendanceState(toCamelCase(attData));
-                setResults(toCamelCase(resData).map((r: any) => ({
-                    ...r,
-                    marks: Number(r.marks || 0),
-                    totalMarks: Number(r.totalMarks || 100)
-                })));
+            const token = localStorage.getItem('edusync_token');
+            const headers: Record<string, string> = {};
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
             }
 
-            setSyncProgress({ percentage: 95, status: 'Refreshing Logs...' });
-            const logsData = effectiveSchoolId 
-                ? await sql`SELECT * FROM activity_logs WHERE school_id = ${effectiveSchoolId} ORDER BY timestamp DESC LIMIT 50` 
-                : await sql`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 50`;
-            setLogs(toCamelCase(logsData));
+            const response = await fetch(`/api/data${queryParam}`, {
+                method: 'GET',
+                headers,
+                credentials: 'include'
+            });
 
-            if (syncMode === 'offline') {
-                await db.transaction('rw', db.tables, async () => {
-                    await Promise.all([
-                        db.schools.bulkPut(schools),
-                        db.users.bulkPut(users),
-                        db.classes.bulkPut(classes),
-                        db.students.bulkPut(transformedStudents),
-                        db.fees.bulkPut(fees),
-                        db.attendance.bulkPut(attendance),
-                        db.results.bulkPut(results),
-                        db.logs.bulkPut(logs),
-                        db.feeHeads.bulkPut(feeHeads),
-                        db.events.bulkPut(events),
-                        db.subjects.bulkPut(subjects),
-                        db.exams.bulkPut(exams),
-                    ]);
-                });
+            if (!response.ok) {
+                const errBody = await response.json().catch(() => ({}));
+                throw new Error(errBody.error || `Server responded with status ${response.status}`);
             }
+
+            const data = await response.json();
+
+            setSyncProgress({ percentage: 60, status: 'Processing Records...' });
+
+            setSchools(data.schools || []);
+            setClasses(data.classes || []);
+            setSubjects(data.subjects || []);
+            setExams(data.exams || []);
+            setFeeHeads(data.feeHeads || []);
+            setEvents(data.events || []);
+            setUsers(data.users || []);
+            setStudents(data.students || []);
+            setFees(data.fees || []);
+            setAttendanceState(data.attendance || []);
+            setResults(data.results || []);
+            setLogs(data.logs || []);
 
             setSyncProgress({ percentage: 100, status: 'DB Synchronized' });
             setLastSyncTime(new Date());
         } catch (error: any) {
             console.error("Sync Error:", error);
             setSyncError(error.message);
-            try {
-                setSyncProgress({ percentage: 50, status: 'Loading offline database fallback...' });
-                const [localSchools, localUsers, localClasses, localStudents, localFees, localAttendance, localResults, localLogs, localFeeHeads, localEvents, localSubjects, localExams] = await Promise.all([
-                    db.schools.toArray(),
-                    db.users.toArray(),
-                    db.classes.toArray(),
-                    db.students.toArray(),
-                    db.fees.toArray(),
-                    db.attendance.toArray(),
-                    db.results.toArray(),
-                    db.logs.toArray(),
-                    db.feeHeads.toArray(),
-                    db.events.toArray(),
-                    db.subjects.toArray(),
-                    db.exams.toArray(),
-                ]);
-
-                setSchools(localSchools);
-                setUsers(localUsers);
-                setClasses(localClasses);
-                setStudents(localStudents);
-                setFees(localFees);
-                setAttendanceState(localAttendance);
-                setResults(localResults);
-                setLogs(localLogs);
-                setFeeHeads(localFeeHeads);
-                setEvents(localEvents);
-                setSubjects(localSubjects);
-                setExams(localExams);
-                setSyncProgress({ percentage: 100, status: 'Loaded from local DB (Offline fallback)' });
-            } catch (fallbackError) {
-                console.error("Fallback to Dexie failed:", fallbackError);
-            }
+            setSyncProgress({ percentage: 0, status: 'Database sync error' });
         } finally {
             setLoading(false);
             if (isInitialLoad) setIsInitialLoad(false);
             setTimeout(() => setSyncProgress({ percentage: 0, status: '' }), 3000);
         }
-    }, [user, activeSchoolId, isInitialLoad, syncMode, schools, users, classes, fees, attendance, results, logs, feeHeads, events, subjects, exams]);
+    }, [user, activeSchoolId, isInitialLoad, schools, users, classes, fees, attendance, results, logs, feeHeads, events, subjects, exams]);
 
     useEffect(() => { fetchData(); }, [user, activeSchoolId]);
 
@@ -386,350 +294,324 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return () => clearInterval(interval);
     }, [user, autoBackupSettings, loading, isInitialLoad, backupToDrive]);
 
+    const apiWrite = useCallback(async (endpoint: string, payload: any): Promise<any> => {
+        const token = localStorage.getItem('edusync_token');
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.error || `Request failed with status ${res.status}`);
+        }
+        return res.json();
+    }, []);
+
     const addLog = useCallback(async (action: string, details: string) => {
         if (!user) return;
-        const id = crypto.randomUUID();
         const effectiveSchoolId = user.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user.schoolId;
-        await sql`
-            INSERT INTO activity_logs (id, user_id, user_name, user_avatar, school_id, action, details, timestamp)
-            VALUES (${id}, ${user.id}, ${user.name}, ${user.avatarUrl || ''}, ${effectiveSchoolId}, ${action}, ${details}, ${new Date().toISOString()})
-        `;
-    }, [user, activeSchoolId]);
+        try {
+            await apiWrite('/api/write/users', { action: 'add-log', actionName: action, details, schoolId: effectiveSchoolId });
+        } catch (e) {
+            console.warn('Could not record client log:', e);
+        }
+    }, [user, activeSchoolId, apiWrite]);
 
     const updateUser = async (updatedUser: User) => {
-        const d = toSnakeCase(updatedUser);
-        await sql`UPDATE profiles SET name = ${d.name}, avatar_url = ${d.avatar_url}, status = ${d.status} WHERE id = ${d.id}`;
+        await apiWrite('/api/write/users', { 
+            action: 'update-user', 
+            id: updatedUser.id, 
+            name: updatedUser.name, 
+            avatarUrl: updatedUser.avatarUrl, 
+            status: updatedUser.status 
+        });
         await fetchData();
     };
 
     const deleteUser = async (userId: string) => {
-        await sql`UPDATE profiles SET status = 'Inactive' WHERE id = ${userId}`;
+        await apiWrite('/api/write/users', { action: 'delete-user', userId });
         await fetchData();
     };
 
     const addUserByAdmin = async (userData: any) => {
-        const id = crypto.randomUUID();
-        const d = toSnakeCase({ ...userData, id, status: 'Active' });
-        await sql`INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url) VALUES (${d.id}, ${d.name}, ${d.email}, ${d.password}, ${d.role}, ${d.school_id}, ${d.status}, ${d.avatar_url})`;
+        await apiWrite('/api/write/users', {
+            action: 'add-user',
+            name: userData.name,
+            email: userData.email,
+            password: userData.password,
+            role: userData.role,
+            schoolId: userData.schoolId,
+            avatarUrl: userData.avatarUrl
+        });
         await fetchData();
     };
 
     const addStudent = async (data: any) => {
-        const id = crypto.randomUUID();
-        const s = toSnakeCase({ ...data, id, status: 'Active' });
-        await sql`INSERT INTO students (id, name, roll_number, class_id, school_id, father_name, father_cnic, date_of_birth, date_of_admission, contact_number, secondary_contact_number, address, status, gender, admitted_class, gr_number, religion, caste, last_school_attended, opening_balance, user_id)
-                  VALUES (${s.id}, ${s.name}, ${s.roll_number}, ${s.class_id}, ${s.school_id}, ${s.father_name}, ${s.father_cnic}, ${s.date_of_birth}, ${s.date_of_admission}, ${s.contact_number}, ${s.secondary_contact_number}, ${s.address}, ${s.status}, ${s.gender}, ${s.admitted_class}, ${s.gr_number}, ${s.religion}, ${s.caste}, ${s.last_school_attended}, ${s.opening_balance}, ${s.user_id})`;
+        await apiWrite('/api/write/students', { action: 'add-student', student: data });
         await fetchData();
-        addLog('Add Student', `Added student: ${s.name}`);
     };
 
     const updateStudent = async (student: Student) => {
-        const s = toSnakeCase(student);
-        await sql`UPDATE students SET name = ${s.name}, roll_number = ${s.roll_number}, class_id = ${s.class_id}, father_name = ${s.father_name}, father_cnic = ${s.father_cnic}, date_of_birth = ${s.date_of_birth}, contact_number = ${s.contact_number}, address = ${s.address}, status = ${s.status}, gender = ${s.gender}, avatar_url = ${s.avatar_url}, admitted_class = ${s.admitted_class}, gr_number = ${s.gr_number}, religion = ${s.religion}, caste = ${s.caste}, last_school_attended = ${s.last_school_attended}, opening_balance = ${s.opening_balance}, user_id = ${s.user_id}, fee_structure = ${JSON.stringify(s.fee_structure || [])} WHERE id = ${s.id}`;
+        await apiWrite('/api/write/students', { action: 'update-student', student });
         await fetchData();
     };
 
     const deleteStudent = async (studentId: string) => {
-        await sql`UPDATE students SET status = 'Deleted' WHERE id = ${studentId}`;
+        await apiWrite('/api/write/students', { action: 'delete-student', studentId });
         await fetchData();
     };
 
     const addClass = async (data: any) => {
-        const id = crypto.randomUUID();
-        await sql`INSERT INTO classes (id, name, section, teacher_id, school_id, sort_order) VALUES (${id}, ${data.name}, ${data.section}, ${data.teacherId}, ${data.schoolId}, ${data.sortOrder || 0})`;
+        await apiWrite('/api/write/classes', { 
+            action: 'add-class', 
+            name: data.name, 
+            section: data.section, 
+            teacherId: data.teacherId, 
+            schoolId: data.schoolId, 
+            sortOrder: data.sortOrder || 0 
+        });
         await fetchData();
     };
 
     const updateClass = async (cls: Class) => {
-        const d = toSnakeCase(cls);
-        await sql`UPDATE classes SET name = ${d.name}, section = ${d.section}, teacher_id = ${d.teacher_id}, sort_order = ${d.sort_order} WHERE id = ${d.id}`;
+        await apiWrite('/api/write/classes', { 
+            action: 'update-class', 
+            id: cls.id, 
+            name: cls.name, 
+            section: cls.section, 
+            teacherId: cls.teacherId, 
+            sortOrder: cls.sortOrder 
+        });
         await fetchData();
     };
 
     const deleteClass = async (id: string) => {
-        await sql`DELETE FROM classes WHERE id = ${id}`;
+        await apiWrite('/api/write/classes', { action: 'delete-class', id });
         await fetchData();
     };
 
     const addSubject = async (data: any) => {
-        await sql`INSERT INTO subjects (id, name, school_id) VALUES (${crypto.randomUUID()}, ${data.name}, ${data.schoolId})`;
+        await apiWrite('/api/write/classes', { action: 'add-subject', name: data.name, schoolId: data.schoolId });
         await fetchData();
     };
 
     const updateSubject = async (subj: Subject) => {
-        await sql`UPDATE subjects SET name = ${subj.name} WHERE id = ${subj.id}`;
+        await apiWrite('/api/write/classes', { action: 'update-subject', id: subj.id, name: subj.name });
         await fetchData();
     };
 
     const deleteSubject = async (id: string) => {
-        await sql`DELETE FROM subjects WHERE id = ${id}`;
+        await apiWrite('/api/write/classes', { action: 'delete-subject', id });
         await fetchData();
     };
 
     const addExam = async (data: any) => {
-        await sql`INSERT INTO exams (id, name, school_id) VALUES (${crypto.randomUUID()}, ${data.name}, ${data.schoolId})`;
+        await apiWrite('/api/write/classes', { action: 'add-exam', name: data.name, schoolId: data.schoolId });
         await fetchData();
     };
 
     const updateExam = async (exam: Exam) => {
-        await sql`UPDATE exams SET name = ${exam.name} WHERE id = ${exam.id}`;
+        await apiWrite('/api/write/classes', { action: 'update-exam', id: exam.id, name: exam.name });
         await fetchData();
     };
 
     const deleteExam = async (id: string) => {
-        await sql`DELETE FROM exams WHERE id = ${id}`;
+        await apiWrite('/api/write/classes', { action: 'delete-exam', id });
         await fetchData();
     };
 
     const setAttendance = async (date: string, records: any[]) => {
-        for (const r of records) {
-            await sql`
-                INSERT INTO attendance (id, student_id, date, status)
-                VALUES (${crypto.randomUUID()}, ${r.studentId}, ${date}, ${r.status})
-                ON CONFLICT (student_id, date) DO UPDATE SET status = EXCLUDED.status
-            `;
-        }
+        const total = records.length;
+        setOperationProgress({ percentage: 20, status: `Saving attendance for ${total} students...` });
+        const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+        await apiWrite('/api/write/academic', {
+            action: 'set-attendance',
+            date,
+            records,
+            schoolId: effectiveSchoolId
+        });
         await fetchData();
+        setOperationProgress({ percentage: 0, status: '' });
+        showToast('Success', `Attendance recorded for ${total} students.`, 'success');
     };
 
     const recordFeePayment = async (challanId: string, amount: number, discount: number, paidDate: string) => {
         const challan = fees.find(f => f.id === challanId);
         if (!challan) return;
+        const student = students.find(s => s.id === challan.studentId);
 
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const validatedPaidDate = (paidDate && paidDate > todayStr) ? todayStr : paidDate;
-
-        const newTotalPaid = challan.paidAmount + amount;
-        const netPayable = challan.totalAmount - discount;
-        const status = newTotalPaid >= netPayable ? 'Paid' : 'Partial';
-        
-        const history = challan.paymentHistory || [];
-        const newRecord = { amount, date: validatedPaidDate };
-
-        await sql`
-            UPDATE fee_challans 
-            SET paid_amount = ${newTotalPaid}, discount = ${discount}, status = ${status}, paid_date = ${validatedPaidDate}, payment_history = ${JSON.stringify([...history, newRecord])}
-            WHERE id = ${challanId}
-        `;
+        await apiWrite('/api/write/payments', {
+            action: 'record-payment',
+            challanId,
+            amount,
+            discount,
+            paidDate
+        });
         await fetchData();
+        showToast('Success', `Recorded payment of Rs. ${amount.toLocaleString()} for ${student?.name || 'Student'}`, 'success');
     };
 
     const updateFeePayment = async (challanId: string, paidAmount: number, discount: number, paidDate: string, paymentHistory?: any[]) => {
-        const challan = fees.find(f => f.id === challanId);
-        if (!challan) return;
-
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const validatedPaidDate = (paidDate && paidDate > todayStr) ? todayStr : paidDate;
-
-        const status = paidAmount >= (challan.totalAmount - discount) ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Unpaid');
-        const historyToSave = paymentHistory || challan.paymentHistory || [];
-
-        await sql`
-            UPDATE fee_challans 
-            SET paid_amount = ${paidAmount}, discount = ${discount}, status = ${status}, paid_date = ${validatedPaidDate}, payment_history = ${JSON.stringify(historyToSave)}
-            WHERE id = ${challanId}
-        `;
+        await apiWrite('/api/write/payments', {
+            action: 'update-payment',
+            challanId,
+            paidAmount,
+            discount,
+            paidDate,
+            paymentHistory
+        });
         await fetchData();
+        showToast('Success', 'Payment updated successfully.', 'success');
     };
 
     const cancelChallan = async (challanId: string) => {
-        await sql`UPDATE fee_challans SET status = 'Cancelled' WHERE id = ${challanId}`;
+        await apiWrite('/api/write/payments', { action: 'cancel-challan', challanId });
         await fetchData();
+        showToast('Success', 'Challan cancelled.', 'success');
     };
 
     const generateChallansForMonth = async (month: string, year: number, selectedFeeHeads: { feeHeadId: string, amount: number }[], studentIds: string[], dueDate?: string) => {
-        const studentFeesMap = new Map<string, FeeChallan[]>();
-        fees.forEach(f => {
-            if (f.status !== 'Cancelled') {
-                const list = studentFeesMap.get(f.studentId) || [];
-                list.push(f);
-                studentFeesMap.set(f.studentId, list);
-            }
+        setOperationProgress({ percentage: 25, status: `Generating challans for ${month} ${year}...` });
+        const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+        const res = await apiWrite('/api/write/challans', {
+            action: 'generate',
+            month,
+            year,
+            selectedFeeHeads,
+            studentIds,
+            dueDate,
+            schoolId: effectiveSchoolId
         });
-
-        let count = 0;
-        const total = studentIds.length;
-        const BATCH_SIZE = 40; 
-        const currentStudentIds = [...studentIds];
-        
-        const monthIndex = months.indexOf(month) + 1;
-        const monthStr = String(monthIndex).padStart(2, '0');
-
-        while (currentStudentIds.length > 0) {
-            const batchIds = currentStudentIds.splice(0, BATCH_SIZE);
-            const batchPromises = batchIds.map(async (sId) => {
-                const student = students.find(s => s.id === sId);
-                if (!student) return null;
-
-                const studentChallans = studentFeesMap.get(sId) || [];
-                const totalCharged = studentChallans.reduce((sum, f) => {
-                    const feeSum = f.feeItems.reduce((acc, item) => acc + item.amount, 0);
-                    return sum + feeSum;
-                }, 0) + (student.openingBalance || 0);
-                
-                const totalCollected = studentChallans.reduce((sum, f) => sum + (f.paidAmount || 0) + (f.discount || 0), 0);
-                const arrears = Math.max(0, totalCharged - totalCollected);
-
-                const feeStructureMap = new Map((student.feeStructure || []).map(item => [item.feeHeadId, item.amount]));
-                const items = selectedFeeHeads.map((h: any) => ({
-                    description: feeHeads.find(fh => fh.id === h.feeHeadId)?.name || 'Fee',
-                    amount: feeStructureMap.get(h.feeHeadId) ?? h.amount
-                }));
-
-                const subtotal = items.reduce((sum: number, i: any) => sum + i.amount, 0);
-                const totalAmount = subtotal + arrears;
-                
-                // Purely Numeric format: YYYYMM-RollNumber
-                const cNum = `${year}${monthStr}-${student.rollNumber}`;
-
-                return sql`
-                    INSERT INTO fee_challans (id, challan_number, student_id, class_id, month, year, due_date, status, fee_items, previous_balance, total_amount, discount, paid_amount)
-                    VALUES (${crypto.randomUUID()}, ${cNum}, ${sId}, ${student.classId}, ${month}, ${year}, ${dueDate}, 'Unpaid', ${JSON.stringify(items)}, ${arrears}, ${totalAmount}, 0, 0)
-                `;
-            });
-
-            await Promise.all(batchPromises);
-            count += batchIds.length;
-            setOperationProgress({ percentage: Math.round((count/total) * 100), status: `Generating Challan ${count} of ${total}...` });
-        }
-
         await fetchData();
-        showToast('Success', `${count} challans generated for ${month} ${year}.`, 'success');
         setOperationProgress({ percentage: 0, status: '' });
+        const count = res.count || 0;
+        const skipped = res.skippedDuplicates || 0;
+        showToast('Success', `${count} challan(s) generated for ${month} ${year}${skipped > 0 ? ` (${skipped} duplicates skipped)` : ''}.`, 'success');
         return count;
     };
 
     const deleteChallansForMonth = async (m: string, y: number) => {
         const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
-        const res = await sql`
-            DELETE FROM fee_challans 
-            WHERE month = ${m} AND year = ${y} AND paid_amount = 0 AND student_id IN (SELECT id FROM students WHERE school_id = ${effectiveSchoolId})
-            RETURNING *
-        `;
+        const res = await apiWrite('/api/write/challans', {
+            action: 'delete-unpaid',
+            month: m,
+            year: y,
+            schoolId: effectiveSchoolId
+        });
         await fetchData();
-        return res.length;
+        const count = res.count || 0;
+        showToast('Success', `Deleted ${count} unpaid challans for ${m} ${y}`, 'success');
+        return count;
     };
 
     const addFeeHead = async (data: any) => {
-        await sql`INSERT INTO fee_heads (id, name, default_amount, school_id) VALUES (${crypto.randomUUID()}, ${data.name}, ${data.defaultAmount}, ${data.schoolId})`;
+        await apiWrite('/api/write/classes', { action: 'add-fee-head', name: data.name, defaultAmount: data.defaultAmount, schoolId: data.schoolId });
         await fetchData();
     };
 
     const updateFeeHead = async (fh: FeeHead) => {
-        await sql`UPDATE fee_heads SET name = ${fh.name}, default_amount = ${fh.defaultAmount} WHERE id = ${fh.id}`;
+        await apiWrite('/api/write/classes', { action: 'update-fee-head', id: fh.id, name: fh.name, defaultAmount: fh.defaultAmount });
         await fetchData();
     };
 
     const deleteFeeHead = async (id: string) => {
-        await sql`DELETE FROM fee_heads WHERE id = ${id}`;
+        await apiWrite('/api/write/classes', { action: 'delete-fee-head', id });
         await fetchData();
     };
 
     const saveResults = async (resultsToSave: any[]) => {
-        for (const r of resultsToSave) {
-            await sql`
-                INSERT INTO results (id, student_id, class_id, exam, subject, marks, total_marks)
-                VALUES (${crypto.randomUUID()}, ${r.studentId}, ${r.classId}, ${r.exam}, ${r.subject}, ${r.marks}, ${r.total_marks})
-                ON CONFLICT (student_id, class_id, exam, subject) DO UPDATE SET marks = EXCLUDED.marks, total_marks = EXCLUDED.total_marks
-            `;
-        }
+        const total = resultsToSave.length;
+        setOperationProgress({ percentage: 25, status: `Saving results for ${total} records...` });
+        const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+        await apiWrite('/api/write/academic', {
+            action: 'save-results',
+            results: resultsToSave,
+            schoolId: effectiveSchoolId
+        });
         await fetchData();
+        setOperationProgress({ percentage: 0, status: '' });
+        showToast('Success', `Results saved for ${total} students.`, 'success');
     };
 
     const addSchool = async (name: string, address: string, logoUrl?: string | null) => {
-        await sql`INSERT INTO schools (id, name, address, logo_url) VALUES (${crypto.randomUUID()}, ${name}, ${address}, ${logoUrl})`;
+        await apiWrite('/api/write/users', { action: 'add-school', name, address, logoUrl });
         await fetchData();
     };
 
     const updateSchool = async (s: School) => {
-        await sql`UPDATE schools SET name = ${s.name}, address = ${s.address}, logo_url = ${s.logoUrl} WHERE id = ${s.id}`;
+        await apiWrite('/api/write/users', { action: 'update-school', id: s.id, name: s.name, address: s.address, logoUrl: s.logoUrl });
         await fetchData();
     };
 
     const deleteSchool = async (id: string) => {
-        await sql`DELETE FROM schools WHERE id = ${id}`;
+        await apiWrite('/api/write/users', { action: 'delete-school', id });
         await fetchData();
     };
 
     const addEvent = async (data: any) => {
-        const d = toSnakeCase(data);
-        await sql`INSERT INTO school_events (id, title, date, category, description, school_id) VALUES (${crypto.randomUUID()}, ${d.title}, ${d.date}, ${d.category}, ${d.description}, ${d.school_id})`;
+        await apiWrite('/api/write/classes', { action: 'add-event', ...data });
         await fetchData();
     };
 
     const updateEvent = async (e: SchoolEvent) => {
-        const d = toSnakeCase(e);
-        await sql`UPDATE school_events SET title = ${d.title}, date = ${d.date}, category = ${d.category}, description = ${d.description} WHERE id = ${d.id}`;
+        await apiWrite('/api/write/classes', { action: 'update-event', ...e });
         await fetchData();
     };
 
     const deleteEvent = async (id: string) => {
-        await sql`DELETE FROM school_events WHERE id = ${id}`;
+        await apiWrite('/api/write/classes', { action: 'delete-event', id });
         await fetchData();
     };
 
     const issueLeavingCertificate = async (studentId: string, details: any) => {
-        const d = toSnakeCase(details);
-        await sql`UPDATE students SET status = 'Left', date_of_leaving = ${d.date_of_leaving}, reason_for_leaving = ${d.reason_for_leaving}, conduct = ${d.conduct}, progress = ${d.progress}, place_of_birth = ${d.place_of_birth} WHERE id = ${studentId}`;
+        await apiWrite('/api/write/students', { action: 'issue-certificate', studentId, details });
         await fetchData();
     };
 
     const bulkAddStudents = async (studentList: any[]) => {
         const total = studentList.length;
-        for (let i = 0; i < total; i++) {
-            const s = studentList[i];
-            const id = crypto.randomUUID();
-            const sn = toSnakeCase({ ...s, id, status: 'Active' });
-            setOperationProgress({ percentage: Math.round((i/total) * 100), status: `Importing Student ${i+1} of ${total}...` });
-            await sql`INSERT INTO students (id, name, roll_number, class_id, school_id, father_name, father_cnic, date_of_birth, date_of_admission, contact_number, secondary_contact_number, address, status, gender, admitted_class, gr_number, religion, caste, last_school_attended, opening_balance, user_id, fee_structure)
-                      VALUES (${sn.id}, ${sn.name}, ${sn.roll_number}, ${sn.class_id}, ${sn.school_id}, ${sn.father_name}, ${sn.father_cnic}, ${sn.date_of_birth}, ${sn.date_of_admission}, ${sn.contact_number}, ${sn.secondary_contact_number}, ${sn.address}, ${sn.status}, ${sn.gender}, ${sn.admitted_class}, ${sn.gr_number}, ${sn.religion}, ${sn.caste}, ${sn.last_school_attended}, ${sn.opening_balance}, ${sn.user_id}, ${JSON.stringify(sn.fee_structure || [])})`;
-        }
-        setOperationProgress({ percentage: 100, status: 'Finalizing Import...' });
+        setOperationProgress({ percentage: 25, status: `Importing ${total} students...` });
+        const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+        await apiWrite('/api/write/students', {
+            action: 'bulk-add-students',
+            students: studentList,
+            schoolId: effectiveSchoolId
+        });
         await fetchData();
         setOperationProgress({ percentage: 0, status: '' });
+        showToast('Success', `Successfully imported ${total} students.`, 'success');
     };
 
     const bulkAddUsers = async (userList: any[]) => {
         const total = userList.length;
-        for (let i = 0; i < total; i++) {
-            const u = userList[i];
-            const id = crypto.randomUUID();
-            const un = toSnakeCase({ ...u, id });
-            setOperationProgress({ percentage: Math.round((i/total) * 100), status: `Importing User ${i+1} of ${total}...` });
-            await sql`INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url) VALUES (${un.id}, ${un.name}, ${un.email}, ${un.password}, ${un.role}, ${un.school_id}, ${un.status}, ${un.avatar_url})`;
-        }
+        setOperationProgress({ percentage: 25, status: `Importing ${total} users...` });
+        const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+        await apiWrite('/api/write/users', { action: 'bulk-add-users', users: userList, schoolId: effectiveSchoolId });
         await fetchData();
         setOperationProgress({ percentage: 0, status: '' });
     };
 
     const bulkAddClasses = async (classList: any[]) => {
-        const total = classList.length;
-        for (let i = 0; i < total; i++) {
-            const c = classList[i];
-            setOperationProgress({ percentage: Math.round((i/total) * 100), status: `Importing Class ${i+1} of ${total}...` });
-            await sql`INSERT INTO classes (id, name, school_id) VALUES (${crypto.randomUUID()}, ${c.name}, ${c.schoolId})`;
-        }
+        const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+        await apiWrite('/api/write/classes', { action: 'bulk-add-classes', classes: classList, schoolId: effectiveSchoolId });
         await fetchData();
-        setOperationProgress({ percentage: 0, status: '' });
     };
 
     const bulkUpdateClassOrder = async (updates: { id: string; sortOrder: number }[]) => {
-        const total = updates.length;
-        setOperationProgress({ percentage: 10, status: 'Reordering classes...' });
-        for (let i = 0; i < total; i++) {
-            const u = updates[i];
-            await sql`UPDATE classes SET sort_order = ${u.sortOrder} WHERE id = ${u.id}`;
-        }
+        await apiWrite('/api/write/classes', { action: 'bulk-update-order', updates });
         await fetchData();
-        setOperationProgress({ percentage: 0, status: '' });
     };
 
     const promoteAllStudents = async (mappings: Record<string, string | 'graduate'>, exemptedIds: string[]) => {
         const exemptSet = new Set(exemptedIds);
         const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
 
-        // 1. Snapshot all active students to promote BEFORE applying any mutations.
-        // This eliminates the cascading bug where students promoted to class B get promoted again when class B is processed.
         const targetStudents = students.filter(s => 
             (effectiveSchoolId ? s.schoolId === effectiveSchoolId : true) &&
             s.status === 'Active' && 
@@ -742,7 +624,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return;
         }
 
-        // Save rollback snapshot to localStorage
         try {
             const rollbackSnapshot = targetStudents.map(s => ({
                 id: s.id,
@@ -758,7 +639,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             console.warn('Could not save rollback snapshot', e);
         }
 
-        // Partition students by destination: graduation vs destination class
         const graduatingStudentIds: string[] = [];
         const classTargetMap: Record<string, string[]> = {};
 
@@ -774,40 +654,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         }
 
-        const totalSteps = (graduatingStudentIds.length > 0 ? 1 : 0) + Object.keys(classTargetMap).length;
-        let stepCount = 0;
-
-        // Apply graduations
-        if (graduatingStudentIds.length > 0) {
-            stepCount++;
-            setOperationProgress({ 
-                percentage: Math.round((stepCount / totalSteps) * 85), 
-                status: `Graduating ${graduatingStudentIds.length} students...` 
-            });
-
-            const CHUNK_SIZE = 50;
-            for (let i = 0; i < graduatingStudentIds.length; i += CHUNK_SIZE) {
-                const chunk = graduatingStudentIds.slice(i, i + CHUNK_SIZE);
-                await sql`UPDATE students SET status = 'Graduated' WHERE id = ANY(${chunk})`;
-            }
-        }
-
-        // Apply class promotions (each student updated by ID, never cascaded)
-        for (const [targetClassId, stdIds] of Object.entries(classTargetMap)) {
-            stepCount++;
-            setOperationProgress({ 
-                percentage: Math.round((stepCount / totalSteps) * 85), 
-                status: `Promoting ${stdIds.length} students to next class...` 
-            });
-
-            const CHUNK_SIZE = 50;
-            for (let i = 0; i < stdIds.length; i += CHUNK_SIZE) {
-                const chunk = stdIds.slice(i, i + CHUNK_SIZE);
-                await sql`UPDATE students SET class_id = ${targetClassId}, status = 'Active' WHERE id = ANY(${chunk})`;
-            }
-        }
-
-        setOperationProgress({ percentage: 95, status: 'Finalizing promotion...' });
+        setOperationProgress({ percentage: 40, status: `Promoting ${targetStudents.length} students...` });
+        await apiWrite('/api/write/students', {
+            action: 'promote-students',
+            graduations: graduatingStudentIds,
+            promotions: classTargetMap,
+            schoolId: effectiveSchoolId
+        });
         await fetchData();
         setOperationProgress({ percentage: 0, status: '' });
         showToast('Success', `Successfully promoted ${targetStudents.length} students.`, 'success');
@@ -835,81 +688,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return 0;
         }
 
-        setOperationProgress({ percentage: 10, status: `Reactivating ${graduated.length} students...` });
-
-        if (options?.restoreFromHistory) {
-            // Reconstruct previous class assignments from fee challans, exam results, or admittedClass
-            const studentPrevClass = new Map<string, string>();
-            
-            for (const fee of fees) {
-                if (fee.classId) {
-                    studentPrevClass.set(fee.studentId, fee.classId);
-                }
-            }
-
-            for (const res of results) {
-                if (res.classId && !studentPrevClass.has(res.studentId)) {
-                    studentPrevClass.set(res.studentId, res.classId);
-                }
-            }
-
-            for (const s of graduated) {
-                if (!studentPrevClass.has(s.id) && s.admittedClass) {
-                    const matchedClass = classes.find(c => 
-                        c.schoolId === s.schoolId && 
-                        c.name.trim().toLowerCase() === s.admittedClass.trim().toLowerCase()
-                    );
-                    if (matchedClass) {
-                        studentPrevClass.set(s.id, matchedClass.id);
-                    }
-                }
-            }
-
-            const classGroups: Record<string, string[]> = {};
-            const keepCurrentClassIds: string[] = [];
-
-            for (const s of graduated) {
-                const resolvedClassId = studentPrevClass.get(s.id);
-                if (resolvedClassId) {
-                    if (!classGroups[resolvedClassId]) classGroups[resolvedClassId] = [];
-                    classGroups[resolvedClassId].push(s.id);
-                } else {
-                    keepCurrentClassIds.push(s.id);
-                }
-            }
-
-            for (const [clsId, sIds] of Object.entries(classGroups)) {
-                const CHUNK = 50;
-                for (let i = 0; i < sIds.length; i += CHUNK) {
-                    const chunk = sIds.slice(i, i + CHUNK);
-                    await sql`UPDATE students SET status = 'Active', class_id = ${clsId} WHERE id = ANY(${chunk})`;
-                }
-            }
-
-            if (keepCurrentClassIds.length > 0) {
-                const CHUNK = 50;
-                for (let i = 0; i < keepCurrentClassIds.length; i += CHUNK) {
-                    const chunk = keepCurrentClassIds.slice(i, i + CHUNK);
-                    await sql`UPDATE students SET status = 'Active' WHERE id = ANY(${chunk})`;
-                }
-            }
-        } else if (options?.targetClassId) {
-            const sIds = graduated.map(s => s.id);
-            const CHUNK = 50;
-            for (let i = 0; i < sIds.length; i += CHUNK) {
-                const chunk = sIds.slice(i, i + CHUNK);
-                await sql`UPDATE students SET status = 'Active', class_id = ${options.targetClassId} WHERE id = ANY(${chunk})`;
-            }
-        } else {
-            const sIds = graduated.map(s => s.id);
-            const CHUNK = 50;
-            for (let i = 0; i < sIds.length; i += CHUNK) {
-                const chunk = sIds.slice(i, i + CHUNK);
-                await sql`UPDATE students SET status = 'Active' WHERE id = ANY(${chunk})`;
-            }
-        }
-
-        setOperationProgress({ percentage: 95, status: 'Finalizing student records...' });
+        setOperationProgress({ percentage: 20, status: `Reactivating ${graduated.length} students...` });
+        const sIds = graduated.map(s => s.id);
+        await apiWrite('/api/write/students', {
+            action: 'reactivate-graduated',
+            studentIds: sIds,
+            targetClassId: options?.targetClassId || null,
+            schoolId: effectiveSchoolId
+        });
         await fetchData();
         setOperationProgress({ percentage: 0, status: '' });
         showToast('Success', `Reactivated ${graduated.length} students to Active status.`, 'success');
@@ -927,8 +713,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const snapshotList: { id: string; classId: string; status: string }[] = data.students || [];
             if (snapshotList.length === 0) return false;
 
-            setOperationProgress({ percentage: 20, status: `Reverting promotion for ${snapshotList.length} students...` });
-
             const groups: Record<string, string[]> = {};
             for (const s of snapshotList) {
                 const key = `${s.classId}__${s.status}`;
@@ -936,15 +720,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 groups[key].push(s.id);
             }
 
-            for (const [key, ids] of Object.entries(groups)) {
-                const [classId, status] = key.split('__');
-                const CHUNK = 50;
-                for (let i = 0; i < ids.length; i += CHUNK) {
-                    const chunk = ids.slice(i, i + CHUNK);
-                    await sql`UPDATE students SET class_id = ${classId}, status = ${status} WHERE id = ANY(${chunk})`;
-                }
-            }
-
+            const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+            setOperationProgress({ percentage: 30, status: `Reverting promotion for ${snapshotList.length} students...` });
+            await apiWrite('/api/write/students', {
+                action: 'revert-promotion',
+                groups,
+                schoolId: effectiveSchoolId
+            });
             localStorage.removeItem('edusync_last_promotion_snapshot');
             await fetchData();
             setOperationProgress({ percentage: 0, status: '' });
@@ -959,91 +741,31 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const increaseTuitionFees = async (studentIds: string[], amount: number) => {
-        const tuitionHead = feeHeads.find(fh => fh.name.toLowerCase() === 'tuition fee');
-        if (!tuitionHead) {
-            showToast('Error', "No 'Tuition Fee' head found.", 'error');
-            return;
-        }
-
-        const total = studentIds.length;
-        for (let i = 0; i < total; i++) {
-            const sId = studentIds[i];
-            const student = students.find(s => s.id === sId);
-            if (!student) continue;
-
-            setOperationProgress({ percentage: Math.round((i/total) * 100), status: `Updating fee for student ${i+1} of ${total}...` });
-
-            let structure = student.feeStructure || [];
-            const idx = structure.findIndex(item => item.feeHeadId === tuitionHead.id);
-            if (idx !== -1) { structure[idx].amount += amount; } 
-            else { structure.push({ feeHeadId: tuitionHead.id, amount: tuitionHead.defaultAmount + amount }); }
-            await sql`UPDATE students SET fee_structure = ${JSON.stringify(structure)} WHERE id = ${sId}`;
-        }
+        const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+        await apiWrite('/api/write/payments', {
+            action: 'increase-tuition',
+            studentIds,
+            amount,
+            schoolId: effectiveSchoolId
+        });
         await fetchData();
-        setOperationProgress({ percentage: 0, status: '' });
-        showToast('Success', `Updated tuition fees for ${total} students.`, 'success');
+        showToast('Success', `Updated tuition fees for ${studentIds.length} students.`, 'success');
     };
 
     const backupData = async () => {
-        let finalSchools = schools;
-        let finalUsers = users;
-        let finalClasses = classes;
-        let finalStudents = students;
-        let finalFees = fees;
-        let finalAttendance = attendance;
-        let finalResults = results;
-        let finalLogs = logs;
-        let finalFeeHeads = feeHeads;
-        let finalEvents = events;
-        let finalSubjects = subjects;
-        let finalExams = exams;
-
-        if (syncMode === 'offline') {
-            try {
-                const [dbSchools, dbUsers, dbClasses, dbStudents, dbFees, dbAttendance, dbResults, dbLogs, dbFeeHeads, dbEvents, dbSubjects, dbExams] = await Promise.all([
-                    db.schools.toArray(),
-                    db.users.toArray(),
-                    db.classes.toArray(),
-                    db.students.toArray(),
-                    db.fees.toArray(),
-                    db.attendance.toArray(),
-                    db.results.toArray(),
-                    db.logs.toArray(),
-                    db.feeHeads.toArray(),
-                    db.events.toArray(),
-                    db.subjects.toArray(),
-                    db.exams.toArray(),
-                ]);
-                if (dbStudents.length > 0) finalStudents = dbStudents;
-                if (dbClasses.length > 0) finalClasses = dbClasses;
-                if (dbFees.length > 0) finalFees = dbFees;
-                if (dbAttendance.length > 0) finalAttendance = dbAttendance;
-                if (dbResults.length > 0) finalResults = dbResults;
-                if (dbSchools.length > 0) finalSchools = dbSchools;
-                if (dbUsers.length > 0) finalUsers = dbUsers;
-                if (dbFeeHeads.length > 0) finalFeeHeads = dbFeeHeads;
-                if (dbSubjects.length > 0) finalSubjects = dbSubjects;
-                if (dbExams.length > 0) finalExams = dbExams;
-                if (dbEvents.length > 0) finalEvents = dbEvents;
-                if (dbLogs.length > 0) finalLogs = dbLogs;
-            } catch (err) {
-                console.warn('Fallback to state for backup:', err);
-            }
-        }
-
         const data = { 
-            schools: finalSchools, 
-            users: finalUsers, 
-            classes: finalClasses, 
-            students: finalStudents, 
-            fees: finalFees, 
-            attendance: finalAttendance, 
-            results: finalResults, 
-            logs: finalLogs, 
-            feeHeads: finalFeeHeads, 
-            events: finalEvents, 
-            subjects: finalSubjects, 
-            exams: finalExams 
+            schools, 
+            users, 
+            classes, 
+            students, 
+            fees, 
+            attendance, 
+            results, 
+            logs, 
+            feeHeads, 
+            events, 
+            subjects, 
+            exams 
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -1062,204 +784,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const text = await file.text();
             const rawData = JSON.parse(text);
             
-            setOperationProgress({ percentage: 5, status: 'Performing deep data integrity check...' });
-
-            if (syncMode === 'offline') {
-                setOperationProgress({ percentage: 10, status: 'Preparing local database restore...' });
-                await db.transaction('rw', db.tables, async () => {
-                    if (isOwnerGlobalView) {
-                        for (const table of db.tables) {
-                            if (table.name === 'users') {
-                                const currentProfile = await db.users.get(user.id);
-                                await table.clear();
-                                if (currentProfile) await db.users.put(currentProfile);
-                            } else {
-                                await table.clear();
-                            }
-                        }
-                    } else if (effectiveSchoolId) {
-                        // Purge existing data for this school
-                        const schoolStudents = await db.students.where('schoolId').equals(effectiveSchoolId).toArray();
-                        const sIdSet = new Set(schoolStudents.map(s => s.id));
-
-                        await db.results.filter(r => sIdSet.has(r.studentId)).delete();
-                        await db.attendance.filter(a => sIdSet.has(a.studentId)).delete();
-                        await db.fees.filter(f => sIdSet.has(f.studentId)).delete();
-                        await db.students.where('schoolId').equals(effectiveSchoolId).delete();
-                        await db.classes.where('schoolId').equals(effectiveSchoolId).delete();
-                        await db.feeHeads.where('schoolId').equals(effectiveSchoolId).delete();
-                        await db.events.where('schoolId').equals(effectiveSchoolId).delete();
-                        await db.subjects.where('schoolId').equals(effectiveSchoolId).delete();
-                        await db.exams.where('schoolId').equals(effectiveSchoolId).delete();
-                        await db.users.filter(u => u.schoolId === effectiveSchoolId && u.id !== user.id).delete();
-                    }
-
-                    const sanitize = (arr: any[], attachSchoolId = true) => {
-                        if (!Array.isArray(arr)) return [];
-                        return arr.map(item => {
-                            const copy = { ...item };
-                            if (!isOwnerGlobalView && effectiveSchoolId && attachSchoolId && (copy.schoolId !== undefined || 'schoolId' in item || copy.school_id !== undefined)) {
-                                copy.schoolId = effectiveSchoolId;
-                            }
-                            return copy;
-                        });
-                    };
-
-                    setOperationProgress({ percentage: 25, status: 'Reconstructing classes & subjects...' });
-                    if (rawData.classes?.length) await db.classes.bulkPut(sanitize(rawData.classes));
-                    if (rawData.feeHeads?.length) await db.feeHeads.bulkPut(sanitize(rawData.feeHeads));
-                    if (rawData.subjects?.length) await db.subjects.bulkPut(sanitize(rawData.subjects));
-                    if (rawData.exams?.length) await db.exams.bulkPut(sanitize(rawData.exams));
-                    if (rawData.events?.length) await db.events.bulkPut(sanitize(rawData.events));
-
-                    setOperationProgress({ percentage: 50, status: 'Reconstructing student directories...' });
-                    if (rawData.students?.length) {
-                        const cleanStudents = sanitize(rawData.students).map((s: any) => ({
-                            ...s,
-                            schoolId: effectiveSchoolId || s.schoolId,
-                            openingBalance: Number(s.openingBalance || 0),
-                            feeStructure: (s.feeStructure || []).map((f: any) => ({ ...f, amount: Number(f.amount || 0) }))
-                        }));
-                        await db.students.bulkPut(cleanStudents);
-                    }
-
-                    setOperationProgress({ percentage: 70, status: 'Reconstructing financial ledgers...' });
-                    if (rawData.fees?.length) {
-                        const cleanFees = sanitize(rawData.fees, false).map((f: any) => {
-                            let history = f.paymentHistory;
-                            if (typeof history === 'string') { try { history = JSON.parse(history); } catch { history = []; } }
-                            if (!Array.isArray(history)) history = [];
-                            return {
-                                ...f,
-                                previousBalance: Number(f.previousBalance || 0),
-                                totalAmount: Number(f.totalAmount || 0),
-                                discount: Number(f.discount || 0),
-                                paidAmount: Number(f.paidAmount || 0),
-                                fineAmount: Number(f.fineAmount || 0),
-                                paymentHistory: history.map((p: any) => ({ ...p, amount: Number(p.amount || 0) }))
-                            };
-                        });
-                        await db.fees.bulkPut(cleanFees);
-                    }
-
-                    setOperationProgress({ percentage: 85, status: 'Reconstructing attendance & results...' });
-                    if (rawData.attendance?.length) await db.attendance.bulkPut(sanitize(rawData.attendance, false));
-                    if (rawData.results?.length) {
-                        const cleanResults = sanitize(rawData.results, false).map((r: any) => ({
-                            ...r,
-                            marks: Number(r.marks || 0),
-                            totalMarks: Number(r.totalMarks || 100),
-                        }));
-                        await db.results.bulkPut(cleanResults);
-                    }
-
-                    if (isOwnerGlobalView) {
-                        if (rawData.schools?.length) await db.schools.bulkPut(rawData.schools);
-                        if (rawData.users?.length) {
-                            const usersToRestore = rawData.users.filter((u: any) => u.id !== user.id);
-                            await db.users.bulkPut(usersToRestore);
-                        }
-                    }
-                });
-            } else {
-                // Online sync mode with PostgreSQL
-                const wipeSchoolData = async (sid: string) => {
-                    setOperationProgress({ percentage: 10, status: 'Purging existing ledgers...' });
-                    await sql`DELETE FROM results WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
-                    await sql`DELETE FROM attendance WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
-                    await sql`DELETE FROM fee_challans WHERE student_id IN (SELECT id FROM students WHERE school_id = ${sid})`;
-                    setOperationProgress({ percentage: 15, status: 'Cleaning directories...' });
-                    await sql`DELETE FROM students WHERE school_id = ${sid}`;
-                    setOperationProgress({ percentage: 20, status: 'Resetting school config...' });
-                    await sql`DELETE FROM classes WHERE school_id = ${sid}`;
-                    await sql`DELETE FROM fee_heads WHERE school_id = ${sid}`;
-                    await sql`DELETE FROM school_events WHERE school_id = ${sid}`;
-                    await sql`DELETE FROM subjects WHERE school_id = ${sid}`;
-                    await sql`DELETE FROM exams WHERE school_id = ${sid}`;
-                    setOperationProgress({ percentage: 25, status: 'Updating security profiles...' });
-                    await sql`DELETE FROM profiles WHERE school_id = ${sid} AND id != ${user.id}`;
-                };
-
-                const fullSystemWipe = async () => {
-                    setOperationProgress({ percentage: 10, status: 'Global system wipe initiated...' });
-                    await sql`TRUNCATE TABLE results CASCADE`;
-                    await sql`TRUNCATE TABLE attendance CASCADE`;
-                    await sql`TRUNCATE TABLE fee_challans CASCADE`;
-                    await sql`TRUNCATE TABLE students CASCADE`;
-                    await sql`TRUNCATE TABLE classes CASCADE`;
-                    await sql`TRUNCATE TABLE fee_heads CASCADE`;
-                    await sql`TRUNCATE TABLE school_events CASCADE`;
-                    await sql`TRUNCATE TABLE subjects CASCADE`;
-                    await sql`TRUNCATE TABLE exams CASCADE`;
-                    await sql`DELETE FROM profiles WHERE role != 'Owner'`;
-                    await sql`DELETE FROM schools`;
-                };
-
-                if (isOwnerGlobalView) {
-                    await fullSystemWipe();
-                } else if (effectiveSchoolId) {
-                    await wipeSchoolData(effectiveSchoolId);
-                } else {
-                    throw new Error("Invalid restore context.");
-                }
-
-                const processTable = async (tableName: string, dataArray: any[], basePercentage: number, weight: number) => {
-                    if (!dataArray || !Array.isArray(dataArray)) return;
-                    const total = dataArray.length;
-                    for (let i = 0; i < total; i++) {
-                        const record = { ...dataArray[i] };
-                        
-                        if (tableName === 'profiles' && record.id === user.id) continue;
-
-                        if (!isOwnerGlobalView && effectiveSchoolId) {
-                            const schoolLinkedTables = ['fee_heads', 'subjects', 'exams', 'classes', 'students', 'school_events', 'profiles'];
-                            if (schoolLinkedTables.includes(tableName)) {
-                                record.schoolId = effectiveSchoolId;
-                            }
-                        }
-                        
-                        const sn = toSnakeCase(record);
-                        setOperationProgress({ 
-                            percentage: basePercentage + Math.floor((i/total) * weight), 
-                            status: `Reconstructing ${tableName.replace('_', ' ')} (${i+1}/${total})...` 
-                        });
-
-                        const keys = Object.keys(sn);
-                        const values = Object.values(sn).map(v => {
-                            if (v === null || v === undefined) return null;
-                            if (typeof v === 'object') return JSON.stringify(v);
-                            return v;
-                        });
-                        
-                        const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
-                        const updateClause = keys.filter(k => k !== 'id').map(k => `${k} = EXCLUDED.${k}`).join(', ');
-                        
-                        const queryStr = `INSERT INTO ${tableName} (${keys.join(', ')}) 
-                                       VALUES (${placeholders}) 
-                                       ON CONFLICT (id) DO UPDATE SET ${updateClause}`;
-                                       
-                        try {
-                            await (sql as any)(queryStr, ...values);
-                        } catch (e) {
-                            console.error(`Row insertion failed in ${tableName}:`, sn, e);
-                        }
-                    }
-                };
-
-                if (isOwnerGlobalView) {
-                    await processTable('schools', rawData.schools, 20, 5);
-                    await processTable('profiles', rawData.users, 25, 5);
-                }
-
-                await processTable('fee_heads', rawData.feeHeads, 30, 5);
-                await processTable('subjects', rawData.subjects, 35, 5);
-                await processTable('exams', rawData.exams, 40, 5);
-                await processTable('classes', rawData.classes, 45, 10);
-                await processTable('students', rawData.students, 55, 15);
-                await processTable('fee_challans', rawData.fees, 70, 15);
-                await processTable('attendance', rawData.attendance, 85, 10);
-                await processTable('results', rawData.results, 95, 5);
-            }
+            setOperationProgress({ percentage: 20, status: 'Restoring database in server atomic transaction...' });
+            await apiWrite('/api/write/restore', {
+                backupData: rawData,
+                targetSchoolId: isOwnerGlobalView ? null : effectiveSchoolId
+            });
 
             setOperationProgress({ percentage: 100, status: 'Reconstruction complete!' });
             showToast('Success', 'Database restoration successfully completed!', 'success');
@@ -1289,7 +818,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         generateChallansForMonth, deleteChallansForMonth, addSchool, updateSchool, deleteSchool,
         addEvent, updateEvent, deleteEvent, bulkAddStudents, bulkAddUsers, bulkAddClasses,
         backupData, restoreData, promoteAllStudents, reactivateGraduatedStudents, revertLastPromotion, increaseTuitionFees, sendFeeReminders, bulkUpdateClassOrder, addFeeHead, updateFeeHead, deleteFeeHead,
-        issueLeavingCertificate, saveResults
+        issueLeavingCertificate, saveResults, addLog
     };
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

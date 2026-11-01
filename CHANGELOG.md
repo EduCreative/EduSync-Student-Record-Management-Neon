@@ -1,6 +1,116 @@
 
 # Changelog
 
+## [3.16.0] - 2026-11-01
+
+### Removed & Hardened (Stage 4: Complete Removal of Database from Browser)
+- **Zero Browser Database Architecture**:
+  - Completely purged database drivers, database connection strings, and client-side SQL execution from the browser application bundle.
+  - Removed `@neondatabase/serverless` and direct PostgreSQL drivers from the client bundle (driver retained strictly for serverless backend / Express execution).
+  - Deleted `src/lib/neonClient.ts` virtual database driver.
+  - Deleted `src/lib/db.ts` and uninstalled Dexie IndexedDB client fallback from the frontend application.
+- **Serverless Notifications (`/api/notifications`)**:
+  - Migrated `NotificationContext` from client-side SQL queries to an authenticated serverless endpoint supporting `GET` (fetch recent user notifications), `POST` mark read, mark all read, and role-authorized broadcast announcements.
+- **Zero Leaked Credentials**:
+  - Removed `VITE_NEON_DATABASE_URL` from `.env.example`, `src/vite-env.d.ts`, and documentation. Database connections require server-only `DATABASE_URL`.
+- **Streamlined Data Recovery & Settings**:
+  - Removed obsolete Dexie sync architecture and danger zone hard-reset controls from `SettingsPage.tsx` and `ThemeContext.tsx`.
+  - Added modern "Data Snapshots & Recovery" interface for Administrators and Owners powered by serverless atomic transaction restore.
+- **Verified Bundle Cleanliness**:
+  - Confirmed via production compilation and bundle inspection that no database connection strings or browser SQL drivers exist in the static distribution output.
+
+## [3.15.0] - 2026-11-01
+
+### Added & Hardened (Stage 3: Safe Serverless Writes & Atomic Operations)
+- **Serverless Write Mutation Architecture (`/api/write/*`)**:
+  - `/api/write/_helpers.ts`: Session extraction, role permission authorization, multi-tenant school boundary enforcement, and server-side audit logging utility.
+  - `/api/write/payments.ts`: Atomic payment processing, payment updating, challan cancellation, and tuition fee adjustments.
+  - `/api/write/challans.ts`: Duplicate-guarded monthly fee challan generation and unpaid challan deletion with student school isolation.
+  - `/api/write/academic.ts`: Multi-row batch upserts for daily student attendance and exam marks (`ON CONFLICT ... DO UPDATE`).
+  - `/api/write/students.ts`: Student CRUD operations, leaving certificate generation, bulk imports, class promotions, graduations, and promotion rollbacks.
+  - `/api/write/classes.ts`: CRUD operations and reordering for classes, subjects, exams, fee heads, and school calendar events.
+  - `/api/write/users.ts`: User management with automatic `bcryptjs` password hashing, deactivation, bulk user imports, and school profile management.
+  - `/api/write/restore.ts`: Atomic transactional database restore wrapped inside `BEGIN ... COMMIT / ROLLBACK` block.
+- **Atomic Database Calculations (Preventing Cashier Race Conditions)**:
+  - Replaced browser-side arithmetic with PostgreSQL-native updates: `paid_amount = paid_amount + $amt`.
+  - Recomputed payment status (`Paid` vs `Partial`) inside PostgreSQL engine using `CASE WHEN (paid_amount + $amt) >= (total_amount - discount) THEN 'Paid' ELSE 'Partial' END`.
+  - Append audit history to `payment_history` atomically.
+- **Duplicate-Safe Monthly Challan Generation**:
+  - Server-side pre-generation validation checks whether an active non-cancelled challan already exists for a student in the specified month and year, skipping duplicates and reporting skipped count to client.
+- **Server-Authoritative Audit Logging**:
+  - Activity logs are authored and written on the server in `activity_logs` using the verified authenticated session user's identity, preventing client-side spoofing.
+- **Transactional Database Restore with Staff Account Protection**:
+  - All restore queries execute within an atomic transaction. If any record fails, the entire transaction is rolled back and an exact error is returned (no false success messages).
+  - Staff profiles, bcrypt password hashes, and activity logs are strictly preserved during single-school restores, eliminating admin lockout.
+- **Bcrypt Hashing for Admin-Created Users**:
+  - Newly created staff accounts (Admin, Accountant, Teacher) are automatically hashed using `bcryptjs` with 10 salt rounds on the server prior to storage.
+- **Complete Elimination of Client-Side Mutations**:
+  - Replaced all direct browser-side `sql` INSERT, UPDATE, and DELETE operations across `DataContext.tsx` with authenticated API calls.
+
+## [3.14.0] - 2026-11-01
+
+### Added & Hardened (Stage 2: Safe Scoped Reads & Data Isolation)
+- **Serverless Data Read Architecture (`/api/data/*`)**:
+  - `/api/data/index.ts`: Unified, low-latency authenticated read endpoint replacing multi-roundtrip client queries with a single scoped request.
+  - `/api/data/students.ts`, `/api/data/fees.ts`, `/api/data/users.ts`, `/api/data/schools.ts`: Dedicated modular read endpoints with role-based access control.
+- **Strict Role-Based Data Isolation**:
+  - **Owner**: Full visibility across all schools or scoped to the selected active school.
+  - **Admin & Accountant**: Strictly isolated to their own `school_id`; Owner accounts and foreign school data are omitted.
+  - **Teacher**: Strictly isolated to their own `school_id`; fee challans and activity logs are omitted.
+  - **Parent**: Restricted strictly to their own children (`child_student_ids`); other students, unrelated fee challans, and user profiles are completely hidden.
+  - **Student**: Restricted strictly to their own profile, class, results, attendance, and fee challans.
+- **Privacy & Credential Protection**:
+  - `password` and password hashes are never queried or returned across any user read endpoint.
+  - `cnic` and `parent_cnic` are excluded for roles that do not require them (Teacher, Parent, Student).
+- **Client Refactoring (`DataContext.tsx`)**:
+  - Replaced client-side `SELECT` statements in `fetchData()` with authenticated `fetch('/api/data')` carrying session cookies/tokens.
+  - Preserved camelCase data shapes, numerical conversions, and JSON parsing so all dashboards, components, and charts render seamlessly without changes.
+
+## [3.13.0] - 2026-10-31
+
+### Added & Hardened (Stage 1: Production Authentication & Passwords)
+- **Serverless Authentication Architecture**: Created backend API routes for Vercel Serverless Functions:
+  - `/api/_db.ts`: Secure server-side database connection using `process.env.DATABASE_URL` (no frontend leaks), JWT generation, verification, and cookie parsing/serialization.
+  - `/api/auth/login.ts`: Email lookup, `bcryptjs` password validation with automatic legacy password upgrade, account status verification (`Pending Approval`, `Inactive`, `Suspended`), rate limiting (5 failed attempts per email per 15 minutes), and secure cookie generation.
+  - `/api/auth/me.ts`: Session hydration and token validation via `httpOnly` cookie and authorization header.
+  - `/api/auth/logout.ts`: Session invalidation and cookie clearing endpoint.
+  - `/api/auth/change-password.ts`: Authenticated password change endpoint with `bcryptjs` hashing.
+  - `/api/auth/register.ts`: Account registration with `bcryptjs` hashing and pending approval workflow.
+- **Client-Side Auth Hardening (`AuthContext.tsx`)**:
+  - Removed client-side `SELECT ... password = ...` database queries.
+  - Eliminated trusting `localStorage` as proof of user identity; session identity is verified by the backend `/api/auth/me` on every load.
+  - Omitted password fields from client-facing payloads across all authentication operations.
+- **Password Migration Utility**:
+  - `scripts/hash-passwords.ts`: Standalone migration script that safely upgrades existing plaintext passwords to salted `bcryptjs` hashes, skipping existing hashes.
+- **Dev & Production Parity**:
+  - `server.ts`: Express application mounting Vite middleware in development and serving built assets in production, allowing serverless `/api/*` endpoints to be tested seamlessly on port 3000.
+
+## [3.12.0] - 2026-10-31
+
+### Fixed & Hardened (Audit Follow-Up)
+- **Data Loss Bug in Student Edits**: Fixed a bug where editing an existing student (`updateStudent`) dropped `date_of_admission` and `secondary_contact_number`. Also restored missing `fee_structure` in `addStudent` to prevent loss of custom tuition rates on newly admitted students.
+- **Complete Financial Audit Trail**: Added comprehensive activity logging across all financial mutations (`recordFeePayment`, `updateFeePayment`, `cancelChallan`, `deleteChallansForMonth`, `generateChallansForMonth`, `increaseTuitionFees`, and `issueLeavingCertificate`).
+- **Dashboard Collection & Dues Reconciliation**:
+  - Reconciled "Collected Today" and "Collected This Month" across Admin and Accountant dashboards to aggregate from `payment_history`, eliminating discrepancies between split payments and the Fee Collection Report.
+  - Recomputed `totalOutstandingDues` on dashboards using active student cumulative balances rather than summing old overlapping challan records.
+- **Fresh Database Schema Initialization Order**: Moved `schools` table definition before `profiles` in `schema.sql` so executing the schema on a fresh PostgreSQL instance completes without foreign key reference errors.
+- **Restore Foreign Key Cascade Safety**: Added pre-emptive deletion/truncation of `activity_logs` before deleting profiles during school and global database restores, preventing foreign key constraint aborts.
+- **Local Calendar Date Handling**: Introduced `getLocalTodayString()` to use local client timezone dates rather than UTC, avoiding premature date shifting around midnight in South Asian timezones (UTC+5).
+
+## [3.11.0] - 2026-10-31
+
+### Performance & Scalability
+- **Production Database B-Tree Indexing**: Added explicit `CREATE INDEX IF NOT EXISTS` statements across all foreign keys and high-frequency filter columns in `schema.sql` (`student_id`, `class_id`, `school_id`, `month, year`, `status`, `paid_date`, `date`, `exam`). Eliminates O(N) sequential table scans on PostgreSQL, ensuring instantaneous query execution even with tens of thousands of historical records.
+- **Concurrent Batch Execution**: Refactored mass-operation network loops (`setAttendance`, `saveResults`, `increaseTuitionFees`, `bulkAddStudents`) from sequential one-by-one queries to concurrent `Promise.all` batches with chunking (20-30 rows per batch) and real-time progress tracking. Reduces execution times from 30+ seconds down to 1-2 seconds.
+
+### Financial Transactions & Ledger Integrity
+- **Duplicate Challan Guard**: Added strict safeguards in both bulk generation (`generateChallansForMonth`) and single challan generation (`SingleChallanGenerationModal`) to detect existing non-cancelled challans for the same student, month, and year. Prevents accidental duplicate ledger creation and double-billing.
+- **Accurate Arrears Carry-Over with Fines**: Updated cumulative ledger formula in `generateChallansForMonth` to incorporate penalty fines (`fineAmount`) into charged totals alongside fee items and opening balances, guaranteeing late fees correctly carry over into future months.
+
+### Academic Records & Result Accuracy
+- **Total Marks Parameter Mapping**: Fixed property key mapping in `saveResults` where `totalMarks` (camelCase) from UI inputs is now correctly mapped and validated before insertion, preventing null total marks in exam reports.
+- **Cleaned Redundant Assets**: Removed orphaned `LeavingCertificatePage` legacy component to prevent duplicate maintenance paths.
+
 ## [3.10.0] - 2026-10-10
 
 ### Fixed

@@ -17,7 +17,7 @@ const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
 const SingleChallanGenerationModal: React.FC<SingleChallanGenerationModalProps> = ({ isOpen, onClose, student }) => {
-    const { feeHeads, generateChallansForMonth } = useData();
+    const { fees, feeHeads, generateChallansForMonth } = useData();
     const { showToast } = useToast();
 
     const [month, setMonth] = useState(months[new Date().getMonth()]);
@@ -25,6 +25,11 @@ const SingleChallanGenerationModal: React.FC<SingleChallanGenerationModalProps> 
     const [dueDate, setDueDate] = useState('');
     const [selectedFeeHeads, setSelectedFeeHeads] = useState<Map<string, { selected: boolean; amount: number }>>(new Map());
     const [isGenerating, setIsGenerating] = useState(false);
+
+    const existingChallan = useMemo(() => {
+        if (!student) return null;
+        return fees.find(f => f.studentId === student.id && f.month === month && f.year === year && f.status !== 'Cancelled') || null;
+    }, [fees, student, month, year]);
 
     const schoolFeeHeads = useMemo(() => {
         if (!student) return [];
@@ -107,6 +112,18 @@ const SingleChallanGenerationModal: React.FC<SingleChallanGenerationModalProps> 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`New Challan (${formatMonthDisplay(month, year)}) for ${student.name}`}>
             <div className="space-y-4">
+                {existingChallan && (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-900/30 border-l-4 border-amber-500 rounded-r-md text-amber-800 dark:text-amber-200 text-sm">
+                        <p className="font-bold">Active Challan Already Exists</p>
+                        <p className="text-xs mt-1">
+                            A challan (<strong>{existingChallan.challanNumber}</strong>) is already recorded for {month} {year} with status <strong>{existingChallan.status}</strong> (Total: Rs. {existingChallan.totalAmount.toLocaleString()}).
+                        </p>
+                        <p className="text-xs mt-1 text-amber-700 dark:text-amber-300">
+                            To modify it, please go to Fee Collection. Generating another challan for the same month is restricted to prevent duplicate dues.
+                        </p>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="input-label">For Month</label>
@@ -135,7 +152,8 @@ const SingleChallanGenerationModal: React.FC<SingleChallanGenerationModalProps> 
                                     <input type="checkbox"
                                         checked={selectedFeeHeads.get(fh.id)?.selected || false}
                                         onChange={() => handleFeeHeadToggle(fh.id)}
-                                        className="h-4 w-4 rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
+                                        disabled={Boolean(existingChallan)}
+                                        className="h-4 w-4 rounded border-secondary-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
                                     />
                                     <span>{fh.name}</span>
                                 </label>
@@ -145,7 +163,7 @@ const SingleChallanGenerationModal: React.FC<SingleChallanGenerationModalProps> 
                                         value={selectedFeeHeads.get(fh.id)?.amount || 0}
                                         onChange={(e) => handleAmountChange(fh.id, e.target.value)}
                                         className="input-field w-24 text-right"
-                                        disabled={!selectedFeeHeads.get(fh.id)?.selected}
+                                        disabled={Boolean(existingChallan) || !selectedFeeHeads.get(fh.id)?.selected}
                                     />
                                 </div>
                             </div>
@@ -153,9 +171,14 @@ const SingleChallanGenerationModal: React.FC<SingleChallanGenerationModalProps> 
                     </div>
                 </div>
                 
-                <div className="flex justify-end pt-4">
-                    <button onClick={handleGenerate} disabled={isGenerating} className="btn-primary">
-                        {isGenerating ? 'Generating...' : 'Generate Challan'}
+                <div className="flex justify-end pt-4 space-x-3">
+                    <button type="button" onClick={onClose} className="btn-secondary">Close</button>
+                    <button 
+                        onClick={handleGenerate} 
+                        disabled={isGenerating || Boolean(existingChallan)} 
+                        className={`btn-primary ${existingChallan ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                        {isGenerating ? 'Generating...' : (existingChallan ? 'Challan Already Exists' : 'Generate Challan')}
                     </button>
                 </div>
             </div>
