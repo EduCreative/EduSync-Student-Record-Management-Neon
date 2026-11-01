@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { getDb } from '../_db';
+import { getDb } from '../../_db';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST') {

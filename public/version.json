@@ -1,11 +1,7 @@
 {
-  "version": "3.16.0",
+  "version": "3.16.2",
   "releaseDate": "2026-11-01",
   "changelog": [
-    "Stage 4 Zero Browser Database: Completely eliminated database connection strings, database clients, and direct SQL queries from the frontend client bundle.",
-    "Removed Browser Database Drivers: Deleted src/lib/neonClient.ts, src/lib/db.ts, and removed Dexie IndexedDB client fallback from client code.",
-    "Server-Authoritative Notifications: Migrated NotificationContext to use authenticated /api/notifications serverless endpoint for fetching, marking read, and broadcasting notifications.",
-    "Server-Only Database Credentials: Removed VITE_NEON_DATABASE_URL from client environment definitions, docs, and configurations; PostgreSQL is accessed strictly via server-side DATABASE_URL.",
-    "Streamlined Settings & Data Management: Replaced offline Dexie sync and cache wipe controls with a production-grade Data Snapshots & Recovery interface powered by serverless atomic transactions."
+    "Enhanced Sign-In Page (v3.16.2): Redesigned LoginPage with prominent version display (`v3.16.2`), modern glassmorphism styling, responsive layout, and convenient one-click Quick Demo Login buttons for Owner, Admin, Accountant, Teacher, Parent, and Student roles for instant testing."
   ]
 }

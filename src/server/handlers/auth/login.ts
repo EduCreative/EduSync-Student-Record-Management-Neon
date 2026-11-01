@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { getDb, signToken, setSessionCookie, toCamelCase } from '../_db';
+import { getDb, signToken, setSessionCookie, toCamelCase } from '../../_db';
 
 // Rate limiting: 5 failed attempts per email per 15 minutes
 interface FailedAttempt {

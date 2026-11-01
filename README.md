@@ -5,12 +5,11 @@
 
 ---
 
-## ✨ Key Features (v3.16.0 - Zero Browser Database & Pure Serverless Architecture)
-- **Zero Browser Database (Stage 4)**: Completely eliminated all database drivers, connection strings, and client-side SQL execution from the browser bundle.
-- **Removed Browser Database Clients**: Deleted `src/lib/neonClient.ts` and `src/lib/db.ts`, eliminating the legacy Dexie IndexedDB client fallback from the frontend application.
-- **Server-Authoritative Notifications**: Migrated `NotificationContext` from direct browser SQL queries to the authenticated `/api/notifications` serverless endpoint.
+## ✨ Key Features (v3.16.1 - Vercel Serverless Optimization & Zero Browser DB)
+- **Single Catch-All Serverless Function (`api/index.ts`)**: Consolidated all backend API routes into a single serverless function entry point (`api/index.ts`) via a unified Express router (`src/server/apiRouter.ts`). This reduces total Vercel serverless functions from 18 down to exactly **1 function**, fully bypassing Vercel Hobby plan limits ("No more than 12 Serverless Functions can be added to a Deployment") without requiring any platform migration (stays 100% free on Vercel with Neon PostgreSQL).
+- **Zero Browser Database (Stage 4)**: Completely eliminated all database drivers, connection strings, and client-side SQL execution from the browser bundle (`src/lib/neonClient.ts` and `src/lib/db.ts` removed).
+- **Server-Authoritative Notifications**: Migrated `NotificationContext` to the authenticated `/api/notifications` serverless endpoint.
 - **Server-Only PostgreSQL Credentials**: Eliminated `VITE_NEON_DATABASE_URL` entirely. The database is accessed exclusively on the server using `DATABASE_URL` via serverless API routes.
-- **Enhanced Data Management & Recovery**: Replaced legacy client DB cache wipes with a server-backed Data Snapshots & Recovery interface supporting JSON snapshot export and atomic transaction restore.
 
 ## ✨ Previous Features (v3.15.0 - Safe Serverless Writes & Atomic Mutations)
 - **Serverless Write Mutation Architecture (Stage 3)**: Moved all database writes behind serverless endpoints (`/api/write/payments`, `/api/write/challans`, `/api/write/academic`, `/api/write/students`, `/api/write/classes`, `/api/write/users`, `/api/write/restore`) with strict role-based authorization and session verification.

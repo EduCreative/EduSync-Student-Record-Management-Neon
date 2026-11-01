@@ -1,4 +1,4 @@
-import { authenticateRequest, getDb, TokenPayload } from '../_db';
+import { authenticateRequest, getDb, TokenPayload } from '../../_db';
 import crypto from 'crypto';
 
 export type UserRoleType = 'Owner' | 'Admin' | 'Accountant' | 'Teacher' | 'Parent' | 'Student';

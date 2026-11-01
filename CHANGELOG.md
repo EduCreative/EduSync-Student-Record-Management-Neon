@@ -1,6 +1,21 @@
 
 # Changelog
 
+## [3.16.2] - 2026-11-01
+
+### Added & Improved (Sign-In Page Redesign & Version Badge)
+- **Sign-In Page UI/UX Redesign (`LoginPage.tsx`)**:
+  - Added prominent application version display (`v3.16.2`) on both desktop branding sidebar and mobile header.
+  - Introduced **Quick Demo Logins** grid for instant testing across all roles (Owner, Admin, Accountant, Teacher, Parent, Student) with one-click credential filling.
+  - Polished glassmorphism visual styling, input focus states, and responsive layout.
+
+## [3.16.1] - 2026-11-01
+
+### Optimized & Resolved (Vercel Serverless Function Limit Bypass)
+- **Single Catch-All Serverless Function (`api/index.ts`)**:
+  - Consolidated all 18 backend endpoints into a single serverless function entry point (`api/index.ts`) powered by a unified Express router (`src/server/apiRouter.ts`).
+  - Reduced total Vercel serverless functions from 18 down to exactly **1 function**, fully resolving Vercel Hobby plan limits ("No more than 12 Serverless Functions can be added to a Deployment") without requiring any platform migration (stays free on Vercel with Neon PostgreSQL).
+
 ## [3.16.0] - 2026-11-01
 
 ### Removed & Hardened (Stage 4: Complete Removal of Database from Browser)

@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { getDb, verifyToken, extractToken } from '../_db';
+import { getDb, verifyToken, extractToken } from '../../_db';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST') {

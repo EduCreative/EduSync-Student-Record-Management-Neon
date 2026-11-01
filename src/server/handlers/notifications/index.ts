@@ -1,4 +1,4 @@
-import { getDb, authenticateRequest } from '../_db';
+import { getDb, authenticateRequest } from '../../_db';
 import crypto from 'crypto';
 
 export default async function handler(req: any, res: any) {

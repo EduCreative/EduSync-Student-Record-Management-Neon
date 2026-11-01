@@ -1,4 +1,4 @@
-import { clearSessionCookie } from '../_db';
+import { clearSessionCookie } from '../../_db';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST' && req.method !== 'GET') {

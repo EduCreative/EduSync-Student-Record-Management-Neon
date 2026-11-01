@@ -1,4 +1,4 @@
-import { getDb, verifyToken, extractToken, toCamelCase } from '../_db';
+import { getDb, verifyToken, extractToken, toCamelCase } from '../../_db';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'GET' && req.method !== 'POST') {
