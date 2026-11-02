@@ -1,7 +1,7 @@
 {
-  "version": "3.23.10",
+  "version": "3.23.11",
   "releaseDate": "2026-11-02",
   "changelog": [
-    "CommonJS Extension Fix (`api/index.cjs`) (v3.23.10): Renamed `api/index.js` to `api/index.cjs` and updated `vercel.json` rewrites. Because the project root package.json specifies `"type": "module"`, Vercel treats `.js` files as ES modules where `require()` is undefined. Using `.cjs` guarantees correct CommonJS execution."
+    "Vercel /api Rewrite & CommonJS Scope Isolation (v3.23.11): Updated `vercel.json` rewrites to point to `/api` and added an isolated `api/package.json` specifying `\"type\": \"commonjs\"` alongside `api/index.js`, ensuring Vercel routes and executes the serverless handler without `require` scope errors."
   ]
 }

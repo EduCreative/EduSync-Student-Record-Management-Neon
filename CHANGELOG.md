@@ -1,6 +1,14 @@
 
 # Changelog
 
+## [3.23.11] - 2026-11-02
+
+### Vercel `/api` Rewrite & CommonJS Scope Isolation (`api/package.json`)
+- **Isolated CommonJS Scope (`api/package.json`)**:
+  - Added a local `api/package.json` file containing `{"type": "commonjs"}`. This tells Vercel's Node runtime to execute `api/index.js` in CommonJS mode (where `require()` is fully supported) even though the root package.json is set to `"type": "module"`.
+- **Vercel Rewrites (`vercel.json`)**:
+  - Pointed `vercel.json` rewrites back to `/api`, matching Vercel's standard serverless function convention.
+
 ## [3.23.10] - 2026-11-02
 
 ### CommonJS Extension Fix (`api/index.cjs`)
