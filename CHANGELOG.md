@@ -1,6 +1,12 @@
 
 # Changelog
 
+## [3.23.8] - 2026-11-02
+
+### CommonJS Serverless Output Format Fix
+- **Switched esbuild format to CJS (`--format=cjs`)**:
+  - Resolved `Error: Dynamic require of "tty" is not supported` by compiling `api/index.js` as CommonJS (`--format=cjs`). This allows Node.js built-in modules (`tty`, `util`, `debug`) to be correctly required without ESM dynamic require translation errors in Vercel's serverless runtime.
+
 ## [3.23.7] - 2026-11-02
 
 ### Fully Bundled Serverless Artifact (`api/index.js`)
