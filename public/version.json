@@ -1,7 +1,7 @@
 {
-  "version": "3.23.6",
+  "version": "3.23.7",
   "releaseDate": "2026-11-02",
   "changelog": [
-    "Standalone Vercel Serverless Entrypoint (v3.23.6): Converted `api/index.ts` into a self-contained standalone Express handler entrypoint, completely eliminating relative multi-folder imports (`../src/...`) that caused Vercel's `ERR_MODULE_NOT_FOUND` runtime error."
+    "Fully Bundled Serverless Artifact (v3.23.7): Switched back to esbuild single-file bundling for `api/index.js`, compiling all server routes and dependencies into a self-contained ESM artifact to resolve Vercel runtime `ERR_MODULE_NOT_FOUND` module resolution errors."
   ]
 }

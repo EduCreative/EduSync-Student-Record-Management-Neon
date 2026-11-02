@@ -1,6 +1,12 @@
 
 # Changelog
 
+## [3.23.7] - 2026-11-02
+
+### Fully Bundled Serverless Artifact (`api/index.js`)
+- **esbuild Single-File Bundling**:
+  - Restored esbuild bundling to combine all server files and dependencies into a single self-contained `api/index.js` file. This resolves Vercel's `ERR_MODULE_NOT_FOUND` error for submodules (`apiRouter`, `_db`, etc.) when running in the serverless `/var/task` environment.
+
 ## [3.23.6] - 2026-11-02
 
 ### Standalone Serverless Entrypoint Fix (`api/index.ts`)
