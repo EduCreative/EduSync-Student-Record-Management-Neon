@@ -1,7 +1,7 @@
 {
-  "version": "3.23.1",
+  "version": "3.23.2",
   "releaseDate": "2026-11-02",
   "changelog": [
-    "Fix Authentication & Vercel Deployment (v3.23.1): Restored tracked `api/index.js` bundle for Vercel deployment (removed from `.gitignore`), configured cookies with `SameSite=None; Secure; Partitioned` for cross-site iframe support in AI Studio, removed stale localStorage user fallback in AuthContext, and added auto-logout on 401 Unauthorized in DataContext."
+    "Vercel Serverless Routing & Resilience (v3.23.2): Fixed vercel.json rewrite destination from `/api/index.js` to `/api`, added safe fallback for SESSION_SECRET to prevent serverless boot crashes, added original URL resolution via x-matched-path, and added descriptive server error diagnostics in login."
   ]
 }

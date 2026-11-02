@@ -83,12 +83,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 body: JSON.stringify({ email, password: pass })
             });
 
-            const data = await res.json();
+            let data: any = null;
+            const contentType = res.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                data = await res.json().catch(() => null);
+            }
 
-            if (!res.ok || !data.success) {
+            if (!res.ok) {
+                if (res.status === 404) {
+                    return {
+                        success: false,
+                        error: 'Backend API not found (404). Please ensure vercel.json rewrites point to /api and the deployment is up to date.'
+                    };
+                }
+                const errorMessage = data?.error || (await res.text().catch(() => '')) || `Authentication failed with status ${res.status}`;
+                return {
+                    success: false,
+                    error: errorMessage
+                };
+            }
+
+            if (!data || !data.success) {
                 return { 
                     success: false, 
-                    error: data.error || 'Authentication failed. Please verify credentials.' 
+                    error: data?.error || 'Authentication failed. Please verify credentials.' 
                 };
             }
 
@@ -104,7 +122,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return { success: true };
         } catch (err: any) {
             console.error("Login request failed:", err);
-            return { success: false, error: 'Connection to authentication service failed. Please check network.' };
+            return { 
+                success: false, 
+                error: err?.message ? `Connection failed: ${err.message}` : 'Connection to authentication service failed. Please check network.' 
+            };
         }
     };
 

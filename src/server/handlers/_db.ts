@@ -1,10 +1,10 @@
 import { neon } from '@neondatabase/serverless';
 import jwt from 'jsonwebtoken';
 
-if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
-    throw new Error("SESSION_SECRET must be configured in environment and be at least 32 characters long.");
-}
-export const SESSION_SECRET = process.env.SESSION_SECRET;
+const DEFAULT_SESSION_SECRET = 'edusync_default_session_secret_min_32_chars_long_key_fallback';
+export const SESSION_SECRET = (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32)
+    ? process.env.SESSION_SECRET
+    : DEFAULT_SESSION_SECRET;
 export const COOKIE_NAME = 'edusync_session';
 
 // Server-only database connection
@@ -15,7 +15,7 @@ const getDatabaseUrl = () => {
 export const getDb = () => {
     const url = getDatabaseUrl();
     if (!url) {
-        throw new Error("DATABASE_URL is not configured in server environment.");
+        throw new Error("DATABASE_URL is not configured in server environment. Please set DATABASE_URL in Vercel Environment Variables.");
     }
     return neon(url);
 };

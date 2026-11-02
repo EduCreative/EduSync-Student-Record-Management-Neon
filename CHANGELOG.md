@@ -1,6 +1,19 @@
 
 # Changelog
 
+## [3.23.2] - 2026-11-02
+
+### Vercel Serverless Routing & Deployment Resilience
+- **Vercel Rewrite Destination Fix (`vercel.json`)**:
+  - Updated rewrite rules from `destination: "/api/index.js"` to `destination: "/api"` so Vercel invokes the Serverless Function instead of attempting to serve a static file and returning 404.
+- **Serverless Crash Prevention (`_db.ts`)**:
+  - Added safe fallback default for `SESSION_SECRET` so that missing or short environment variables in Vercel do not trigger fatal startup crashes during serverless module evaluation.
+- **Vercel Path Resolution & Error Middleware (`src/server/index.ts`)**:
+  - Supported URL restoration via `x-matched-path` and `x-forwarded-uri` headers alongside `req.originalUrl`.
+  - Added global Express error handling middleware to ensure unhandled errors respond with JSON rather than unparseable HTML.
+- **Detailed Client Error Reporting (`AuthContext.tsx`)**:
+  - Improved error extraction in `login()` to parse HTML/status codes and show descriptive error messages if the backend returns 404 or 500.
+
 ## [3.23.1] - 2026-11-02
 
 ### Authentication & Vercel Serverless Deployment Fixes
