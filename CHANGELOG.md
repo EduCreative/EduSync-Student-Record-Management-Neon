@@ -1,6 +1,16 @@
 
 # Changelog
 
+## [3.23.4] - 2026-11-02
+
+### Native Vercel TypeScript Serverless Function
+- **Permanent Source File (`api/index.ts`)**:
+  - Created a permanent source file `api/index.ts` in the repository root exporting the server handler (`import handler from '../src/server/index'`). The `api` folder is now directly visible and tracked in Git, ensuring Vercel detects the serverless function during repository analysis.
+- **Vercel Rewrite Configuration (`vercel.json`)**:
+  - Configured `rewrites` to map `/api/(.*)` directly to `/api/index.ts` with explicit `buildCommand: "npm run build"` and `outputDirectory: "dist"`.
+- **Simplified Build Pipeline (`package.json`)**:
+  - Streamlined `"build"` script to `"tsc && vite build"`, letting `@vercel/node` compile `api/index.ts` natively on deployment without depending on transient local esbuild bundles.
+
 ## [3.23.3] - 2026-11-02
 
 ### Vercel Serverless Function Rewrite Fix

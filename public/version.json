@@ -1,7 +1,7 @@
 {
-  "version": "3.23.3",
+  "version": "3.23.4",
   "releaseDate": "2026-11-02",
   "changelog": [
-    "Vercel Serverless Function Rewrite Fix (v3.23.3): Corrected vercel.json rewrite destination to `/api/index` matching the Vercel function path for `api/index.js`, and added pre-handler path restoration via `x-matched-path` to ensure reliable API routing on Vercel."
+    "Native Vercel TypeScript Serverless Function (v3.23.4): Created permanent source file `api/index.ts` so the `api` directory is directly tracked in Git and visible in the code tree. Configured Vercel rewrites to target `/api/index.ts` directly, eliminating reliance on transient esbuild bundle artifacts."
   ]
 }
