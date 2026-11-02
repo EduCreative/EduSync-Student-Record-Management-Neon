@@ -2,19 +2,9 @@ import express from 'express';
 import { apiRouter } from './apiRouter';
 
 const app = express();
-console.log("Server initialization started");
 
-// Parse JSON bodies
+// Parse JSON bodies (with adequate limit for bulk backup/import data)
 app.use(express.json({ limit: '50mb' }));
-
-// Restore original URL if rewritten by Vercel edge proxy
-app.use((req, _res, next) => {
-    const rawMatched = (req.headers['x-matched-path'] as string) || (req.headers['x-forwarded-uri'] as string) || req.originalUrl;
-    if (rawMatched && typeof rawMatched === 'string') {
-        req.url = rawMatched;
-    }
-    next();
-});
 
 // Mount router on both /api and root to handle any routing style
 app.use('/api', apiRouter);
@@ -32,9 +22,5 @@ app.use((err: any, _req: any, res: any, _next: any) => {
 });
 
 export default function handler(req: any, res: any) {
-    const rawMatched = (req.headers?.['x-matched-path'] as string) || (req.headers?.['x-forwarded-uri'] as string) || req.originalUrl;
-    if (rawMatched && typeof rawMatched === 'string' && rawMatched.startsWith('/api')) {
-        req.url = rawMatched;
-    }
     return app(req, res);
 }

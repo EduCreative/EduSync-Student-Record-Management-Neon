@@ -1,6 +1,17 @@
 
 # Changelog
 
+## [3.23.12] - 2026-11-02
+
+### Native Catch-All Vercel Serverless Function (`api/[...slug].js`)
+- **Real Server Bundle (`api/[...slug].js`)**:
+  - Bundled the full, genuine Express backend from `src/server/index.ts` into a Vercel catch-all serverless function `api/[...slug].js`.
+  - Deleted obsolete `api/index.js` stand-in.
+- **Removed URL Path Hacks**:
+  - Removed the `x-matched-path` URL rewriting workaround in `src/server/index.ts`.
+- **Simplified `vercel.json`**:
+  - Removed explicit `/api` rewrites, letting Vercel natively route all `/api/*` requests to `api/[...slug].js`.
+
 ## [3.23.11] - 2026-11-02
 
 ### Vercel `/api` Rewrite & CommonJS Scope Isolation (`api/package.json`)
