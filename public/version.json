@@ -1,7 +1,7 @@
 {
-  "version": "3.23.9",
+  "version": "3.23.10",
   "releaseDate": "2026-11-02",
   "changelog": [
-    "Zero-Dependency Standalone api/index.js (v3.23.9): Replaced complex server bundling with a clean, hand-written CommonJS `api/index.js` serverless file that directly queries Neon PostgreSQL and handles authentication/sessions without any external multi-file module imports."
+    "CommonJS Extension Fix (`api/index.cjs`) (v3.23.10): Renamed `api/index.js` to `api/index.cjs` and updated `vercel.json` rewrites. Because the project root package.json specifies `"type": "module"`, Vercel treats `.js` files as ES modules where `require()` is undefined. Using `.cjs` guarantees correct CommonJS execution."
   ]
 }

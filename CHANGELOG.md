@@ -1,6 +1,12 @@
 
 # Changelog
 
+## [3.23.10] - 2026-11-02
+
+### CommonJS Extension Fix (`api/index.cjs`)
+- **Renamed `api/index.js` to `api/index.cjs`**:
+  - Because your root `package.json` specifies `"type": "module"`, Vercel treats all `.js` files as ES modules, which caused the `ReferenceError: require is not defined` error. Renaming the standalone serverless function to `.cjs` forces Vercel's Node.js runtime to treat it as CommonJS, allowing `require()` to execute perfectly.
+
 ## [3.23.9] - 2026-11-02
 
 ### Zero-Dependency Standalone Serverless Entrypoint (`api/index.js`)
