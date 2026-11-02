@@ -2,6 +2,7 @@ import express from 'express';
 import { apiRouter } from './apiRouter';
 
 const app = express();
+console.log("Server initialization started");
 
 // Parse JSON bodies
 app.use(express.json({ limit: '50mb' }));
