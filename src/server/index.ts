@@ -31,5 +31,9 @@ app.use((err: any, _req: any, res: any, _next: any) => {
 });
 
 export default function handler(req: any, res: any) {
+    const rawMatched = (req.headers?.['x-matched-path'] as string) || (req.headers?.['x-forwarded-uri'] as string) || req.originalUrl;
+    if (rawMatched && typeof rawMatched === 'string' && rawMatched.startsWith('/api')) {
+        req.url = rawMatched;
+    }
     return app(req, res);
 }

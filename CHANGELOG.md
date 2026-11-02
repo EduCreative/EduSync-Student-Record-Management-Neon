@@ -1,6 +1,14 @@
 
 # Changelog
 
+## [3.23.3] - 2026-11-02
+
+### Vercel Serverless Function Rewrite Fix
+- **Vercel Destination Matching (`vercel.json`)**:
+  - Updated the rewrite destination from `/api` to `/api/index` (the canonical route path corresponding to the serverless function file `api/index.js`), resolving Vercel's `404 NOT_FOUND` for Express endpoints.
+- **Pre-Handler Path Resolution (`src/server/index.ts`)**:
+  - Added URL restoration inside the main export `handler` using `x-matched-path` or `x-forwarded-uri` before routing to Express, ensuring all incoming paths match `/api/...` routes cleanly.
+
 ## [3.23.2] - 2026-11-02
 
 ### Vercel Serverless Routing & Deployment Resilience

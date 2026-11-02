@@ -1,7 +1,7 @@
 {
-  "version": "3.23.2",
+  "version": "3.23.3",
   "releaseDate": "2026-11-02",
   "changelog": [
-    "Vercel Serverless Routing & Resilience (v3.23.2): Fixed vercel.json rewrite destination from `/api/index.js` to `/api`, added safe fallback for SESSION_SECRET to prevent serverless boot crashes, added original URL resolution via x-matched-path, and added descriptive server error diagnostics in login."
+    "Vercel Serverless Function Rewrite Fix (v3.23.3): Corrected vercel.json rewrite destination to `/api/index` matching the Vercel function path for `api/index.js`, and added pre-handler path restoration via `x-matched-path` to ensure reliable API routing on Vercel."
   ]
 }
