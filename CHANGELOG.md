@@ -1,6 +1,17 @@
 
 # Changelog
 
+## [3.23.1] - 2026-11-02
+
+### Authentication & Vercel Serverless Deployment Fixes
+- **Vercel Serverless Function Tracking (`api/index.js`, `.gitignore`)**:
+  - Removed `api/index.js` from `.gitignore` so the bundled serverless entry point is included in git and deployed to Vercel, fixing `404 NOT_FOUND` / `Connection to authentication service failed`.
+- **Cross-Site IFrame Cookie Support (`_db.ts`)**:
+  - Configured `setSessionCookie` and `clearSessionCookie` with `SameSite=None; Secure; Partitioned` (CHIPS), allowing session cookies to be saved and sent inside cross-site iframes (such as the Google AI Studio preview).
+- **Session State & 401 Handling (`AuthContext.tsx`, `DataContext.tsx`)**:
+  - Removed fallback to stale `localStorage` user profile when server session verification fails, ensuring unauthenticated states cleanly render the Login page.
+  - Added automatic logout and local state reset in `DataContext.tsx` when `/api/data` or `apiWrite` returns `401 Unauthorized`, eliminating persistent sync errors.
+
 ## [3.23.0] - 2026-11-01
 
 ### Database Migration & Schema Hardening

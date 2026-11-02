@@ -99,7 +99,7 @@ export const useData = (): DataContextType => {
 };
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { user, activeSchoolId } = useAuth();
+    const { user, activeSchoolId, logout } = useAuth();
     const { showToast } = useToast();
 
     const [loading, setLoading] = useState(true);
@@ -226,6 +226,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 credentials: 'include'
             });
 
+            if (response.status === 401) {
+                console.warn("Session expired on fetchData. Logging out.");
+                logout();
+                return;
+            }
+
             if (!response.ok) {
                 const errBody = await response.json().catch(() => ({}));
                 throw new Error(errBody.error || `Server responded with status ${response.status}`);
@@ -295,12 +301,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             credentials: 'include',
             body: JSON.stringify(payload)
         });
+        if (res.status === 401) {
+            console.warn("Session expired on apiWrite. Logging out.");
+            logout();
+            throw new Error('Session expired. Please log in again.');
+        }
         if (!res.ok) {
             const errorData = await res.json().catch(() => ({}));
             throw new Error(errorData.error || `Request failed with status ${res.status}`);
         }
         return res.json();
-    }, []);
+    }, [logout]);
 
     const addLog = useCallback(async (action: string, details: string) => {
         if (!user) return;

@@ -33,5 +33,4 @@ dist-ssr
 
 # Vercel & Bundles
 .vercel
-api/index.js
 cookies.txt

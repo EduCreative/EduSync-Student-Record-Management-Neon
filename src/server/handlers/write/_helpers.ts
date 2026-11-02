@@ -1,4 +1,4 @@
-import { authenticateRequest, getDb, serializeCookie, COOKIE_NAME, TokenPayload } from '../../_db';
+import { authenticateRequest, getDb, clearSessionCookie, TokenPayload } from '../../_db';
 import crypto from 'crypto';
 
 export type UserRoleType = 'Owner' | 'Admin' | 'Accountant' | 'Teacher' | 'Parent' | 'Student';
@@ -17,12 +17,9 @@ export async function verifySession(req: any, res: any): Promise<{ session: Toke
     }
     const sql = getDb();
     try {
-        console.log("verifySession userId:", session.userId);
         const users = await sql`SELECT status FROM profiles WHERE id = ${session.userId} LIMIT 1`;
-        console.log("verifySession user status check result:", users);
         if (!users || users.length === 0 || (users[0].status && (users[0].status === 'Inactive' || users[0].status === 'Suspended'))) {
-            console.log("verifySession status check failed, clearing cookie");
-            res.setHeader('Set-Cookie', serializeCookie(COOKIE_NAME, '', { maxAge: 0, path: '/' }));
+            clearSessionCookie(res);
             res.status(401).json({ error: 'Unauthorized: Account is inactive or suspended.' });
             return null;
         }

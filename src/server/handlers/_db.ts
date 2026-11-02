@@ -63,7 +63,7 @@ export function parseCookies(req: any): Record<string, string> {
     return cookies;
 }
 
-export function serializeCookie(name: string, val: string, options: { httpOnly?: boolean; secure?: boolean; sameSite?: string; path?: string; maxAge?: number } = {}): string {
+export function serializeCookie(name: string, val: string, options: { httpOnly?: boolean; secure?: boolean; sameSite?: string; path?: string; maxAge?: number; partitioned?: boolean } = {}): string {
     let cookie = `${encodeURIComponent(name)}=${encodeURIComponent(val)}`;
     if (options.maxAge !== undefined) {
         cookie += `; Max-Age=${Math.floor(options.maxAge)}`;
@@ -79,6 +79,9 @@ export function serializeCookie(name: string, val: string, options: { httpOnly?:
     }
     if (options.sameSite) {
         cookie += `; SameSite=${options.sameSite.charAt(0).toUpperCase() + options.sameSite.slice(1).toLowerCase()}`;
+    }
+    if (options.partitioned) {
+        cookie += `; Partitioned`;
     }
     return cookie;
 }
@@ -102,11 +105,11 @@ export function authenticateRequest(req: any): TokenPayload | null {
 }
 
 export function setSessionCookie(res: any, token: string) {
-    const isProd = process.env.NODE_ENV === 'production';
     const cookieStr = serializeCookie(COOKIE_NAME, token, {
         httpOnly: true,
-        secure: isProd,
-        sameSite: 'strict',
+        secure: true,
+        sameSite: 'none',
+        partitioned: true,
         path: '/',
         maxAge: 12 * 60 * 60 // 12 hours
     });
@@ -114,11 +117,11 @@ export function setSessionCookie(res: any, token: string) {
 }
 
 export function clearSessionCookie(res: any) {
-    const isProd = process.env.NODE_ENV === 'production';
     const cookieStr = serializeCookie(COOKIE_NAME, '', {
         httpOnly: true,
-        secure: isProd,
-        sameSite: 'strict',
+        secure: true,
+        sameSite: 'none',
+        partitioned: true,
         path: '/',
         maxAge: 0
     });

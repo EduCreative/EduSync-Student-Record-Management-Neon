@@ -1,4 +1,4 @@
-import { getDb, authenticateRequest, serializeCookie, COOKIE_NAME, toCamelCase } from '../../_db';
+import { getDb, authenticateRequest, clearSessionCookie, toCamelCase } from '../../_db';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'GET') {
@@ -13,12 +13,9 @@ export default async function handler(req: any, res: any) {
         }
 
         const sql = getDb();
-        console.log("data API userId:", session.userId);
         const userCheck = await sql`SELECT status FROM profiles WHERE id = ${session.userId} LIMIT 1`;
-        console.log("data API user status check result:", userCheck);
         if (!userCheck || userCheck.length === 0 || (userCheck[0].status && (userCheck[0].status === 'Inactive' || userCheck[0].status === 'Suspended'))) {
-            console.log("data API status check failed, clearing cookie");
-            res.setHeader('Set-Cookie', serializeCookie(COOKIE_NAME, '', { maxAge: 0, path: '/' }));
+            clearSessionCookie(res);
             return res.status(401).json({ error: 'Unauthorized: Account is inactive or suspended' });
         }
 

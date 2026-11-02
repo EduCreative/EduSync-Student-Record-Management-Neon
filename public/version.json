@@ -1,7 +1,7 @@
 {
-  "version": "3.23.0",
-  "releaseDate": "2026-11-01",
+  "version": "3.23.1",
+  "releaseDate": "2026-11-02",
   "changelog": [
-    "Database Migration (v3.23.0): Added missing `school_id` columns to `attendance` and `results`, added `created_at` timestamp and `check_amounts` constraint to `fee_challans`, and added `phone_number` to `profiles`. Added unique partial indexes for `fee_challans` to prevent duplicate challan generation."
+    "Fix Authentication & Vercel Deployment (v3.23.1): Restored tracked `api/index.js` bundle for Vercel deployment (removed from `.gitignore`), configured cookies with `SameSite=None; Secure; Partitioned` for cross-site iframe support in AI Studio, removed stale localStorage user fallback in AuthContext, and added auto-logout on 401 Unauthorized in DataContext."
   ]
 }

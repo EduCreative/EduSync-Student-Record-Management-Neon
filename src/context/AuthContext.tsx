@@ -53,21 +53,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     localStorage.removeItem('edusync_user');
                 }
             } catch (error) {
-                console.error("Auth server verification failed:", error);
+                console.warn("Auth server verification failed:", error);
                 if (isMounted) {
-                    // Fallback to cached profile only if network is completely down, but mark unverified
-                    const cachedUser = localStorage.getItem('edusync_user');
-                    if (cachedUser) {
-                        try {
-                            const parsed = JSON.parse(cachedUser);
-                            setUser(parsed);
-                            if (parsed.role !== UserRole.Owner) {
-                                setActiveSchoolId(parsed.schoolId);
-                            }
-                        } catch {
-                            setUser(null);
-                        }
-                    }
+                    setUser(null);
+                    localStorage.removeItem('edusync_user');
                 }
             } finally {
                 if (isMounted) {
