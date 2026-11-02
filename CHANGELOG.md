@@ -1,6 +1,12 @@
 
 # Changelog
 
+## [3.23.9] - 2026-11-02
+
+### Zero-Dependency Standalone Serverless Entrypoint (`api/index.js`)
+- **Direct Native CommonJS Implementation**:
+  - Replaced all multi-file bundling steps with a dedicated, robust CommonJS `api/index.js` file at the root. It directly connects to Neon PostgreSQL (`@neondatabase/serverless`), performs authentication via `bcryptjs` and `jsonwebtoken`, and handles API routes without any complex module resolution chains or dynamic `require` errors.
+
 ## [3.23.8] - 2026-11-02
 
 ### CommonJS Serverless Output Format Fix

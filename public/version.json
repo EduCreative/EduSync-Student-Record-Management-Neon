@@ -1,7 +1,7 @@
 {
-  "version": "3.23.8",
+  "version": "3.23.9",
   "releaseDate": "2026-11-02",
   "changelog": [
-    "CommonJS Serverless Output Format Fix (v3.23.8): Switched esbuild bundling format from ESM (`--format=esm`) to CommonJS (`--format=cjs`) to prevent `Dynamic require of \"tty\" is not supported` errors when loading Node.js built-in modules (`debug`, `tty`) in Vercel's serverless runtime."
+    "Zero-Dependency Standalone api/index.js (v3.23.9): Replaced complex server bundling with a clean, hand-written CommonJS `api/index.js` serverless file that directly queries Neon PostgreSQL and handles authentication/sessions without any external multi-file module imports."
   ]
 }
