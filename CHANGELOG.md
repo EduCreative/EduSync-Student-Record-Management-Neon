@@ -1,6 +1,12 @@
 
 # Changelog
 
+## [3.23.6] - 2026-11-02
+
+### Standalone Serverless Entrypoint Fix (`api/index.ts`)
+- **Direct Standalone Implementation**:
+  - Replaced the relative import (`../src/server/index`) in `api/index.ts` with a fully self-contained Express server initialization. This completely eliminates Vercel's `ERR_MODULE_NOT_FOUND` error caused by cross-directory path resolution when running inside Vercel's serverless container (`/var/task`).
+
 ## [3.23.5] - 2026-11-02
 
 ### Native TypeScript Serverless Function on Vercel

@@ -1,7 +1,7 @@
 {
-  "version": "3.23.5",
+  "version": "3.23.6",
   "releaseDate": "2026-11-02",
   "changelog": [
-    "Vercel Serverless TypeScript Native Function (v3.23.5): Replaced pre-bundled JS with native TypeScript `api/index.ts` handler routing and updated `vercel.json` and build scripts for seamless Vercel deployment."
+    "Standalone Vercel Serverless Entrypoint (v3.23.6): Converted `api/index.ts` into a self-contained standalone Express handler entrypoint, completely eliminating relative multi-folder imports (`../src/...`) that caused Vercel's `ERR_MODULE_NOT_FOUND` runtime error."
   ]
 }
