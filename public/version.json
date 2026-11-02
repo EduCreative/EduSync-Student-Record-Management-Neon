@@ -1,7 +1,7 @@
 {
-  "version": "3.23.4",
+  "version": "3.23.5",
   "releaseDate": "2026-11-02",
   "changelog": [
-    "Native Vercel TypeScript Serverless Function (v3.23.4): Created permanent source file `api/index.ts` so the `api` directory is directly tracked in Git and visible in the code tree. Configured Vercel rewrites to target `/api/index.ts` directly, eliminating reliance on transient esbuild bundle artifacts."
+    "Vercel Serverless TypeScript Native Function (v3.23.5): Replaced pre-bundled JS with native TypeScript `api/index.ts` handler routing and updated `vercel.json` and build scripts for seamless Vercel deployment."
   ]
 }

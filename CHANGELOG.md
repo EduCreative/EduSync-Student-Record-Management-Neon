@@ -1,6 +1,12 @@
 
 # Changelog
 
+## [3.23.5] - 2026-11-02
+
+### Native TypeScript Serverless Function on Vercel
+- **Direct TypeScript Handler (`api/index.ts`)**:
+  - Replaced legacy compiled JS artifacts with a clean native TypeScript Vercel serverless function entrypoint (`api/index.ts`), allowing Vercel's `@vercel/node` builder to compile and execute the Express application without missing module references.
+
 ## [3.23.4] - 2026-11-02
 
 ### Native Vercel TypeScript Serverless Function
