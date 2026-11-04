@@ -1,6 +1,16 @@
 
 # Changelog
 
+## [3.27.0] - 2026-11-03
+
+### Phase 3: Security Hardening, Role Access Controls & Session Integrity
+- **Strict `SESSION_SECRET` Enforcement (A1 - `_db.ts`)**: Removed fallback secret; server refuses to start if `SESSION_SECRET` is missing or shorter than 32 characters.
+- **Role Allow-Lists & Creation Scope (A2 - `users.ts`, `register.ts`)**: Enforced strict role creation boundaries (Admins may only create Accountant, Teacher, Parent, Student within their own school; Owner required for Admin/Owner accounts).
+- **Secure Password Changes & Resets (A3 - `change-password.ts`)**: Required current password for self-change, restricted administrative resets to authorized roles (preventing resetting Owner passwords), and recorded audit log entries for every change.
+- **School Ownership Checks (A4 - `_helpers.ts`, `classes.ts`, `users.ts`)**: Enforced `requireSameSchool` verification across entity updates and deletions, preventing cross-tenant data tampering.
+- **Session Re-Validation & Status Checks (A5 - `_helpers.ts`, `AuthContext.tsx`)**: Re-read user status from database on each authenticated API call; automatically clear session cookie and reject with 401 if inactive or suspended.
+- **Database Schema Synchronization (`migrations/001_schema_sync.sql`)**: Synced missing columns (`attendance.school_id`, `results.school_id`, `fee_challans.created_at`, `profiles.phone_number`), backfilled tenant IDs, and added active partial unique indexes and check constraints.
+
 ## [3.26.0] - 2026-11-03
 
 ### System Resumption & Production Verification

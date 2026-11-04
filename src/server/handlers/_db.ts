@@ -1,10 +1,10 @@
 import { neon } from '@neondatabase/serverless';
 import jwt from 'jsonwebtoken';
 
-const DEFAULT_SESSION_SECRET = 'edusync_default_session_secret_min_32_chars_long_key_fallback';
-export const SESSION_SECRET = (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32)
-    ? process.env.SESSION_SECRET
-    : DEFAULT_SESSION_SECRET;
+if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
+    throw new Error("SESSION_SECRET environment variable is required and must be at least 32 characters long.");
+}
+export const SESSION_SECRET = process.env.SESSION_SECRET;
 export const COOKIE_NAME = 'edusync_session';
 
 // Server-only database connection
