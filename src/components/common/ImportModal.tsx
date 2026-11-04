@@ -171,13 +171,48 @@ const ImportModal = <T extends Record<string, any>>({
                 }));
             });
             showToast('Success', 'Import process completed.', 'success');
+            setStage('complete');
         } catch (err: any) {
-            setError(err.message);
-            showToast('Import Error', err.message, 'error');
-            setStage('preview'); // Go back to preview on failure
+            const errorMsg = err?.message || 'Import failed.';
+            setError(errorMsg);
+            showToast('Import Error', errorMsg, 'error');
+
+            // Handle duplicate roll number error (B2) by moving conflicted row to invalid records
+            const isDupRoll = err?.code === 'DUPLICATE_ROLL' || errorMsg.includes('DUPLICATE_ROLL') || errorMsg.includes('23505') || errorMsg.includes('already exists');
+            const dupRoll = err?.rollNumber || (errorMsg.match(/Roll number "([^"]+)"/) || [])[1];
+
+            if (isDupRoll && dupRoll) {
+                setPreviewData(prev => {
+                    if (!prev) return prev;
+                    const conflictedIndex = prev.validRecords.findIndex(r => 
+                        String(r.roll_number || r.rollNumber || '').trim().toLowerCase() === String(dupRoll).trim().toLowerCase()
+                    );
+                    if (conflictedIndex !== -1) {
+                        const failedRecord = prev.validRecords[conflictedIndex];
+                        const updatedValid = prev.validRecords.filter((_, idx) => idx !== conflictedIndex);
+                        const updatedInvalid = [
+                            ...prev.invalidRecords,
+                            {
+                                record: failedRecord,
+                                reason: `Roll number "${dupRoll}" already exists in this school.`,
+                                rowNum: conflictedIndex + 2
+                            }
+                        ];
+                        // Also remove from selected indices
+                        setSelectedIndices(prevSelected => {
+                            const newSelected = new Set(prevSelected);
+                            newSelected.delete(conflictedIndex);
+                            return newSelected;
+                        });
+                        return { validRecords: updatedValid, invalidRecords: updatedInvalid };
+                    }
+                    return prev;
+                });
+            }
+
+            setStage('preview'); // Stay on preview on failure so errors remain visible (B4)
         } finally {
             setIsProcessing(false);
-            setStage('complete');
         }
     };
 

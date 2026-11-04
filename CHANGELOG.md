@@ -1,6 +1,32 @@
 
 # Changelog
 
+## [3.26.0] - 2026-11-03
+
+### System Resumption & Production Verification
+- Resumed task execution following compaction, verifying full TypeScript compilation, Vercel API routing configuration (`vercel.json`), and robust backend integration.
+
+## [3.25.0] - 2026-11-03
+
+### Phase 2: High-Performance Challan Generation & Duplicate Guards
+- **Single-Query Aggregated Arrears Calculation (A11 - `src/server/handlers/write/challans.ts`)**:
+  - Replaced the O(N) loop with a single aggregated PostgreSQL query (`GROUP BY student_id`) computing total charged fees, fines, payments, and discounts across all past non-cancelled challans for all students simultaneously.
+  - Reduced database round trips during monthly generation from 500+ down to ~6 queries.
+- **Chunked Multi-Row Insertion with `ON CONFLICT DO NOTHING` (A11 - `src/server/handlers/write/challans.ts`)**:
+  - Implemented batch parameterized insertions in chunks of 100 students leveraging `ON CONFLICT (student_id, month, year) WHERE status <> 'Cancelled' DO NOTHING RETURNING id`.
+  - Accurately reports created challan count and skipped duplicate count based on returned rows.
+  - Generates zero duplicate challans when run repeatedly for the whole school.
+- **Removed 20-Second Client Timeout (A11 - `ChallanGenerationPage.tsx`)**:
+  - Eliminated the arbitrary `Promise.race` 20s timeout in `ChallanGenerationPage.tsx`, allowing large batches to complete smoothly.
+- **Unique Roll Numbers Per School (B2 - `migrations/002_roll_unique.sql` & `schema.sql`)**:
+  - Created migration `migrations/002_roll_unique.sql` to detect duplicate roll numbers and enforce `students_school_roll_unique` partial unique index on `(school_id, roll_number) WHERE status <> 'Deleted'`.
+  - Added `students_school_roll_unique` index to `schema.sql` for fresh database instances.
+- **SQLSTATE 23505 Duplicate Roll Handling (B2 - `src/server/handlers/write/students.ts`)**:
+  - In `add-student`, `update-student`, and `bulk-add-students`, caught unique constraint violation error `23505` and returned HTTP 409 with `{ error: 'DUPLICATE_ROLL', rollNumber }`.
+- **Import Modal Error Stage Retention (B4 & B2 - `ImportModal.tsx` & `DataContext.tsx`)**:
+  - Removed `setStage('complete')` from the `finally` block in `handleConfirmImport`, setting it only on successful import.
+  - Kept errors and preview stage active on failure, dynamically identifying duplicate roll numbers and marking conflicted rows as "Roll number already exists" in invalid records so users can review and re-import remaining records without starting over.
+
 ## [3.24.0] - 2026-11-03
 
 ### Phase 1: Ledger & Payment Integrity

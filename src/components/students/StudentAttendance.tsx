@@ -1,14 +1,24 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
 import { Attendance } from '../../types';
+import { getTodayKarachi } from '../../utils/dates';
 
 interface StudentAttendanceProps {
     studentId: string;
 }
 
 const StudentAttendance: React.FC<StudentAttendanceProps> = ({ studentId }) => {
-    const { attendance } = useData();
+    const { attendance, loadAttendanceRange } = useData();
     const [currentDate, setCurrentDate] = useState(new Date());
+
+    useEffect(() => {
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const fromStr = `${year}-${month}-01`;
+        const lastDay = new Date(year, currentDate.getMonth() + 1, 0).getDate();
+        const toStr = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+        loadAttendanceRange(fromStr, toStr);
+    }, [currentDate, loadAttendanceRange]);
 
     const eventsByDate = useMemo(() => {
         return attendance.reduce((acc, att: Attendance) => {
@@ -73,7 +83,7 @@ const StudentAttendance: React.FC<StudentAttendanceProps> = ({ studentId }) => {
                         const dateStr = d.toISOString().split('T')[0];
                         const status = eventsByDate[dateStr];
                         const statusInfo = getStatusInfo(status);
-                        const isToday = new Date().toISOString().split('T')[0] === dateStr;
+                        const isToday = getTodayKarachi() === dateStr;
                         const isCurrentMonth = d.getMonth() === currentDate.getMonth();
 
                         return (

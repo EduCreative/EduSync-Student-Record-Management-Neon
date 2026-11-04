@@ -1,4 +1,5 @@
 import { verifySession, isAuthorized, writeServerAuditLog } from './_helpers';
+import { getTodayKarachi } from '../../../utils/dates';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST') {
@@ -79,7 +80,7 @@ export default async function handler(req: any, res: any) {
                 });
             }
 
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = getTodayKarachi();
             const validatedPaidDate = (paidDate && paidDate > todayStr) ? todayStr : (paidDate || todayStr);
 
             const newRecord = {
@@ -163,7 +164,7 @@ export default async function handler(req: any, res: any) {
                 recomputedPaidAmount += itemAmt;
             }
 
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = getTodayKarachi();
             const validatedPaidDate = (paidDate && paidDate > todayStr) ? todayStr : (paidDate || todayStr);
 
             // Compute status strictly on the server (A9)
@@ -236,7 +237,7 @@ export default async function handler(req: any, res: any) {
                 challan.school_id
             );
 
-            return res.status(200).json({ success: true });
+            return res.status(200).json({ success: true, challanId, status: 'Cancelled' });
 
         } else if (action === 'increase-tuition') {
             const { studentIds, amount } = body;

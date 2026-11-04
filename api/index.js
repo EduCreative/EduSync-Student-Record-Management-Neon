@@ -35378,6 +35378,30 @@ async function handler5(req, res) {
   }
 }
 
+// src/utils/dates.ts
+var TIMEZONE = "Asia/Karachi";
+function getTodayKarachi(dateObj = /* @__PURE__ */ new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  return formatter.format(dateObj);
+}
+function getCurrentKarachiYear(dateObj = /* @__PURE__ */ new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIMEZONE,
+    year: "numeric"
+  });
+  return parseInt(formatter.format(dateObj), 10);
+}
+function getKarachiDateOffset(days) {
+  const d = /* @__PURE__ */ new Date();
+  d.setDate(d.getDate() + days);
+  return getTodayKarachi(d);
+}
+
 // src/server/handlers/data/index.ts
 async function handler6(req, res) {
   if (req.method !== "GET") {
@@ -35501,20 +35525,52 @@ async function handler6(req, res) {
     let attData = [];
     let resData = [];
     if (targetStudentIds.length > 0) {
-      if (!isTeacher) {
-        feesData = await sql`
-                    SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items, 
-                           previous_balance, total_amount, discount, paid_amount, status, 
-                           paid_date, fine_amount, payment_history, created_at
-                    FROM fee_challans 
-                    WHERE student_id = ANY(${targetStudentIds})
-                    ORDER BY year DESC, month DESC
-                `;
+      const requestedYear = req.query?.year;
+      let effectiveYear = null;
+      if (requestedYear) {
+        if (requestedYear !== "all") {
+          const parsed = parseInt(String(requestedYear), 10);
+          if (!isNaN(parsed)) effectiveYear = parsed;
+        }
+      } else {
+        effectiveYear = getCurrentKarachiYear();
       }
-      [attData, resData] = await Promise.all([
-        sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds})`,
-        sql`SELECT id, student_id, exam, subject, marks, total_marks, school_id FROM results WHERE student_id = ANY(${targetStudentIds})`
-      ]);
+      if (!isTeacher) {
+        if (effectiveYear !== null) {
+          feesData = await sql`
+                        SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items, 
+                               previous_balance, total_amount, discount, paid_amount, status, 
+                               paid_date, fine_amount, payment_history, created_at
+                        FROM fee_challans 
+                        WHERE student_id = ANY(${targetStudentIds}) AND year = ${effectiveYear}
+                        ORDER BY year DESC, month DESC
+                    `;
+        } else {
+          feesData = await sql`
+                        SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items, 
+                               previous_balance, total_amount, discount, paid_amount, status, 
+                               paid_date, fine_amount, payment_history, created_at
+                        FROM fee_challans 
+                        WHERE student_id = ANY(${targetStudentIds})
+                        ORDER BY year DESC, month DESC
+                    `;
+        }
+      }
+      const attendanceFrom = req.query?.attendanceFrom;
+      const attendanceTo = req.query?.attendanceTo;
+      let attQuery;
+      if (attendanceFrom === "all") {
+        attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds})`;
+      } else if (attendanceFrom && attendanceTo) {
+        attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom} AND date <= ${attendanceTo}`;
+      } else if (attendanceFrom) {
+        attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom}`;
+      } else {
+        const defaultAttendanceFrom = getKarachiDateOffset(-45);
+        attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${defaultAttendanceFrom}`;
+      }
+      const resQuery = sql`SELECT id, student_id, exam, subject, marks, total_marks, school_id FROM results WHERE student_id = ANY(${targetStudentIds})`;
+      [attData, resData] = await Promise.all([attQuery, resQuery]);
     }
     let logsData = [];
     if (isOwner) {
@@ -35877,7 +35933,7 @@ async function handler11(req, res) {
           remainingBalance
         });
       }
-      const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      const todayStr = getTodayKarachi();
       const validatedPaidDate = paidDate && paidDate > todayStr ? todayStr : paidDate || todayStr;
       const newRecord = {
         amount: numAmount,
@@ -35943,7 +35999,7 @@ async function handler11(req, res) {
         }
         recomputedPaidAmount += itemAmt;
       }
-      const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      const todayStr = getTodayKarachi();
       const validatedPaidDate = paidDate && paidDate > todayStr ? todayStr : paidDate || todayStr;
       const netPayable = Math.max(0, Number(challan.total_amount) - numDiscount);
       const status = recomputedPaidAmount >= netPayable ? "Paid" : recomputedPaidAmount > 0 ? "Partial" : "Unpaid";
@@ -36004,7 +36060,7 @@ async function handler11(req, res) {
         `Cancelled fee challan #${challan.challan_number} for ${challan.student_name}`,
         challan.school_id
       );
-      return res.status(200).json({ success: true });
+      return res.status(200).json({ success: true, challanId, status: "Cancelled" });
     } else if (action === "increase-tuition") {
       const { studentIds, amount } = body;
       const incAmount = Number(amount) || 0;
@@ -36115,48 +36171,34 @@ async function handler12(req, res) {
       const feeHeadMap = new Map(feeHeads.map((fh) => [fh.id, fh.name]));
       const monthIndex = MONTH_NAMES.indexOf(month) + 1;
       const monthStr = String(monthIndex).padStart(2, "0");
-      const existingChallans = await sql`
-                SELECT student_id 
-                FROM fee_challans 
-                WHERE student_id = ANY(${students.map((s) => s.id)})
-                AND month = ${month} 
-                AND year = ${targetYear} 
-                AND status != 'Cancelled'
+      const studentIdsToQuery = students.map((s) => s.id);
+      const arrearsAggregation = await sql`
+                SELECT 
+                    student_id,
+                    COALESCE(SUM(
+                        COALESCE((
+                            SELECT SUM((item->>'amount')::numeric)
+                            FROM jsonb_array_elements(
+                                CASE WHEN jsonb_typeof(fee_items) = 'array' THEN fee_items ELSE '[]'::jsonb END
+                            ) AS item
+                        ), 0) + COALESCE(fine_amount, 0)
+                    ), 0) AS total_charged,
+                    COALESCE(SUM(COALESCE(paid_amount, 0) + COALESCE(discount, 0)), 0) AS total_collected
+                FROM fee_challans
+                WHERE student_id = ANY(${studentIdsToQuery})
+                AND status <> 'Cancelled'
+                GROUP BY student_id
             `;
-      const existingStudentSet = new Set(existingChallans.map((c) => c.student_id));
-      let generatedCount = 0;
-      let skippedDuplicates = 0;
+      const arrearsMap = /* @__PURE__ */ new Map();
+      for (const row of arrearsAggregation) {
+        const charged = Number(row.total_charged) || 0;
+        const collected = Number(row.total_collected) || 0;
+        arrearsMap.set(row.student_id, Math.max(0, charged - collected));
+      }
+      const challanRowsToInsert = [];
       for (const student of students) {
-        if (existingStudentSet.has(student.id)) {
-          skippedDuplicates++;
-          continue;
-        }
-        const pastChallans = await sql`
-                    SELECT fee_items, fine_amount, paid_amount, discount
-                    FROM fee_challans
-                    WHERE student_id = ${student.id}
-                    AND status != 'Cancelled'
-                `;
-        let totalCharged = Number(student.opening_balance) || 0;
-        let totalCollected = 0;
-        for (const pc of pastChallans) {
-          let items2 = pc.fee_items || [];
-          if (typeof items2 === "string") {
-            try {
-              items2 = JSON.parse(items2);
-            } catch {
-              items2 = [];
-            }
-          }
-          if (Array.isArray(items2)) {
-            for (const item of items2) {
-              totalCharged += Number(item.amount) || 0;
-            }
-          }
-          totalCharged += Number(pc.fine_amount) || 0;
-          totalCollected += (Number(pc.paid_amount) || 0) + (Number(pc.discount) || 0);
-        }
-        const arrears = Math.max(0, totalCharged - totalCollected);
+        const historicalDues = arrearsMap.get(student.id) ?? 0;
+        const totalArrears = Math.max(0, (Number(student.opening_balance) || 0) + historicalDues);
         let studentStructure = student.fee_structure || [];
         if (typeof studentStructure === "string") {
           try {
@@ -36171,21 +36213,66 @@ async function handler12(req, res) {
           amount: feeStructureMap.get(h.feeHeadId) ?? (Number(h.amount) || 0)
         }));
         const subtotal = items.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
-        const totalAmount = subtotal + arrears;
+        const totalAmount = subtotal + totalArrears;
         const challanId = import_crypto4.default.randomUUID();
         const cNum = `${targetYear}${monthStr}-${student.roll_number}`;
-        await sql`
+        challanRowsToInsert.push({
+          id: challanId,
+          challan_number: cNum,
+          student_id: student.id,
+          class_id: student.class_id,
+          month,
+          year: targetYear,
+          due_date: dueDate || null,
+          status: "Unpaid",
+          fee_items: items,
+          previous_balance: totalArrears,
+          total_amount: totalAmount,
+          discount: 0,
+          paid_amount: 0,
+          fine_amount: 0
+        });
+      }
+      let generatedCount = 0;
+      let skippedDuplicates = 0;
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < challanRowsToInsert.length; i += CHUNK_SIZE) {
+        const chunk = challanRowsToInsert.slice(i, i + CHUNK_SIZE);
+        const valuePlaceholders = [];
+        const params = [];
+        let p2 = 1;
+        for (const row of chunk) {
+          valuePlaceholders.push(`($${p2++}, $${p2++}, $${p2++}, $${p2++}, $${p2++}, $${p2++}, $${p2++}, $${p2++}, $${p2++}::jsonb, $${p2++}, $${p2++}, $${p2++}, $${p2++}, $${p2++})`);
+          params.push(
+            row.id,
+            row.challan_number,
+            row.student_id,
+            row.class_id,
+            row.month,
+            row.year,
+            row.due_date,
+            row.status,
+            JSON.stringify(row.fee_items),
+            row.previous_balance,
+            row.total_amount,
+            row.discount,
+            row.paid_amount,
+            row.fine_amount
+          );
+        }
+        const insertQuery = `
                     INSERT INTO fee_challans (
                         id, challan_number, student_id, class_id, month, year, 
                         due_date, status, fee_items, previous_balance, total_amount, 
                         discount, paid_amount, fine_amount
-                    ) VALUES (
-                        ${challanId}, ${cNum}, ${student.id}, ${student.class_id}, ${month}, ${targetYear}, 
-                        ${dueDate || null}, 'Unpaid', ${JSON.stringify(items)}, ${arrears}, ${totalAmount}, 
-                        0, 0, 0
-                    )
+                    ) VALUES ${valuePlaceholders.join(", ")}
+                    ON CONFLICT (student_id, month, year) WHERE status <> 'Cancelled' DO NOTHING
+                    RETURNING id
                 `;
-        generatedCount++;
+        const insertedRows = await sql(insertQuery, params);
+        const count = insertedRows ? insertedRows.length : 0;
+        generatedCount += count;
+        skippedDuplicates += chunk.length - count;
       }
       await writeServerAuditLog(
         sql,
@@ -36381,25 +36468,32 @@ async function handler14(req, res) {
       }
       const effectiveSchoolId = session.role === "Owner" && student.schoolId ? student.schoolId : session.schoolId;
       const id = import_crypto6.default.randomUUID();
-      await sql`
-                INSERT INTO students (
-                    id, name, roll_number, class_id, school_id, father_name, father_cnic, 
-                    date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
-                    address, status, gender, admitted_class, gr_number, religion, caste, 
-                    last_school_attended, opening_balance, user_id, fee_structure, avatar_url
-                ) VALUES (
-                    ${id}, ${student.name}, ${student.rollNumber}, ${student.classId || null}, 
-                    ${effectiveSchoolId}, ${student.fatherName || null}, ${student.fatherCnic || null}, 
-                    ${student.dateOfBirth || null}, ${student.dateOfAdmission || null}, 
-                    ${student.contactNumber || null}, ${student.secondaryContactNumber || null}, 
-                    ${student.address || null}, 'Active', ${student.gender || "Male"}, 
-                    ${student.admittedClass || null}, ${student.grNumber || null}, 
-                    ${student.religion || null}, ${student.caste || null}, 
-                    ${student.lastSchoolAttended || null}, ${Number(student.openingBalance) || 0}, 
-                    ${student.userId || null}, ${JSON.stringify(student.feeStructure || [])},
-                    ${student.avatarUrl || null}
-                )
-            `;
+      try {
+        await sql`
+                    INSERT INTO students (
+                        id, name, roll_number, class_id, school_id, father_name, father_cnic, 
+                        date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
+                        address, status, gender, admitted_class, gr_number, religion, caste, 
+                        last_school_attended, opening_balance, user_id, fee_structure, avatar_url
+                    ) VALUES (
+                        ${id}, ${student.name}, ${student.rollNumber}, ${student.classId || null}, 
+                        ${effectiveSchoolId}, ${student.fatherName || null}, ${student.fatherCnic || null}, 
+                        ${student.dateOfBirth || null}, ${student.dateOfAdmission || null}, 
+                        ${student.contactNumber || null}, ${student.secondaryContactNumber || null}, 
+                        ${student.address || null}, 'Active', ${student.gender || "Male"}, 
+                        ${student.admittedClass || null}, ${student.grNumber || null}, 
+                        ${student.religion || null}, ${student.caste || null}, 
+                        ${student.lastSchoolAttended || null}, ${Number(student.openingBalance) || 0}, 
+                        ${student.userId || null}, ${JSON.stringify(student.feeStructure || [])},
+                        ${student.avatarUrl || null}
+                    )
+                `;
+      } catch (err) {
+        if (err?.code === "23505" || err?.message?.includes("23505") || err?.message?.includes("students_school_roll_unique")) {
+          return res.status(409).json({ error: "DUPLICATE_ROLL", rollNumber: student.rollNumber, message: `Roll number "${student.rollNumber}" already exists in this school.` });
+        }
+        throw err;
+      }
       await writeServerAuditLog(
         sql,
         session,
@@ -36421,31 +36515,38 @@ async function handler14(req, res) {
       if (session.role !== "Owner" && session.schoolId && existing.school_id !== session.schoolId) {
         return res.status(403).json({ error: "Unauthorized: Student belongs to another school." });
       }
-      await sql`
-                UPDATE students SET
-                    name = ${student.name},
-                    roll_number = ${student.rollNumber},
-                    class_id = ${student.classId || null},
-                    father_name = ${student.fatherName || null},
-                    father_cnic = ${student.fatherCnic || null},
-                    date_of_birth = ${student.dateOfBirth || null},
-                    date_of_admission = ${student.dateOfAdmission || null},
-                    contact_number = ${student.contactNumber || null},
-                    secondary_contact_number = ${student.secondaryContactNumber || null},
-                    address = ${student.address || null},
-                    status = ${student.status || "Active"},
-                    gender = ${student.gender || "Male"},
-                    avatar_url = ${student.avatarUrl || null},
-                    admitted_class = ${student.admittedClass || null},
-                    gr_number = ${student.grNumber || null},
-                    religion = ${student.religion || null},
-                    caste = ${student.caste || null},
-                    last_school_attended = ${student.lastSchoolAttended || null},
-                    opening_balance = ${Number(student.openingBalance) || 0},
-                    user_id = ${student.userId || null},
-                    fee_structure = ${JSON.stringify(student.feeStructure || [])}
-                WHERE id = ${student.id}
-            `;
+      try {
+        await sql`
+                    UPDATE students SET
+                        name = ${student.name},
+                        roll_number = ${student.rollNumber},
+                        class_id = ${student.classId || null},
+                        father_name = ${student.fatherName || null},
+                        father_cnic = ${student.fatherCnic || null},
+                        date_of_birth = ${student.dateOfBirth || null},
+                        date_of_admission = ${student.dateOfAdmission || null},
+                        contact_number = ${student.contactNumber || null},
+                        secondary_contact_number = ${student.secondaryContactNumber || null},
+                        address = ${student.address || null},
+                        status = ${student.status || "Active"},
+                        gender = ${student.gender || "Male"},
+                        avatar_url = ${student.avatarUrl || null},
+                        admitted_class = ${student.admittedClass || null},
+                        gr_number = ${student.grNumber || null},
+                        religion = ${student.religion || null},
+                        caste = ${student.caste || null},
+                        last_school_attended = ${student.lastSchoolAttended || null},
+                        opening_balance = ${Number(student.openingBalance) || 0},
+                        user_id = ${student.userId || null},
+                        fee_structure = ${JSON.stringify(student.feeStructure || [])}
+                    WHERE id = ${student.id}
+                `;
+      } catch (err) {
+        if (err?.code === "23505" || err?.message?.includes("23505") || err?.message?.includes("students_school_roll_unique")) {
+          return res.status(409).json({ error: "DUPLICATE_ROLL", rollNumber: student.rollNumber, message: `Roll number "${student.rollNumber}" already exists in this school.` });
+        }
+        throw err;
+      }
       await writeServerAuditLog(
         sql,
         session,
@@ -36482,38 +36583,47 @@ async function handler14(req, res) {
         return res.status(400).json({ error: "Students array is required." });
       }
       const effectiveSchoolId = session.role === "Owner" && schoolId ? schoolId : session.schoolId;
-      const BATCH_SIZE = 25;
-      for (let i = 0; i < students.length; i += BATCH_SIZE) {
-        const batch = students.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map((s) => {
-          const id = import_crypto6.default.randomUUID();
-          return sql`
-                        INSERT INTO students (
-                            id, name, roll_number, class_id, school_id, father_name, father_cnic, 
-                            date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
-                            address, status, gender, admitted_class, gr_number, religion, caste, 
-                            last_school_attended, opening_balance, user_id, fee_structure
-                        ) VALUES (
-                            ${id}, ${s.name}, ${s.rollNumber || s.roll_number}, ${s.classId || s.class_id || null}, 
-                            ${effectiveSchoolId}, ${s.fatherName || s.father_name || null}, ${s.fatherCnic || s.father_cnic || null}, 
-                            ${s.dateOfBirth || s.date_of_birth || null}, ${s.dateOfAdmission || s.date_of_admission || null}, 
-                            ${s.contactNumber || s.contact_number || null}, ${s.secondaryContactNumber || s.secondary_contact_number || null}, 
-                            ${s.address || null}, 'Active', ${s.gender || "Male"}, ${s.admittedClass || s.admitted_class || null}, 
-                            ${s.grNumber || s.gr_number || null}, ${s.religion || null}, ${s.caste || null}, 
-                            ${s.lastSchoolAttended || s.last_school_attended || null}, ${Number(s.openingBalance || s.opening_balance) || 0}, 
-                            ${s.userId || s.user_id || null}, ${JSON.stringify(s.feeStructure || s.fee_structure || [])}
-                        )
-                    `;
-        }));
+      try {
+        const BATCH_SIZE = 25;
+        for (let i = 0; i < students.length; i += BATCH_SIZE) {
+          const batch = students.slice(i, i + BATCH_SIZE);
+          await Promise.all(batch.map((s) => {
+            const id = import_crypto6.default.randomUUID();
+            return sql`
+                            INSERT INTO students (
+                                id, name, roll_number, class_id, school_id, father_name, father_cnic, 
+                                date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
+                                address, status, gender, admitted_class, gr_number, religion, caste, 
+                                last_school_attended, opening_balance, user_id, fee_structure
+                            ) VALUES (
+                                ${id}, ${s.name}, ${s.rollNumber || s.roll_number}, ${s.classId || s.class_id || null}, 
+                                ${effectiveSchoolId}, ${s.fatherName || s.father_name || null}, ${s.fatherCnic || s.father_cnic || null}, 
+                                ${s.dateOfBirth || s.date_of_birth || null}, ${s.dateOfAdmission || s.date_of_admission || null}, 
+                                ${s.contactNumber || s.contact_number || null}, ${s.secondaryContactNumber || s.secondary_contact_number || null}, 
+                                ${s.address || null}, 'Active', ${s.gender || "Male"}, ${s.admittedClass || s.admitted_class || null}, 
+                                ${s.grNumber || s.gr_number || null}, ${s.religion || null}, ${s.caste || null}, 
+                                ${s.lastSchoolAttended || s.last_school_attended || null}, ${Number(s.openingBalance || s.opening_balance) || 0}, 
+                                ${s.userId || s.user_id || null}, ${JSON.stringify(s.feeStructure || s.fee_structure || [])}
+                            )
+                        `;
+          }));
+        }
+        await writeServerAuditLog(
+          sql,
+          session,
+          "Bulk Import Students",
+          `Bulk imported ${students.length} students`,
+          effectiveSchoolId
+        );
+        return res.status(200).json({ success: true, count: students.length });
+      } catch (err) {
+        if (err?.code === "23505" || err?.message?.includes("23505") || err?.message?.includes("students_school_roll_unique")) {
+          const match = err?.detail?.match(/Key \(school_id, roll_number\)=\([^,]+, ([^)]+)\)/);
+          const conflictedRoll = match ? match[1] : err.rollNumber || "duplicate";
+          return res.status(409).json({ error: "DUPLICATE_ROLL", rollNumber: conflictedRoll, message: `Roll number "${conflictedRoll}" already exists in this school.` });
+        }
+        throw err;
       }
-      await writeServerAuditLog(
-        sql,
-        session,
-        "Bulk Import Students",
-        `Bulk imported ${students.length} students`,
-        effectiveSchoolId
-      );
-      return res.status(200).json({ success: true, count: students.length });
     } else if (action === "issue-certificate") {
       const { studentId, details } = body;
       if (!studentId || !details) {
@@ -36531,7 +36641,7 @@ async function handler14(req, res) {
                 UPDATE students 
                 SET 
                     status = 'Left',
-                    date_of_leaving = ${details.dateOfLeaving || details.date_of_leaving || (/* @__PURE__ */ new Date()).toISOString().split("T")[0]},
+                    date_of_leaving = ${details.dateOfLeaving || details.date_of_leaving || getTodayKarachi()},
                     reason_for_leaving = ${details.reasonForLeaving || details.reason_for_leaving || null},
                     conduct = ${details.conduct || null},
                     progress = ${details.progress || null},

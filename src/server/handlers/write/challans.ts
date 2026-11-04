@@ -54,53 +54,37 @@ export default async function handler(req: any, res: any) {
             const monthIndex = MONTH_NAMES.indexOf(month) + 1;
             const monthStr = String(monthIndex).padStart(2, '0');
 
-            // Find existing non-cancelled challans for these students for month & year
-            const existingChallans = await sql`
-                SELECT student_id 
-                FROM fee_challans 
-                WHERE student_id = ANY(${students.map((s: any) => s.id)})
-                AND month = ${month} 
-                AND year = ${targetYear} 
-                AND status != 'Cancelled'
+            // Compute historical arrears for all students in ONE aggregated SQL query (A11)
+            const studentIdsToQuery = students.map((s: any) => s.id);
+            const arrearsAggregation = await sql`
+                SELECT 
+                    student_id,
+                    COALESCE(SUM(
+                        COALESCE((
+                            SELECT SUM((item->>'amount')::numeric)
+                            FROM jsonb_array_elements(
+                                CASE WHEN jsonb_typeof(fee_items) = 'array' THEN fee_items ELSE '[]'::jsonb END
+                            ) AS item
+                        ), 0) + COALESCE(fine_amount, 0)
+                    ), 0) AS total_charged,
+                    COALESCE(SUM(COALESCE(paid_amount, 0) + COALESCE(discount, 0)), 0) AS total_collected
+                FROM fee_challans
+                WHERE student_id = ANY(${studentIdsToQuery})
+                AND status <> 'Cancelled'
+                GROUP BY student_id
             `;
-            const existingStudentSet = new Set(existingChallans.map((c: any) => c.student_id));
 
-            let generatedCount = 0;
-            let skippedDuplicates = 0;
+            const arrearsMap = new Map<string, number>();
+            for (const row of arrearsAggregation) {
+                const charged = Number(row.total_charged) || 0;
+                const collected = Number(row.total_collected) || 0;
+                arrearsMap.set(row.student_id, Math.max(0, charged - collected));
+            }
 
+            const challanRowsToInsert: any[] = [];
             for (const student of students) {
-                // GUARD: Check against duplicate challan
-                if (existingStudentSet.has(student.id)) {
-                    skippedDuplicates++;
-                    continue;
-                }
-
-                // Compute historical arrears from all past non-cancelled challans
-                const pastChallans = await sql`
-                    SELECT fee_items, fine_amount, paid_amount, discount
-                    FROM fee_challans
-                    WHERE student_id = ${student.id}
-                    AND status != 'Cancelled'
-                `;
-
-                let totalCharged = Number(student.opening_balance) || 0;
-                let totalCollected = 0;
-
-                for (const pc of pastChallans) {
-                    let items = pc.fee_items || [];
-                    if (typeof items === 'string') {
-                        try { items = JSON.parse(items); } catch { items = []; }
-                    }
-                    if (Array.isArray(items)) {
-                        for (const item of items) {
-                            totalCharged += Number(item.amount) || 0;
-                        }
-                    }
-                    totalCharged += Number(pc.fine_amount) || 0;
-                    totalCollected += (Number(pc.paid_amount) || 0) + (Number(pc.discount) || 0);
-                }
-
-                const arrears = Math.max(0, totalCharged - totalCollected);
+                const historicalDues = arrearsMap.get(student.id) ?? 0;
+                const totalArrears = Math.max(0, (Number(student.opening_balance) || 0) + historicalDues);
 
                 // Student fee structure overrides
                 let studentStructure = student.fee_structure || [];
@@ -115,23 +99,73 @@ export default async function handler(req: any, res: any) {
                 }));
 
                 const subtotal = items.reduce((sum: number, i: any) => sum + (Number(i.amount) || 0), 0);
-                const totalAmount = subtotal + arrears;
+                const totalAmount = subtotal + totalArrears;
                 const challanId = crypto.randomUUID();
                 const cNum = `${targetYear}${monthStr}-${student.roll_number}`;
 
-                await sql`
+                challanRowsToInsert.push({
+                    id: challanId,
+                    challan_number: cNum,
+                    student_id: student.id,
+                    class_id: student.class_id,
+                    month,
+                    year: targetYear,
+                    due_date: dueDate || null,
+                    status: 'Unpaid',
+                    fee_items: items,
+                    previous_balance: totalArrears,
+                    total_amount: totalAmount,
+                    discount: 0,
+                    paid_amount: 0,
+                    fine_amount: 0
+                });
+            }
+
+            // Insert in chunks of 100 students with single multi-row INSERT ... ON CONFLICT DO NOTHING (A11)
+            let generatedCount = 0;
+            let skippedDuplicates = 0;
+            const CHUNK_SIZE = 100;
+
+            for (let i = 0; i < challanRowsToInsert.length; i += CHUNK_SIZE) {
+                const chunk = challanRowsToInsert.slice(i, i + CHUNK_SIZE);
+                const valuePlaceholders: string[] = [];
+                const params: any[] = [];
+                let p = 1;
+
+                for (const row of chunk) {
+                    valuePlaceholders.push(`($${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}::jsonb, $${p++}, $${p++}, $${p++}, $${p++}, $${p++})`);
+                    params.push(
+                        row.id,
+                        row.challan_number,
+                        row.student_id,
+                        row.class_id,
+                        row.month,
+                        row.year,
+                        row.due_date,
+                        row.status,
+                        JSON.stringify(row.fee_items),
+                        row.previous_balance,
+                        row.total_amount,
+                        row.discount,
+                        row.paid_amount,
+                        row.fine_amount
+                    );
+                }
+
+                const insertQuery = `
                     INSERT INTO fee_challans (
                         id, challan_number, student_id, class_id, month, year, 
                         due_date, status, fee_items, previous_balance, total_amount, 
                         discount, paid_amount, fine_amount
-                    ) VALUES (
-                        ${challanId}, ${cNum}, ${student.id}, ${student.class_id}, ${month}, ${targetYear}, 
-                        ${dueDate || null}, 'Unpaid', ${JSON.stringify(items)}, ${arrears}, ${totalAmount}, 
-                        0, 0, 0
-                    )
+                    ) VALUES ${valuePlaceholders.join(', ')}
+                    ON CONFLICT (student_id, month, year) WHERE status <> 'Cancelled' DO NOTHING
+                    RETURNING id
                 `;
 
-                generatedCount++;
+                const insertedRows: any[] = await sql(insertQuery, params);
+                const count = insertedRows ? insertedRows.length : 0;
+                generatedCount += count;
+                skippedDuplicates += (chunk.length - count);
             }
 
             await writeServerAuditLog(

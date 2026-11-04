@@ -1,13 +1,23 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 // FIX: Import UserRole to resolve 'Cannot find name' error.
 import { UserRole } from '../../types';
+import { getTodayKarachi } from '../../utils/dates';
 
 const AttendanceViewer: React.FC = () => {
     const { user } = useAuth();
-    const { students, attendance } = useData();
+    const { students, attendance, loadAttendanceRange } = useData();
     const [currentDate, setCurrentDate] = useState(new Date());
+
+    useEffect(() => {
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const fromStr = `${year}-${month}-01`;
+        const lastDay = new Date(year, currentDate.getMonth() + 1, 0).getDate();
+        const toStr = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+        loadAttendanceRange(fromStr, toStr);
+    }, [currentDate, loadAttendanceRange]);
 
     const myChildren = useMemo(() => {
         if (!user) return [];
@@ -105,7 +115,7 @@ const AttendanceViewer: React.FC = () => {
                     {days.map(d => {
                         const dateStr = d.toISOString().split('T')[0];
                         const status = eventsByDate[dateStr];
-                        const isToday = new Date().toISOString().split('T')[0] === dateStr;
+                        const isToday = getTodayKarachi() === dateStr;
                         const isCurrentMonth = d.getMonth() === currentDate.getMonth();
 
                         return (

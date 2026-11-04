@@ -176,6 +176,7 @@ CREATE INDEX IF NOT EXISTS idx_students_school_id ON students(school_id);
 CREATE INDEX IF NOT EXISTS idx_students_class_id ON students(class_id);
 CREATE INDEX IF NOT EXISTS idx_students_status ON students(status);
 CREATE INDEX IF NOT EXISTS idx_students_roll_number ON students(roll_number);
+CREATE UNIQUE INDEX IF NOT EXISTS students_school_roll_unique ON students (school_id, roll_number) WHERE status <> 'Deleted';
 
 -- Fee Challans indexes (High-traffic ledger queries)
 CREATE INDEX IF NOT EXISTS idx_fee_challans_student_id ON fee_challans(student_id);

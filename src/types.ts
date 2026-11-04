@@ -93,6 +93,7 @@ export interface Attendance {
     studentId: string;
     date: string;
     status: 'Present' | 'Absent' | 'Leave';
+    schoolId?: string;
 }
 
 export interface FeeHead {

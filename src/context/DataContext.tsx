@@ -4,6 +4,7 @@ import { School, User, UserRole, Class, Student, Attendance, FeeChallan, Result,
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { driveService } from '../utils/googleDriveService';
+import { toCamelCase } from '../utils/caseConverter';
 
 interface SyncProgress {
     percentage: number;
@@ -86,6 +87,7 @@ interface DataContextType {
     sendFeeReminders: (challanIds: string[]) => Promise<void>;
     bulkUpdateClassOrder: (classes: { id: string; sortOrder: number }[]) => Promise<void>;
     addLog: (action: string, details: string) => Promise<void>;
+    loadAttendanceRange: (from: string, to: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -308,7 +310,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         if (!res.ok) {
             const errorData = await res.json().catch(() => ({}));
-            throw new Error(errorData.error || `Request failed with status ${res.status}`);
+            const err = new Error(errorData.error || errorData.message || `Request failed with status ${res.status}`) as any;
+            err.code = errorData.error;
+            err.rollNumber = errorData.rollNumber;
+            err.status = res.status;
+            throw err;
         }
         return res.json();
     }, [logout]);
@@ -426,6 +432,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await fetchData();
     };
 
+    const loadAttendanceRange = useCallback(async (from: string, to: string) => {
+        try {
+            const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+            const schoolParam = effectiveSchoolId ? `schoolId=${encodeURIComponent(effectiveSchoolId)}&` : '';
+            const res = await fetch(`/api/data?${schoolParam}attendanceFrom=${encodeURIComponent(from)}&attendanceTo=${encodeURIComponent(to)}`, {
+                credentials: 'include'
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data.attendance)) {
+                    setAttendanceState(prev => {
+                        const map = new Map<string, Attendance>();
+                        prev.forEach(item => map.set(`${item.studentId}_${item.date}`, item));
+                        data.attendance.forEach((item: Attendance) => map.set(`${item.studentId}_${item.date}`, item));
+                        return Array.from(map.values());
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to load attendance range:', e);
+        }
+    }, [user, activeSchoolId]);
+
     const setAttendance = async (date: string, records: any[]) => {
         const total = records.length;
         setOperationProgress({ percentage: 20, status: `Saving attendance for ${total} students...` });
@@ -436,7 +465,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             records,
             schoolId: effectiveSchoolId
         });
-        await fetchData();
+
+        // A15: Update state directly without full reload
+        setAttendanceState(prev => {
+            const map = new Map<string, Attendance>();
+            prev.forEach(item => map.set(`${item.studentId}_${item.date}`, item));
+            records.forEach(r => {
+                const key = `${r.studentId}_${date}`;
+                const existing = map.get(key);
+                map.set(key, {
+                    id: existing?.id || crypto.randomUUID(),
+                    studentId: r.studentId,
+                    date,
+                    status: r.status,
+                    schoolId: effectiveSchoolId || ''
+                });
+            });
+            return Array.from(map.values());
+        });
+
         setOperationProgress({ percentage: 0, status: '' });
         showToast('Success', `Attendance recorded for ${total} students.`, 'success');
     };
@@ -446,7 +493,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!challan) return;
         const student = students.find(s => s.id === challan.studentId);
 
-        await apiWrite('/api/write/payments', {
+        const res = await apiWrite('/api/write/payments', {
             action: 'record-payment',
             challanId,
             amount,
@@ -455,12 +502,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             allowOverpayment: options?.allowOverpayment,
             idempotencyKey: options?.idempotencyKey
         });
-        await fetchData();
+
+        // A15: Update state directly without full reload
+        if (res.challan) {
+            const updated = toCamelCase(res.challan);
+            let history = updated.paymentHistory;
+            if (typeof history === 'string') {
+                try { history = JSON.parse(history); } catch { history = []; }
+            }
+            const cleanChallan: FeeChallan = {
+                ...updated,
+                previousBalance: Number(updated.previousBalance || 0),
+                totalAmount: Number(updated.totalAmount || 0),
+                discount: Number(updated.discount || 0),
+                paidAmount: Number(updated.paidAmount || 0),
+                fineAmount: Number(updated.fineAmount || 0),
+                paymentHistory: (Array.isArray(history) ? history : []).map((p: any) => ({
+                    ...p,
+                    amount: Number(p.amount || 0)
+                }))
+            };
+            setFees(prev => prev.map(f => f.id === challanId ? cleanChallan : f));
+        }
+
         showToast('Success', `Recorded payment of Rs. ${amount.toLocaleString()} for ${student?.name || 'Student'}`, 'success');
     };
 
     const updateFeePayment = async (challanId: string, paidAmount: number, discount: number, paidDate: string, paymentHistory?: any[]) => {
-        await apiWrite('/api/write/payments', {
+        const res = await apiWrite('/api/write/payments', {
             action: 'update-payment',
             challanId,
             paidAmount,
@@ -468,13 +537,36 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             paidDate,
             paymentHistory
         });
-        await fetchData();
+
+        // A15: Update state directly without full reload
+        if (res.challan) {
+            const updated = toCamelCase(res.challan);
+            let history = updated.paymentHistory;
+            if (typeof history === 'string') {
+                try { history = JSON.parse(history); } catch { history = []; }
+            }
+            const cleanChallan: FeeChallan = {
+                ...updated,
+                previousBalance: Number(updated.previousBalance || 0),
+                totalAmount: Number(updated.totalAmount || 0),
+                discount: Number(updated.discount || 0),
+                paidAmount: Number(updated.paidAmount || 0),
+                fineAmount: Number(updated.fineAmount || 0),
+                paymentHistory: (Array.isArray(history) ? history : []).map((p: any) => ({
+                    ...p,
+                    amount: Number(p.amount || 0)
+                }))
+            };
+            setFees(prev => prev.map(f => f.id === challanId ? cleanChallan : f));
+        }
+
         showToast('Success', 'Payment updated successfully.', 'success');
     };
 
     const cancelChallan = async (challanId: string) => {
         await apiWrite('/api/write/payments', { action: 'cancel-challan', challanId });
-        await fetchData();
+        // A15: Update state directly without full reload
+        setFees(prev => prev.map(f => f.id === challanId ? { ...f, status: 'Cancelled' } : f));
         showToast('Success', 'Challan cancelled.', 'success');
     };
 
@@ -536,7 +628,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             results: resultsToSave,
             schoolId: effectiveSchoolId
         });
-        await fetchData();
+
+        // A15: Update state directly without full reload
+        setResults(prev => {
+            const map = new Map<string, Result>();
+            prev.forEach(item => map.set(`${item.studentId}_${item.exam}_${item.subject}`, item));
+            resultsToSave.forEach(r => {
+                const key = `${r.studentId}_${r.exam}_${r.subject}`;
+                const existing = map.get(key);
+                map.set(key, {
+                    id: existing?.id || crypto.randomUUID(),
+                    studentId: r.studentId,
+                    classId: r.classId,
+                    exam: r.exam,
+                    subject: r.subject,
+                    marks: Number(r.marks) || 0,
+                    totalMarks: Number(r.totalMarks ?? r.total_marks ?? 100) || 100,
+                    schoolId: effectiveSchoolId || ''
+                });
+            });
+            return Array.from(map.values());
+        });
+
         setOperationProgress({ percentage: 0, status: '' });
         showToast('Success', `Results saved for ${total} students.`, 'success');
     };
@@ -820,7 +933,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         generateChallansForMonth, deleteChallansForMonth, addSchool, updateSchool, deleteSchool,
         addEvent, updateEvent, deleteEvent, bulkAddStudents, bulkAddUsers, bulkAddClasses,
         backupData, restoreData, promoteAllStudents, reactivateGraduatedStudents, revertLastPromotion, increaseTuitionFees, sendFeeReminders, bulkUpdateClassOrder, addFeeHead, updateFeeHead, deleteFeeHead,
-        issueLeavingCertificate, saveResults, addLog
+        issueLeavingCertificate, saveResults, addLog, loadAttendanceRange
     };
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

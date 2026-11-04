@@ -13,6 +13,7 @@ import Modal from '../common/Modal';
 import Avatar from '../common/Avatar';
 import { getClassLevel } from '../../utils/sorting';
 import DivergingBarChart, { DivergingBarChartData } from '../charts/DivergingBarChart';
+import { getTodayKarachi } from '../../utils/dates';
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -257,7 +258,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
     }, [fees, students, effectiveSchoolId]);
 
     const attendanceData = useMemo(() => {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getTodayKarachi();
         const todaysAttendance = attendance.filter(a => a.date === todayStr);
         const attendanceMap = new Map(todaysAttendance.map(a => [a.studentId, a.status]));
     
@@ -441,7 +442,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
 
     const handleAttendanceClick = (item: { label: string }) => {
         const status = item.label;
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = getTodayKarachi();
         const todaysAttendanceRecords = attendance.filter(a => a.date === todayStr);
         const todaysAttendanceMap = new Map(todaysAttendanceRecords.map(a => [a.studentId, a.status]));
 

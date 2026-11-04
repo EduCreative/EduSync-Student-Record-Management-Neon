@@ -6,6 +6,7 @@ import { usePrint } from '../../context/PrintContext';
 import { UserRole } from '../../types';
 import { formatDate } from '../../constants';
 import { getClassLevel } from '../../utils/sorting';
+import { getTodayKarachi, getFirstDayOfKarachiMonth } from '../../utils/dates';
 import PrintableReportLayout from './PrintableReportLayout';
 
 interface AttendanceReportModalProps {
@@ -13,28 +14,23 @@ interface AttendanceReportModalProps {
     onClose: () => void;
 }
 
-const getTodayString = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    const day = today.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
-const getFirstDayOfMonthString = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    return `${year}-${month}-01`;
-}
+const getTodayString = () => getTodayKarachi();
+const getFirstDayOfMonthString = () => getFirstDayOfKarachiMonth();
 
 const AttendanceReportModal: React.FC<AttendanceReportModalProps> = ({ isOpen, onClose }) => {
     const { user, activeSchoolId } = useAuth();
-    const { students, classes, attendance, getSchoolById } = useData();
+    const { students, classes, attendance, getSchoolById, loadAttendanceRange } = useData();
     const { showPrintPreview } = usePrint();
 
     const [classId, setClassId] = useState('all');
     const [startDate, setStartDate] = useState(getFirstDayOfMonthString());
     const [endDate, setEndDate] = useState(getTodayString());
+
+    React.useEffect(() => {
+        if (isOpen && startDate && endDate) {
+            loadAttendanceRange(startDate, endDate);
+        }
+    }, [isOpen, startDate, endDate, loadAttendanceRange]);
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
     const school = useMemo(() => getSchoolById(effectiveSchoolId || ''), [getSchoolById, effectiveSchoolId]);

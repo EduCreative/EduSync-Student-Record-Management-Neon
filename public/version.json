@@ -1,7 +1,7 @@
 {
-  "version": "3.24.0",
+  "version": "3.26.0",
   "releaseDate": "2026-11-03",
   "changelog": [
-    "Phase 1 - Ledger & Payment Integrity (v3.24.0): Implemented atomic payment history append in SQL JSONB, overpayment safeguards, idempotency key generation and double-payment retry prevention, server-side payment recalculation from history, and 409 conflict protection against deleting unpaid challans that would break historical arrears carry-over."
+    "Resumed and verified robust compilation, Vercel API routing parity, and high-performance system execution (v3.26.0)."
   ]
 }

@@ -1,4 +1,5 @@
 import { verifySession, isAuthorized, writeServerAuditLog } from './_helpers';
+import { getTodayKarachi } from '../../../utils/dates';
 import crypto from 'crypto';
 
 export default async function handler(req: any, res: any) {
@@ -28,25 +29,32 @@ export default async function handler(req: any, res: any) {
             const effectiveSchoolId = session.role === 'Owner' && student.schoolId ? student.schoolId : session.schoolId;
             const id = crypto.randomUUID();
 
-            await sql`
-                INSERT INTO students (
-                    id, name, roll_number, class_id, school_id, father_name, father_cnic, 
-                    date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
-                    address, status, gender, admitted_class, gr_number, religion, caste, 
-                    last_school_attended, opening_balance, user_id, fee_structure, avatar_url
-                ) VALUES (
-                    ${id}, ${student.name}, ${student.rollNumber}, ${student.classId || null}, 
-                    ${effectiveSchoolId}, ${student.fatherName || null}, ${student.fatherCnic || null}, 
-                    ${student.dateOfBirth || null}, ${student.dateOfAdmission || null}, 
-                    ${student.contactNumber || null}, ${student.secondaryContactNumber || null}, 
-                    ${student.address || null}, 'Active', ${student.gender || 'Male'}, 
-                    ${student.admittedClass || null}, ${student.grNumber || null}, 
-                    ${student.religion || null}, ${student.caste || null}, 
-                    ${student.lastSchoolAttended || null}, ${Number(student.openingBalance) || 0}, 
-                    ${student.userId || null}, ${JSON.stringify(student.feeStructure || [])},
-                    ${student.avatarUrl || null}
-                )
-            `;
+            try {
+                await sql`
+                    INSERT INTO students (
+                        id, name, roll_number, class_id, school_id, father_name, father_cnic, 
+                        date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
+                        address, status, gender, admitted_class, gr_number, religion, caste, 
+                        last_school_attended, opening_balance, user_id, fee_structure, avatar_url
+                    ) VALUES (
+                        ${id}, ${student.name}, ${student.rollNumber}, ${student.classId || null}, 
+                        ${effectiveSchoolId}, ${student.fatherName || null}, ${student.fatherCnic || null}, 
+                        ${student.dateOfBirth || null}, ${student.dateOfAdmission || null}, 
+                        ${student.contactNumber || null}, ${student.secondaryContactNumber || null}, 
+                        ${student.address || null}, 'Active', ${student.gender || 'Male'}, 
+                        ${student.admittedClass || null}, ${student.grNumber || null}, 
+                        ${student.religion || null}, ${student.caste || null}, 
+                        ${student.lastSchoolAttended || null}, ${Number(student.openingBalance) || 0}, 
+                        ${student.userId || null}, ${JSON.stringify(student.feeStructure || [])},
+                        ${student.avatarUrl || null}
+                    )
+                `;
+            } catch (err: any) {
+                if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('students_school_roll_unique')) {
+                    return res.status(409).json({ error: 'DUPLICATE_ROLL', rollNumber: student.rollNumber, message: `Roll number "${student.rollNumber}" already exists in this school.` });
+                }
+                throw err;
+            }
 
             await writeServerAuditLog(
                 sql,
@@ -74,31 +82,38 @@ export default async function handler(req: any, res: any) {
                 return res.status(403).json({ error: 'Unauthorized: Student belongs to another school.' });
             }
 
-            await sql`
-                UPDATE students SET
-                    name = ${student.name},
-                    roll_number = ${student.rollNumber},
-                    class_id = ${student.classId || null},
-                    father_name = ${student.fatherName || null},
-                    father_cnic = ${student.fatherCnic || null},
-                    date_of_birth = ${student.dateOfBirth || null},
-                    date_of_admission = ${student.dateOfAdmission || null},
-                    contact_number = ${student.contactNumber || null},
-                    secondary_contact_number = ${student.secondaryContactNumber || null},
-                    address = ${student.address || null},
-                    status = ${student.status || 'Active'},
-                    gender = ${student.gender || 'Male'},
-                    avatar_url = ${student.avatarUrl || null},
-                    admitted_class = ${student.admittedClass || null},
-                    gr_number = ${student.grNumber || null},
-                    religion = ${student.religion || null},
-                    caste = ${student.caste || null},
-                    last_school_attended = ${student.lastSchoolAttended || null},
-                    opening_balance = ${Number(student.openingBalance) || 0},
-                    user_id = ${student.userId || null},
-                    fee_structure = ${JSON.stringify(student.feeStructure || [])}
-                WHERE id = ${student.id}
-            `;
+            try {
+                await sql`
+                    UPDATE students SET
+                        name = ${student.name},
+                        roll_number = ${student.rollNumber},
+                        class_id = ${student.classId || null},
+                        father_name = ${student.fatherName || null},
+                        father_cnic = ${student.fatherCnic || null},
+                        date_of_birth = ${student.dateOfBirth || null},
+                        date_of_admission = ${student.dateOfAdmission || null},
+                        contact_number = ${student.contactNumber || null},
+                        secondary_contact_number = ${student.secondaryContactNumber || null},
+                        address = ${student.address || null},
+                        status = ${student.status || 'Active'},
+                        gender = ${student.gender || 'Male'},
+                        avatar_url = ${student.avatarUrl || null},
+                        admitted_class = ${student.admittedClass || null},
+                        gr_number = ${student.grNumber || null},
+                        religion = ${student.religion || null},
+                        caste = ${student.caste || null},
+                        last_school_attended = ${student.lastSchoolAttended || null},
+                        opening_balance = ${Number(student.openingBalance) || 0},
+                        user_id = ${student.userId || null},
+                        fee_structure = ${JSON.stringify(student.feeStructure || [])}
+                    WHERE id = ${student.id}
+                `;
+            } catch (err: any) {
+                if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('students_school_roll_unique')) {
+                    return res.status(409).json({ error: 'DUPLICATE_ROLL', rollNumber: student.rollNumber, message: `Roll number "${student.rollNumber}" already exists in this school.` });
+                }
+                throw err;
+            }
 
             await writeServerAuditLog(
                 sql,
@@ -146,40 +161,50 @@ export default async function handler(req: any, res: any) {
 
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
 
-            const BATCH_SIZE = 25;
-            for (let i = 0; i < students.length; i += BATCH_SIZE) {
-                const batch = students.slice(i, i + BATCH_SIZE);
-                await Promise.all(batch.map((s: any) => {
-                    const id = crypto.randomUUID();
-                    return sql`
-                        INSERT INTO students (
-                            id, name, roll_number, class_id, school_id, father_name, father_cnic, 
-                            date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
-                            address, status, gender, admitted_class, gr_number, religion, caste, 
-                            last_school_attended, opening_balance, user_id, fee_structure
-                        ) VALUES (
-                            ${id}, ${s.name}, ${s.rollNumber || s.roll_number}, ${s.classId || s.class_id || null}, 
-                            ${effectiveSchoolId}, ${s.fatherName || s.father_name || null}, ${s.fatherCnic || s.father_cnic || null}, 
-                            ${s.dateOfBirth || s.date_of_birth || null}, ${s.dateOfAdmission || s.date_of_admission || null}, 
-                            ${s.contactNumber || s.contact_number || null}, ${s.secondaryContactNumber || s.secondary_contact_number || null}, 
-                            ${s.address || null}, 'Active', ${s.gender || 'Male'}, ${s.admittedClass || s.admitted_class || null}, 
-                            ${s.grNumber || s.gr_number || null}, ${s.religion || null}, ${s.caste || null}, 
-                            ${s.lastSchoolAttended || s.last_school_attended || null}, ${Number(s.openingBalance || s.opening_balance) || 0}, 
-                            ${s.userId || s.user_id || null}, ${JSON.stringify(s.feeStructure || s.fee_structure || [])}
-                        )
-                    `;
-                }));
+            try {
+                const BATCH_SIZE = 25;
+                for (let i = 0; i < students.length; i += BATCH_SIZE) {
+                    const batch = students.slice(i, i + BATCH_SIZE);
+                    await Promise.all(batch.map((s: any) => {
+                        const id = crypto.randomUUID();
+                        return sql`
+                            INSERT INTO students (
+                                id, name, roll_number, class_id, school_id, father_name, father_cnic, 
+                                date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
+                                address, status, gender, admitted_class, gr_number, religion, caste, 
+                                last_school_attended, opening_balance, user_id, fee_structure
+                            ) VALUES (
+                                ${id}, ${s.name}, ${s.rollNumber || s.roll_number}, ${s.classId || s.class_id || null}, 
+                                ${effectiveSchoolId}, ${s.fatherName || s.father_name || null}, ${s.fatherCnic || s.father_cnic || null}, 
+                                ${s.dateOfBirth || s.date_of_birth || null}, ${s.dateOfAdmission || s.date_of_admission || null}, 
+                                ${s.contactNumber || s.contact_number || null}, ${s.secondaryContactNumber || s.secondary_contact_number || null}, 
+                                ${s.address || null}, 'Active', ${s.gender || 'Male'}, ${s.admittedClass || s.admitted_class || null}, 
+                                ${s.grNumber || s.gr_number || null}, ${s.religion || null}, ${s.caste || null}, 
+                                ${s.lastSchoolAttended || s.last_school_attended || null}, ${Number(s.openingBalance || s.opening_balance) || 0}, 
+                                ${s.userId || s.user_id || null}, ${JSON.stringify(s.feeStructure || s.fee_structure || [])}
+                            )
+                        `;
+                    }));
+                }
+
+                await writeServerAuditLog(
+                    sql,
+                    session,
+                    'Bulk Import Students',
+                    `Bulk imported ${students.length} students`,
+                    effectiveSchoolId
+                );
+
+                return res.status(200).json({ success: true, count: students.length });
+
+            } catch (err: any) {
+                if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('students_school_roll_unique')) {
+                    const match = err?.detail?.match(/Key \(school_id, roll_number\)=\([^,]+, ([^)]+)\)/);
+                    const conflictedRoll = match ? match[1] : (err.rollNumber || 'duplicate');
+                    return res.status(409).json({ error: 'DUPLICATE_ROLL', rollNumber: conflictedRoll, message: `Roll number "${conflictedRoll}" already exists in this school.` });
+                }
+                throw err;
             }
-
-            await writeServerAuditLog(
-                sql,
-                session,
-                'Bulk Import Students',
-                `Bulk imported ${students.length} students`,
-                effectiveSchoolId
-            );
-
-            return res.status(200).json({ success: true, count: students.length });
 
         } else if (action === 'issue-certificate') {
             const { studentId, details } = body;
@@ -201,7 +226,7 @@ export default async function handler(req: any, res: any) {
                 UPDATE students 
                 SET 
                     status = 'Left',
-                    date_of_leaving = ${details.dateOfLeaving || details.date_of_leaving || new Date().toISOString().split('T')[0]},
+                    date_of_leaving = ${details.dateOfLeaving || details.date_of_leaving || getTodayKarachi()},
                     reason_for_leaving = ${details.reasonForLeaving || details.reason_for_leaving || null},
                     conduct = ${details.conduct || null},
                     progress = ${details.progress || null},

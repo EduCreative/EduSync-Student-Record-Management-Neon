@@ -14,16 +14,11 @@ import { formatDate, formatMonthDisplay } from '../../constants';
 import StudentFeeHistory from '../students/StudentFeeHistory';
 import PrintableChallan from '../reports/PrintableChallan';
 import { usePrint } from '../../context/PrintContext';
+import { getTodayKarachi, getCurrentKarachiMonthDetails } from '../../utils/dates';
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-const getTodayString = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    const day = today.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
+const getTodayString = () => getTodayKarachi();
 
 const FeeCollectionPage: React.FC = () => {
     const { user, activeSchoolId, hasPermission } = useAuth();
@@ -58,7 +53,7 @@ const FeeCollectionPage: React.FC = () => {
     // Filters
     const [statusFilter, setStatusFilter] = useState<'Outstanding' | 'All' | 'Paid' | 'Unpaid' | 'Partial'>('Outstanding');
     const [classFilter, setClassFilter] = useState('all');
-    const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7)); // Format: YYYY-MM
+    const [monthFilter, setMonthFilter] = useState(getCurrentKarachiMonthDetails().monthCode); // Format: YYYY-MM
     const [sortBy, setSortBy] = useState<'date' | 'name' | 'rollNumber' | 'class'>('date');
 
     // Single Challan Generation

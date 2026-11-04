@@ -164,14 +164,7 @@ const ChallanGenerationPage: React.FC = () => {
 
         setIsGenerating(true);
         try {
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("Request timed out. Please check your connection.")), 20000)
-            );
-
-            await Promise.race([
-                generateChallansForMonth(month, year, feeHeadsToGenerate, studentIdsToGenerate, dueDate),
-                timeoutPromise
-            ]);
+            await generateChallansForMonth(month, year, feeHeadsToGenerate, studentIdsToGenerate, dueDate);
             setIsPreviewOpen(false); // Close modal on success
         } catch (error: any) {
             showToast('Error', error.message || 'Challan generation failed or timed out.', 'error');

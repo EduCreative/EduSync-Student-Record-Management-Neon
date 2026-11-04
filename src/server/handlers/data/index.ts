@@ -1,4 +1,5 @@
 import { getDb, authenticateRequest, clearSessionCookie, toCamelCase } from '../../_db';
+import { getCurrentKarachiYear, getKarachiDateOffset } from '../../../utils/dates';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'GET') {
@@ -154,22 +155,60 @@ export default async function handler(req: any, res: any) {
 
         if (targetStudentIds.length > 0) {
             // Fees: Only Owner, Admin, Accountant, Parent, Student (Teachers do not manage fees)
-            if (!isTeacher) {
-                feesData = await sql`
-                    SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items, 
-                           previous_balance, total_amount, discount, paid_amount, status, 
-                           paid_date, fine_amount, payment_history, created_at
-                    FROM fee_challans 
-                    WHERE student_id = ANY(${targetStudentIds})
-                    ORDER BY year DESC, month DESC
-                `;
+            // A14: Scoped query by academic year (defaults to current Karachi year, ?year=all to disable)
+            const requestedYear = req.query?.year;
+            let effectiveYear: number | null = null;
+            if (requestedYear) {
+                if (requestedYear !== 'all') {
+                    const parsed = parseInt(String(requestedYear), 10);
+                    if (!isNaN(parsed)) effectiveYear = parsed;
+                }
+            } else {
+                effectiveYear = getCurrentKarachiYear();
             }
 
-            // Attendance and Results
-            [attData, resData] = await Promise.all([
-                sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds})`,
-                sql`SELECT id, student_id, exam, subject, marks, total_marks, school_id FROM results WHERE student_id = ANY(${targetStudentIds})`,
-            ]);
+            if (!isTeacher) {
+                if (effectiveYear !== null) {
+                    feesData = await sql`
+                        SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items, 
+                               previous_balance, total_amount, discount, paid_amount, status, 
+                               paid_date, fine_amount, payment_history, created_at
+                        FROM fee_challans 
+                        WHERE student_id = ANY(${targetStudentIds}) AND year = ${effectiveYear}
+                        ORDER BY year DESC, month DESC
+                    `;
+                } else {
+                    feesData = await sql`
+                        SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items, 
+                               previous_balance, total_amount, discount, paid_amount, status, 
+                               paid_date, fine_amount, payment_history, created_at
+                        FROM fee_challans 
+                        WHERE student_id = ANY(${targetStudentIds})
+                        ORDER BY year DESC, month DESC
+                    `;
+                }
+            }
+
+            // Attendance (A14: Default attendance to last 45 days, support ?attendanceFrom=&attendanceTo=)
+            const attendanceFrom = req.query?.attendanceFrom;
+            const attendanceTo = req.query?.attendanceTo;
+
+            let attQuery;
+            if (attendanceFrom === 'all') {
+                attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds})`;
+            } else if (attendanceFrom && attendanceTo) {
+                attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom} AND date <= ${attendanceTo}`;
+            } else if (attendanceFrom) {
+                attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom}`;
+            } else {
+                // Default: Last 45 days
+                const defaultAttendanceFrom = getKarachiDateOffset(-45);
+                attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${defaultAttendanceFrom}`;
+            }
+
+            const resQuery = sql`SELECT id, student_id, exam, subject, marks, total_marks, school_id FROM results WHERE student_id = ANY(${targetStudentIds})`;
+
+            [attData, resData] = await Promise.all([attQuery, resQuery]);
         }
 
         // 6. Fetch Activity Logs (Owner, Admin, Accountant only)
