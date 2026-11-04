@@ -1,9 +1,9 @@
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import { DownloadIcon, UploadIcon } from '../../constants';
+import { DownloadIcon } from '../../constants';
 import Modal from '../common/Modal';
 import { UserRole } from '../../types';
 import { useToast } from '../../context/ToastContext';
@@ -20,8 +20,6 @@ const SettingsPage: React.FC = () => {
     const { user, effectiveRole, activeSchoolId } = useAuth();
     const { schools, backupData, backupToDrive, restoreData, updateSchool, feeHeads, addFeeHead, updateFeeHead, autoBackupSettings, updateAutoBackupSettings } = useData();
     const { showToast } = useToast();
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [restoreFile, setRestoreFile] = useState<File | null>(null);
 
     // State for School Details
     const [isSchoolSaving, setIsSchoolSaving] = useState(false);
@@ -91,20 +89,6 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    const handleRestoreInitiate = (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files && event.target.files.length > 0) {
-            setRestoreFile(event.target.files[0]);
-        }
-        event.target.value = '';
-    };
-
-    const handleConfirmRestore = async () => {
-        if (restoreFile) {
-            setRestoreFile(null);
-            await restoreData(restoreFile);
-        }
-    };
-
     const handleManualDriveBackup = async () => {
         setIsCloudBackingUp(true);
         await backupToDrive();
@@ -140,13 +124,6 @@ const SettingsPage: React.FC = () => {
 
     return (
         <>
-            <Modal isOpen={!!restoreFile} onClose={() => setRestoreFile(null)} title="Confirm Snapshot Load">
-                <p className="text-secondary-600 dark:text-secondary-400">Restore state from <strong>{restoreFile?.name}</strong>? Existing school records will be replaced via atomic database transaction.</p>
-                <div className="flex justify-end space-x-2 pt-4">
-                    <button type="button" onClick={() => setRestoreFile(null)} className="btn-secondary">Cancel</button>
-                    <button type="button" onClick={handleConfirmRestore} className="btn-danger">Start Reconstruction</button>
-                </div>
-            </Modal>
 
             <Modal isOpen={showCloudPicker} onClose={() => setShowCloudPicker(false)} title="Available Cloud Snapshots">
                 <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
@@ -336,13 +313,9 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <button onClick={backupData} className="btn-secondary text-xs shadow-none"><DownloadIcon className="w-3 h-3 mr-1" /> JSON Export</button>
                             </div>
-                            <div className="flex items-center justify-between pt-2 border-t dark:border-secondary-700">
-                                <div>
-                                    <p className="font-medium text-sm">Restore from Snapshot</p>
-                                    <p className="text-xs text-secondary-500">Atomic server-side database restore with data integrity verification</p>
-                                </div>
-                                <input ref={fileInputRef} type="file" accept=".json" onChange={handleRestoreInitiate} className="hidden" />
-                                <button onClick={() => fileInputRef.current?.click()} className="btn-secondary text-xs shadow-none"><UploadIcon className="w-3 h-3 mr-1"/> Load File</button>
+                            <div className="p-4 border-2 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/20 rounded-lg">
+                                <p className="text-sm font-bold text-red-700 dark:text-red-400">Database Restore Disabled</p>
+                                <p className="text-xs text-red-600 dark:text-red-300 mt-1">Database restore is currently disabled. A safe CLI restore tool will be provided in SETUP.md before launch. Please do not attempt to restore via this page.</p>
                             </div>
                         </div>
                     </div>

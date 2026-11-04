@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
 import { Attendance } from '../../types';
-import { getTodayKarachi } from '../../utils/dates';
+import { getTodayKarachi, toLocalDateString } from '../../utils/dates';
 
 interface StudentAttendanceProps {
     studentId: string;
@@ -80,7 +80,7 @@ const StudentAttendance: React.FC<StudentAttendanceProps> = ({ studentId }) => {
                 <div className="grid grid-cols-7 border-t border-l border-secondary-200 dark:border-secondary-700">
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => <div key={d} className="text-center py-2 bg-secondary-50 dark:bg-secondary-900 font-medium text-sm border-r border-b dark:border-secondary-700">{d}</div>)}
                     {days.map(d => {
-                        const dateStr = d.toISOString().split('T')[0];
+                        const dateStr = toLocalDateString(d);
                         const status = eventsByDate[dateStr];
                         const statusInfo = getStatusInfo(status);
                         const isToday = getTodayKarachi() === dateStr;

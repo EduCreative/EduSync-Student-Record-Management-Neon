@@ -14,6 +14,7 @@ import ImportModal from '../common/ImportModal';
 import { Permission } from '../../permissions';
 import { getClassLevel } from '../../utils/sorting';
 import GraduatedStudentsModal from '../classes/GraduatedStudentsModal';
+import { getTodayKarachi } from '../../utils/dates';
 
 interface StudentManagementPageProps {
     setActiveView: (view: ActiveView) => void;
@@ -308,7 +309,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
         father_name: "Zulfiqar Ahmed",
         father_cnic: "35202-1234567-1",
         date_of_birth: "2010-05-15",
-        date_of_admission: new Date().toISOString().split('T')[0],
+        date_of_admission: getTodayKarachi(),
         contact_number: "0300-1234567",
         secondary_contact_number: "0333-7654321",
         address: "123 School Lane, City",

@@ -1,6 +1,22 @@
 
 # Changelog
 
+## [3.31.0] - 2026-11-04
+
+### Batch F2: Server-Side Ledger & Date Precision
+- **F2.1 (`/api/data` Ledger & Outstanding Dues)**: Updated `/api/data` to return older-year outstanding dues and a per-student ledger computed across all years, preventing fiscal-year rollovers from hiding past arrears.
+- **F2.2 (`toLocalDateString` Helper)**: Added `toLocalDateString` in `src/utils/dates.ts` to ensure local Karachi date calculations (`YYYY-MM-DD`).
+- **F2.3 (Date Helper Migration)**: Replaced `.toISOString().split('T')[0]` across calendar, attendance, and student form/management views with `toLocalDateString` or `getTodayKarachi` to prevent off-by-one UTC day-shift bugs.
+
+## [3.30.0] - 2026-11-04
+
+### Batch F1: Hazards & Data-Loss Vector Mitigations
+- **F1.1 (Restore Endpoint & UI Safeguards)**: Stubbed `scripts/restore.ts` and replaced the in-app restore file upload UI in `SettingsPage.tsx` with a warning notice.
+- **F1.2 (Migration 003)**: Created `migrations/003_challan_number.sql` dropping the erroneous `challan_number` unique index to prevent multi-school collision errors (`23505`), and cleaned up `001_schema_sync.sql` and `schema.sql`.
+- **F1.3 (`change-password` Session Enforcement)**: Upgraded `change-password.ts` to use `verifySession` instead of JWT-only `verifyToken`, ensuring suspended/inactive users cannot reset passwords.
+- **F1.4 (`update-payment` Validation)**: Added strict array validation for `paymentHistory` in `payments.ts` to prevent ledger wiping.
+- **F1.5 (`bulk-update-order` Scoping)**: Added school ownership filtering to `bulk-update-order` in `classes.ts` to prevent cross-tenant class reordering.
+
 ## [3.29.0] - 2026-11-03
 
 ### Phases 1-5 Audit Implementation & Administrative Polish

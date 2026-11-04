@@ -153,8 +153,10 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'Cannot update payments on a cancelled challan.' });
             }
 
-            // Recompute paid_amount strictly from the paymentHistory array, rejecting negative amounts (A9)
-            const historyToSave = Array.isArray(paymentHistory) ? paymentHistory : [];
+            if (!Array.isArray(paymentHistory)) {
+                return res.status(400).json({ error: 'paymentHistory must be an array. Refusing to update a payment with an empty or malformed history.' });
+            }
+            const historyToSave = paymentHistory;
             let recomputedPaidAmount = 0;
             for (const item of historyToSave) {
                 const itemAmt = Number(item?.amount) || 0;

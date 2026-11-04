@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS fee_heads (
 -- Fee Challans table
 CREATE TABLE IF NOT EXISTS fee_challans (
     id UUID PRIMARY KEY,
-    challan_number TEXT NOT NULL,
+    challan_number TEXT NOT NULL, -- NOT unique. Uniqueness enforced per (student_id, month, year) via idx_unique_active_student_challan.
     student_id UUID REFERENCES students(id) NOT NULL,
     class_id UUID REFERENCES classes(id) NOT NULL,
     month TEXT NOT NULL,
@@ -203,4 +203,3 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_timestamp ON activity_logs(timestam
 
 -- Unique Indexes for Fee Challans
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_student_challan ON fee_challans (student_id, month, year) WHERE status <> 'Cancelled';
-CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_challan_number ON fee_challans (challan_number) WHERE status <> 'Cancelled';

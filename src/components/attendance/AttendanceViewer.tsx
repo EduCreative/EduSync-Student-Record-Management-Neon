@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 // FIX: Import UserRole to resolve 'Cannot find name' error.
 import { UserRole } from '../../types';
-import { getTodayKarachi } from '../../utils/dates';
+import { getTodayKarachi, toLocalDateString } from '../../utils/dates';
 
 const AttendanceViewer: React.FC = () => {
     const { user } = useAuth();
@@ -113,7 +113,7 @@ const AttendanceViewer: React.FC = () => {
                 <div className="grid grid-cols-7 border-t border-l border-secondary-200 dark:border-secondary-700">
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => <div key={d} className="text-center py-2 bg-secondary-50 dark:bg-secondary-900 font-medium text-sm border-r border-b dark:border-secondary-700">{d}</div>)}
                     {days.map(d => {
-                        const dateStr = d.toISOString().split('T')[0];
+                        const dateStr = toLocalDateString(d);
                         const status = eventsByDate[dateStr];
                         const isToday = getTodayKarachi() === dateStr;
                         const isCurrentMonth = d.getMonth() === currentDate.getMonth();

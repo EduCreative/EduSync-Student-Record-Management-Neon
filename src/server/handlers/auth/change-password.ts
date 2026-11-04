@@ -1,6 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { getDb, verifyToken, extractToken } from '../../_db';
-import { writeServerAuditLog } from '../write/_helpers';
+import { verifySession, writeServerAuditLog } from '../write/_helpers';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST') {
@@ -9,15 +8,9 @@ export default async function handler(req: any, res: any) {
     }
 
     try {
-        const token = extractToken(req);
-        if (!token) {
-            return res.status(401).json({ error: 'Unauthorized: No active session' });
-        }
-
-        const payload = verifyToken(token);
-        if (!payload || !payload.userId) {
-            return res.status(401).json({ error: 'Unauthorized: Session invalid or expired' });
-        }
+        const auth = await verifySession(req, res);
+        if (!auth) return;
+        const { session, sql } = auth;
 
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
         const { currentPassword, newPassword, targetUserId } = body;
@@ -26,13 +19,11 @@ export default async function handler(req: any, res: any) {
             return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
         }
 
-        const sql = getDb();
-
-        const userIdToUpdate = (targetUserId && targetUserId !== payload.userId) 
+        const userIdToUpdate = (targetUserId && targetUserId !== session.userId) 
             ? targetUserId 
-            : payload.userId;
+            : session.userId;
 
-        const isSelf = (userIdToUpdate === payload.userId);
+        const isSelf = (userIdToUpdate === session.userId);
 
         const users = await sql`
             SELECT id, password, role, school_id FROM profiles WHERE id = ${userIdToUpdate} LIMIT 1
@@ -50,12 +41,12 @@ export default async function handler(req: any, res: any) {
         }
 
         if (!isSelf) {
-            if (payload.role === 'Owner') {
+            if (session.role === 'Owner') {
                 if (targetUser.role === 'Owner') {
                     return res.status(403).json({ error: 'Forbidden: Owner cannot reset another Owner password.' });
                 }
-            } else if (payload.role === 'Admin') {
-                if (targetUser.school_id !== payload.schoolId) {
+            } else if (session.role === 'Admin') {
+                if (targetUser.school_id !== session.schoolId) {
                     return res.status(403).json({ error: 'Forbidden: Admin can only reset passwords for users in their own school.' });
                 }
                 const rolesBelowAdmin = ['Accountant', 'Teacher', 'Parent', 'Student'];
@@ -96,7 +87,7 @@ export default async function handler(req: any, res: any) {
 
         await writeServerAuditLog(
             sql,
-            payload,
+            session,
             isSelf ? 'Change Password' : 'Reset Password',
             isSelf ? 'User changed their own password' : `Reset password for user ID ${userIdToUpdate} (${targetUser.role})`,
             targetUser.school_id

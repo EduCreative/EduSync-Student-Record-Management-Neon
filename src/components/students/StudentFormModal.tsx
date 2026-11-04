@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 import ImageUpload from '../common/ImageUpload';
 import { getClassLevel } from '../../utils/sorting';
+import { getTodayKarachi } from '../../utils/dates';
 
 interface StudentFormModalProps {
     isOpen: boolean;
@@ -14,11 +15,7 @@ interface StudentFormModalProps {
     studentToEdit?: Student | null;
 }
 
-const getTodayString = () => {
-    const today = new Date();
-    const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000);
-    return localDate.toISOString().split('T')[0];
-};
+const getTodayString = () => getTodayKarachi();
 
 // Helper functions for formatting
 const formatCnic = (value: string): string => {

@@ -63,10 +63,27 @@ export default async function handler(req: any, res: any) {
 
         } else if (action === 'bulk-update-order') {
             const { updates } = body;
-            for (const u of updates) {
-                await sql`UPDATE classes SET sort_order = ${u.sortOrder} WHERE id = ${u.id}`;
+            if (!Array.isArray(updates) || updates.length === 0) {
+                return res.status(200).json({ success: true, count: 0 });
             }
-            return res.status(200).json({ success: true });
+            const ids = updates.map((u: any) => u.id);
+            const isOwnerGlobal = session.role === 'Owner';
+            const effectiveSchoolId = session.schoolId;
+
+            const valid = await sql`
+                SELECT id FROM classes
+                WHERE id = ANY(${ids})
+                AND (${isOwnerGlobal}::boolean OR school_id = ${effectiveSchoolId}::uuid)
+            `;
+            const validIds = new Set(valid.map((c: any) => c.id));
+            let updatedCount = 0;
+            for (const u of updates) {
+                if (validIds.has(u.id)) {
+                    await sql`UPDATE classes SET sort_order = ${u.sortOrder} WHERE id = ${u.id}`;
+                    updatedCount++;
+                }
+            }
+            return res.status(200).json({ success: true, count: updatedCount });
 
         // Subject operations
         } else if (action === 'add-subject') {

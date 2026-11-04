@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { SchoolEvent, UserRole } from '../../types';
 import EventFormModal from './EventFormModal';
 import Modal from '../common/Modal';
+import { toLocalDateString } from '../../utils/dates';
 
 const CalendarPage: React.FC = () => {
     const { user, effectiveRole, activeSchoolId } = useAuth();
@@ -51,7 +52,7 @@ const CalendarPage: React.FC = () => {
     // Handlers
     const handleDayClick = (date: Date) => {
         if (!isAdmin) return;
-        setSelectedDate(date.toISOString().split('T')[0]);
+        setSelectedDate(toLocalDateString(date));
         setEventToEdit(null);
         setIsModalOpen(true);
     };
@@ -132,7 +133,7 @@ const CalendarPage: React.FC = () => {
             <div className="space-y-6">
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">School Calendar</h1>
-                    {isAdmin && <button onClick={() => { setSelectedDate(new Date().toISOString().split('T')[0]); setEventToEdit(null); setIsModalOpen(true); }} className="btn-primary">+ Add Event</button>}
+                    {isAdmin && <button onClick={() => { setSelectedDate(toLocalDateString(new Date())); setEventToEdit(null); setIsModalOpen(true); }} className="btn-primary">+ Add Event</button>}
                 </div>
 
                 <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-4">
@@ -147,9 +148,9 @@ const CalendarPage: React.FC = () => {
                             <div key={day} className="text-center py-2 bg-secondary-50 dark:bg-secondary-900 font-medium text-sm border-r border-b dark:border-secondary-700">{day}</div>
                         ))}
                         {days.map(d => {
-                            const dateStr = d.toISOString().split('T')[0];
+                            const dateStr = toLocalDateString(d);
                             const dayEvents = eventsByDate[dateStr] || [];
-                            const isToday = new Date().toISOString().split('T')[0] === dateStr;
+                            const isToday = toLocalDateString(new Date()) === dateStr;
                             const isCurrentMonth = d.getMonth() === currentDate.getMonth();
 
                             return (

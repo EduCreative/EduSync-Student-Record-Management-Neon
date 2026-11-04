@@ -79,3 +79,17 @@ export function getFirstDayOfKarachiMonth(dateObj: Date = new Date()): string {
     const [year, month] = todayStr.split('-');
     return `${year}-${month}-01`;
 }
+
+/**
+ * Returns a local-time YYYY-MM-DD string. Never use .toISOString().split('T')[0]
+ * for calendar/attendance/print output — it shifts by one day in Asia/Karachi.
+ */
+export function toLocalDateString(date: Date | string | number): string {
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+

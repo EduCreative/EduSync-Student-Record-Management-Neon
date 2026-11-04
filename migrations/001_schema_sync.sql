@@ -12,9 +12,11 @@ UPDATE results r SET school_id = s.school_id FROM students s WHERE r.student_id 
 -- WARNING: Run these queries. If they return results, you MUST delete or update 
 -- those duplicate rows before proceeding to the constraints below.
 SELECT student_id, month, year, COUNT(*) FROM fee_challans WHERE status <> 'Cancelled' GROUP BY student_id, month, year HAVING COUNT(*) > 1;
-SELECT challan_number, COUNT(*) FROM fee_challans WHERE status <> 'Cancelled' GROUP BY challan_number HAVING COUNT(*) > 1;
 
 -- 4. Constraints (Run AFTER clearing duplicates)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_student_challan ON fee_challans (student_id, month, year) WHERE status <> 'Cancelled';
-CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_challan_number ON fee_challans (challan_number) WHERE status <> 'Cancelled';
-ALTER TABLE fee_challans ADD CONSTRAINT check_amounts CHECK (paid_amount >= 0 AND discount >= 0 AND total_amount >= 0);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_amounts') THEN
+    ALTER TABLE fee_challans ADD CONSTRAINT check_amounts CHECK (paid_amount >= 0 AND discount >= 0 AND total_amount >= 0);
+  END IF;
+END $$;

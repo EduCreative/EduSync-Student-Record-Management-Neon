@@ -152,6 +152,7 @@ export default async function handler(req: any, res: any) {
         let feesData: any[] = [];
         let attData: any[] = [];
         let resData: any[] = [];
+        let ledgerRows: any[] = [];
 
         if (targetStudentIds.length > 0) {
             // Fees: Only Owner, Admin, Accountant, Parent, Student (Teachers do not manage fees)
@@ -168,8 +169,11 @@ export default async function handler(req: any, res: any) {
             }
 
             if (!isTeacher) {
+                let currentFeesData: any[] = [];
+                let earlierOutstandingFees: any[] = [];
+
                 if (effectiveYear !== null) {
-                    feesData = await sql`
+                    currentFeesData = await sql`
                         SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items, 
                                previous_balance, total_amount, discount, paid_amount, status, 
                                paid_date, fine_amount, payment_history, created_at
@@ -177,8 +181,20 @@ export default async function handler(req: any, res: any) {
                         WHERE student_id = ANY(${targetStudentIds}) AND year = ${effectiveYear}
                         ORDER BY year DESC, month DESC
                     `;
+
+                    earlierOutstandingFees = await sql`
+                        SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items,
+                               previous_balance, total_amount, discount, paid_amount, status,
+                               paid_date, fine_amount, payment_history, created_at
+                        FROM fee_challans
+                        WHERE student_id = ANY(${targetStudentIds})
+                          AND year < ${effectiveYear}
+                          AND status <> 'Cancelled'
+                          AND (paid_amount + discount) < total_amount
+                        ORDER BY year DESC, month DESC
+                    `;
                 } else {
-                    feesData = await sql`
+                    currentFeesData = await sql`
                         SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items, 
                                previous_balance, total_amount, discount, paid_amount, status, 
                                paid_date, fine_amount, payment_history, created_at
@@ -187,6 +203,43 @@ export default async function handler(req: any, res: any) {
                         ORDER BY year DESC, month DESC
                     `;
                 }
+
+                const feeMap = new Map();
+                for (const f of [...currentFeesData, ...earlierOutstandingFees]) {
+                    feeMap.set(f.id, f);
+                }
+                feesData = Array.from(feeMap.values());
+            }
+
+            if (!isTeacher && targetStudentIds.length > 0) {
+                ledgerRows = await sql`
+                    WITH charged AS (
+                      SELECT student_id,
+                        COALESCE(SUM(
+                          COALESCE((SELECT SUM((item->>'amount')::numeric)
+                                    FROM jsonb_array_elements(
+                                      CASE WHEN jsonb_typeof(fee_items) = 'array' THEN fee_items ELSE '[]'::jsonb END
+                                    ) AS item), 0)
+                          + COALESCE(fine_amount, 0)
+                        ), 0) AS total_charged,
+                        COALESCE(SUM(paid_amount), 0) AS total_paid,
+                        COALESCE(SUM(discount), 0) AS total_discount
+                      FROM fee_challans
+                      WHERE student_id = ANY(${targetStudentIds})
+                        AND status <> 'Cancelled'
+                      GROUP BY student_id
+                    )
+                    SELECT
+                      s.id AS student_id,
+                      COALESCE(c.total_charged, 0) AS total_charged,
+                      COALESCE(c.total_paid, 0) AS total_paid,
+                      COALESCE(c.total_discount, 0) AS total_discount,
+                      COALESCE(s.opening_balance, 0) AS opening_balance,
+                      COALESCE(s.opening_balance, 0) + COALESCE(c.total_charged, 0) - COALESCE(c.total_paid, 0) - COALESCE(c.total_discount, 0) AS balance
+                    FROM students s
+                    LEFT JOIN charged c ON c.student_id = s.id
+                    WHERE s.id = ANY(${targetStudentIds})
+                `;
             }
 
             // Attendance (A14: Default attendance to last 45 days, support ?attendanceFrom=&attendanceTo=)
@@ -275,6 +328,15 @@ export default async function handler(req: any, res: any) {
 
         const transformedLogs = toCamelCase(logsData);
 
+        const transformedLedger = isTeacher ? [] : toCamelCase(ledgerRows).map((l: any) => ({
+            studentId: l.studentId,
+            totalCharged: Number(l.totalCharged || 0),
+            totalPaid: Number(l.totalPaid || 0),
+            totalDiscount: Number(l.totalDiscount || 0),
+            openingBalance: Number(l.openingBalance || 0),
+            balance: Number(l.balance || 0),
+        }));
+
         return res.status(200).json({
             schools: transformedSchools,
             classes: transformedClasses,
@@ -287,7 +349,8 @@ export default async function handler(req: any, res: any) {
             fees: transformedFees,
             attendance: transformedAttendance,
             results: transformedResults,
-            logs: transformedLogs
+            logs: transformedLogs,
+            ledger: transformedLedger
         });
 
     } catch (err: any) {
