@@ -93,7 +93,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (res.status === 404) {
                     return {
                         success: false,
-                        error: 'Backend API not found (404). Please ensure vercel.json rewrites point to /api and the deployment is up to date.'
+                        error: data?.error || 'Backend API not found (404). Please ensure vercel.json rewrites point to /api and the deployment is up to date.'
                     };
                 }
                 const errorMessage = data?.error || (await res.text().catch(() => '')) || `Authentication failed with status ${res.status}`;

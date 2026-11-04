@@ -22,7 +22,12 @@ import notificationsHandler from './handlers/notifications/index';
 
 export const apiRouter = Router();
 
+apiRouter.get('/', (_req, res) => {
+    res.json({ success: true, message: 'EduSync API service operational', timestamp: new Date().toISOString() });
+});
+
 apiRouter.all('/auth/login', (req, res) => loginHandler(req, res));
+
 apiRouter.all('/auth/me', (req, res) => meHandler(req, res));
 apiRouter.all('/auth/logout', (req, res) => logoutHandler(req, res));
 apiRouter.all('/auth/change-password', (req, res) => changePasswordHandler(req, res));

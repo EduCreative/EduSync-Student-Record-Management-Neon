@@ -1,11 +1,11 @@
 {
   "name": "edusync-student-record-management-neon",
   "private": true,
-  "version": "3.23.12",
+  "version": "3.23.13",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "npx esbuild src/server/index.ts --bundle --platform=node --format=cjs --outfile=api/[...slug].js && tsc && vite build",
+    "build": "npx esbuild src/server/index.ts --bundle --platform=node --format=cjs --footer:js=\"if (module.exports && module.exports.default) { const d = module.exports.default; module.exports = d; module.exports.default = d; }\" --outfile=api/index.js && tsc && vite build",
     "preview": "vite preview",
     "start": "node server.ts"
   },

@@ -1,6 +1,24 @@
 
 # Changelog
 
+## [3.23.13] - 2026-11-03
+
+### Vercel Deployment API Rewrite & Serverless Parity
+- **Vercel Rewrite Configuration (`vercel.json`)**:
+  - Restored explicit `/api/(.*)` and `/api` rewrite rules pointing to the `/api` serverless handler ahead of the SPA single-page fallback.
+  - Resolves `404 Not Found` errors when accessing `/api/auth/login`, `/api/data`, and `/api/write/*` on Vercel deployments.
+- **Canonical Serverless Function (`api/index.js`)**:
+  - Configured `build` script in `package.json` to bundle `src/server/index.ts` directly into `api/index.js` using esbuild.
+  - Added dual CommonJS export compatibility footer (`module.exports = handler; module.exports.default = handler;`) to support any Node.js runtime environment.
+- **Intelligent URL Restoration (`src/server/index.ts`)**:
+  - Restored requested URI resolution in the serverless handler via `x-matched-path`, `x-forwarded-uri`, `x-original-url`, `x-real-url`, and `req.originalUrl` when Vercel rewrites incoming paths to `/api`.
+- **Catch-All Forwarding Proxy (`api/[...slug].js`)**:
+  - Replaced duplicate 1.6MB bundle in `api/[...slug].js` with a lightweight 2-line module proxy forwarding directly to `./index.js` for seamless backward compatibility.
+- **API Health Check Endpoint (`src/server/apiRouter.ts`)**:
+  - Added `GET /api` root endpoint returning `200 OK` status with operational timestamp for instant server health verification.
+- **Client Error Extraction (`src/context/AuthContext.tsx`)**:
+  - Enhanced 404 handler in `login()` to parse JSON `data?.error` before displaying fallback diagnostic instructions.
+
 ## [3.23.12] - 2026-11-02
 
 ### Native Catch-All Vercel Serverless Function (`api/[...slug].js`)

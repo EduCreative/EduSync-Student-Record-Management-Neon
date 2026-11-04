@@ -1,7 +1,7 @@
 {
-  "version": "3.23.12",
-  "releaseDate": "2026-11-02",
+  "version": "3.23.13",
+  "releaseDate": "2026-11-03",
   "changelog": [
-    "Native Catch-All Vercel Serverless Function (v3.23.12): Replaced stand-in API handlers with a catch-all function `api/[...slug].js` bundled directly from real `src/server` codebase. Removed URL path hacks and manual `/api` rewrites from `vercel.json` to leverage native Vercel catch-all routing."
+    "Vercel Deployment API Rewrite & Serverless Parity (v3.23.13): Fixed backend API 404 on Vercel deployments. Restored explicit /api/(.*) and /api rewrites in vercel.json mapping to canonical serverless entrypoint api/index.js with intelligent x-matched-path / x-forwarded-uri URL restoration in the serverless handler. Configured dual CommonJS module exports and provided api/[...slug].js fallback proxy."
   ]
 }
