@@ -1,6 +1,13 @@
 
 # Changelog
 
+## [3.28.0] - 2026-11-03
+
+### Phase 4: Advanced Reporting, Activity Log Integration & System Verification
+- **Advanced Reporting & Export Endpoints**: Verified secure, tenant-isolated backend report generation for fee collections, defaulters, attendance, and student metrics.
+- **Activity Log & Audit Trail Expansion**: Ensured comprehensive server activity log persistence across tenant operations and admin/owner monitoring.
+- **Production Hardening & System Versioning**: Bumped application version to `3.28.0` across all metadata, version files, and changelogs.
+
 ## [3.27.0] - 2026-11-03
 
 ### Phase 3: Security Hardening, Role Access Controls & Session Integrity

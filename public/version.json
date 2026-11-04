@@ -1,7 +1,7 @@
 {
-  "version": "3.27.0",
+  "version": "3.28.0",
   "releaseDate": "2026-11-03",
   "changelog": [
-    "Implemented Phase 3 Security Hardening: strict 32+ char SESSION_SECRET enforcement, role allow-lists, password reset and change validations, school ownership checks, session re-validation, and database schema sync."
+    "Completed Phase 4 Advanced Reporting, Activity Log Integration & Production System Verification."
   ]
 }
