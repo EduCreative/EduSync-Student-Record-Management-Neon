@@ -57,7 +57,7 @@ interface DataContextType {
     updateExam: (updatedExam: Exam) => Promise<void>;
     deleteExam: (examId: string) => Promise<void>;
     setAttendance: (date: string, attendanceData: { studentId: string; status: 'Present' | 'Absent' | 'Leave' }[]) => Promise<void>;
-    recordFeePayment: (challanId: string, amount: number, discount: number, paidDate: string) => Promise<void>;
+    recordFeePayment: (challanId: string, amount: number, discount: number, paidDate: string, options?: { allowOverpayment?: boolean; idempotencyKey?: string }) => Promise<void>;
     updateFeePayment: (challanId: string, paidAmount: number, discount: number, paidDate: string, paymentHistory?: any[]) => Promise<void>;
     cancelChallan: (challanId: string) => Promise<void>;
     generateChallansForMonth: (month: string, year: number, selectedFeeHeads: { feeHeadId: string, amount: number }[], studentIds: string[], dueDate?: string) => Promise<number>;
@@ -441,7 +441,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         showToast('Success', `Attendance recorded for ${total} students.`, 'success');
     };
 
-    const recordFeePayment = async (challanId: string, amount: number, discount: number, paidDate: string) => {
+    const recordFeePayment = async (challanId: string, amount: number, discount: number, paidDate: string, options?: { allowOverpayment?: boolean; idempotencyKey?: string }) => {
         const challan = fees.find(f => f.id === challanId);
         if (!challan) return;
         const student = students.find(s => s.id === challan.studentId);
@@ -451,7 +451,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             challanId,
             amount,
             discount,
-            paidDate
+            paidDate,
+            allowOverpayment: options?.allowOverpayment,
+            idempotencyKey: options?.idempotencyKey
         });
         await fetchData();
         showToast('Success', `Recorded payment of Rs. ${amount.toLocaleString()} for ${student?.name || 'Student'}`, 'success');

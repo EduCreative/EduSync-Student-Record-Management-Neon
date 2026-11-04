@@ -35830,11 +35830,14 @@ async function handler11(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
     const { action } = body;
     if (action === "record-payment") {
-      const { challanId, amount, discount = 0, paidDate } = body;
+      const { challanId, amount, discount = 0, paidDate, allowOverpayment, idempotencyKey } = body;
       const numAmount = Number(amount) || 0;
       const numDiscount = Number(discount) || 0;
       if (!challanId || numAmount <= 0) {
         return res.status(400).json({ error: "Challan ID and valid positive amount are required." });
+      }
+      if (numDiscount < 0) {
+        return res.status(400).json({ error: "Discount cannot be negative." });
       }
       const challanRows = await sql`
                 SELECT fc.*, s.school_id, s.name as student_name, s.roll_number
@@ -35850,8 +35853,9 @@ async function handler11(req, res) {
       if (session.role !== "Owner" && session.schoolId && challan.school_id !== session.schoolId) {
         return res.status(403).json({ error: "Unauthorized: This challan belongs to another school." });
       }
-      const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-      const validatedPaidDate = paidDate && paidDate > todayStr ? todayStr : paidDate || todayStr;
+      if (challan.status === "Cancelled") {
+        return res.status(400).json({ error: "Cannot record payment on a cancelled challan." });
+      }
       let existingHistory = challan.payment_history || [];
       if (typeof existingHistory === "string") {
         try {
@@ -35861,24 +35865,38 @@ async function handler11(req, res) {
         }
       }
       if (!Array.isArray(existingHistory)) existingHistory = [];
+      if (idempotencyKey && existingHistory.some((entry) => entry.idempotencyKey === idempotencyKey)) {
+        return res.status(200).json({ success: true, challan, duplicatePrevented: true });
+      }
+      const currentDiscount = numDiscount > 0 ? numDiscount : Number(challan.discount || 0);
+      const remainingBalance = Math.max(0, Number(challan.total_amount) - currentDiscount - Number(challan.paid_amount || 0));
+      if (numAmount > remainingBalance && allowOverpayment !== true) {
+        return res.status(400).json({
+          error: `Payment amount (Rs. ${numAmount.toLocaleString()}) exceeds the remaining balance (Rs. ${remainingBalance.toLocaleString()}). Overpayment confirmation required.`,
+          requiresOverpaymentConfirmation: true,
+          remainingBalance
+        });
+      }
+      const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      const validatedPaidDate = paidDate && paidDate > todayStr ? todayStr : paidDate || todayStr;
       const newRecord = {
         amount: numAmount,
         date: validatedPaidDate,
         recordedBy: session.name || session.email,
-        recordedAt: (/* @__PURE__ */ new Date()).toISOString()
+        recordedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        idempotencyKey: idempotencyKey || null
       };
-      const updatedHistory = [...existingHistory, newRecord];
       const updateResult = await sql`
                 UPDATE fee_challans
                 SET 
                     paid_amount = paid_amount + ${numAmount},
-                    discount = ${numDiscount},
+                    discount = ${currentDiscount},
                     paid_date = ${validatedPaidDate},
                     status = CASE 
-                        WHEN (paid_amount + ${numAmount}) >= (total_amount - ${numDiscount}) THEN 'Paid' 
+                        WHEN (paid_amount + ${numAmount}) >= (total_amount - ${currentDiscount}) THEN 'Paid' 
                         ELSE 'Partial' 
                     END,
-                    payment_history = ${JSON.stringify(updatedHistory)}
+                    payment_history = COALESCE(payment_history, '[]'::jsonb) || ${JSON.stringify([newRecord])}::jsonb
                 WHERE id = ${challanId}
                 RETURNING *
             `;
@@ -35886,16 +35904,18 @@ async function handler11(req, res) {
         sql,
         session,
         "Record Payment",
-        `Recorded payment of Rs. ${numAmount.toLocaleString()} (Discount: Rs. ${numDiscount.toLocaleString()}) on Challan #${challan.challan_number} for ${challan.student_name} (Roll #${challan.roll_number})`,
+        `Recorded payment of Rs. ${numAmount.toLocaleString()} (Discount: Rs. ${currentDiscount.toLocaleString()}) on Challan #${challan.challan_number} for ${challan.student_name} (Roll #${challan.roll_number})`,
         challan.school_id
       );
       return res.status(200).json({ success: true, challan: updateResult[0] });
     } else if (action === "update-payment") {
-      const { challanId, paidAmount, discount = 0, paidDate, paymentHistory } = body;
-      const numPaidAmount = Number(paidAmount) || 0;
+      const { challanId, discount = 0, paidDate, paymentHistory } = body;
       const numDiscount = Number(discount) || 0;
       if (!challanId) {
         return res.status(400).json({ error: "Challan ID is required." });
+      }
+      if (numDiscount < 0) {
+        return res.status(400).json({ error: "Discount cannot be negative." });
       }
       const challanRows = await sql`
                 SELECT fc.*, s.school_id, s.name as student_name, s.roll_number
@@ -35911,18 +35931,41 @@ async function handler11(req, res) {
       if (session.role !== "Owner" && session.schoolId && challan.school_id !== session.schoolId) {
         return res.status(403).json({ error: "Unauthorized: This challan belongs to another school." });
       }
+      if (challan.status === "Cancelled") {
+        return res.status(400).json({ error: "Cannot update payments on a cancelled challan." });
+      }
+      const historyToSave = Array.isArray(paymentHistory) ? paymentHistory : [];
+      let recomputedPaidAmount = 0;
+      for (const item of historyToSave) {
+        const itemAmt = Number(item?.amount) || 0;
+        if (itemAmt < 0) {
+          return res.status(400).json({ error: "Payment history contains an invalid negative amount." });
+        }
+        recomputedPaidAmount += itemAmt;
+      }
       const todayStr = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
       const validatedPaidDate = paidDate && paidDate > todayStr ? todayStr : paidDate || todayStr;
-      const status = numPaidAmount >= challan.total_amount - numDiscount ? "Paid" : numPaidAmount > 0 ? "Partial" : "Unpaid";
-      const historyToSave = paymentHistory || challan.payment_history || [];
+      const netPayable = Math.max(0, Number(challan.total_amount) - numDiscount);
+      const status = recomputedPaidAmount >= netPayable ? "Paid" : recomputedPaidAmount > 0 ? "Partial" : "Unpaid";
+      const oldPaidAmount = Number(challan.paid_amount) || 0;
+      let oldHistory = challan.payment_history || [];
+      if (typeof oldHistory === "string") {
+        try {
+          oldHistory = JSON.parse(oldHistory);
+        } catch {
+          oldHistory = [];
+        }
+      }
+      const oldHistoryCount = Array.isArray(oldHistory) ? oldHistory.length : 0;
+      const newHistoryCount = historyToSave.length;
       const updateResult = await sql`
                 UPDATE fee_challans
                 SET 
-                    paid_amount = ${numPaidAmount},
+                    paid_amount = ${recomputedPaidAmount},
                     discount = ${numDiscount},
                     paid_date = ${validatedPaidDate},
                     status = ${status},
-                    payment_history = ${JSON.stringify(historyToSave)}
+                    payment_history = ${JSON.stringify(historyToSave)}::jsonb
                 WHERE id = ${challanId}
                 RETURNING *
             `;
@@ -35930,7 +35973,7 @@ async function handler11(req, res) {
         sql,
         session,
         "Edit Payment",
-        `Updated payment on Challan #${challan.challan_number} for ${challan.student_name} to Rs. ${numPaidAmount.toLocaleString()} (Discount: Rs. ${numDiscount.toLocaleString()})`,
+        `Updated payment on Challan #${challan.challan_number} for ${challan.student_name}: Old paid Rs. ${oldPaidAmount.toLocaleString()} (${oldHistoryCount} entries) -> New paid Rs. ${recomputedPaidAmount.toLocaleString()} (${newHistoryCount} entries)`,
         challan.school_id
       );
       return res.status(200).json({ success: true, challan: updateResult[0] });
@@ -36162,23 +36205,63 @@ async function handler12(req, res) {
       if (!month || !targetYear) {
         return res.status(400).json({ error: "Month and year are required." });
       }
+      const monthIndex = MONTH_NAMES.indexOf(month) + 1;
+      if (monthIndex < 1 || monthIndex > 12) {
+        return res.status(400).json({ error: `Invalid month name: ${month}` });
+      }
       const effectiveSchoolId = session.role === "Owner" && schoolId ? schoolId : session.schoolId;
-      const deletedRows = await sql`
-                DELETE FROM fee_challans 
-                WHERE month = ${month} 
-                AND year = ${targetYear} 
-                AND paid_amount = 0 
-                AND student_id IN (
-                    SELECT id FROM students 
-                    WHERE (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
+      const candidates = await sql`
+                SELECT fc.id, fc.student_id, fc.challan_number, s.name as student_name, s.roll_number
+                FROM fee_challans fc
+                JOIN students s ON s.id = fc.student_id
+                WHERE fc.month = ${month} 
+                AND fc.year = ${targetYear} 
+                AND fc.paid_amount = 0 
+                AND fc.discount = 0
+                AND (fc.payment_history IS NULL OR fc.payment_history = '[]'::jsonb)
+                AND fc.status != 'Cancelled'
+                AND (${effectiveSchoolId}::uuid IS NULL OR s.school_id = ${effectiveSchoolId}::uuid)
+            `;
+      if (candidates.length === 0) {
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          message: `No eligible unpaid challans found for ${month} ${targetYear} (challans with partial payments, discounts, or payment history were preserved).`
+        });
+      }
+      const candidateStudentIds = Array.from(new Set(candidates.map((c) => c.student_id)));
+      const laterChallans = await sql`
+                SELECT fc.id, fc.student_id, fc.month, fc.year, s.name as student_name, s.roll_number
+                FROM fee_challans fc
+                JOIN students s ON s.id = fc.student_id
+                WHERE fc.student_id = ANY(${candidateStudentIds})
+                AND fc.status != 'Cancelled'
+                AND (
+                    fc.year > ${targetYear}
+                    OR (
+                        fc.year = ${targetYear} 
+                        AND array_position(ARRAY['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']::text[], fc.month) > ${monthIndex}
+                    )
                 )
+                LIMIT 5
+            `;
+      if (laterChallans.length > 0) {
+        const sample = laterChallans[0];
+        return res.status(409).json({
+          error: `Cannot delete unpaid challans for ${month} ${targetYear}: ${laterChallans.length} student(s) (such as ${sample.student_name}, Roll #${sample.roll_number}) have active subsequent challans (${sample.month} ${sample.year}). Deleting will break ledger continuity.`
+        });
+      }
+      const candidateIds = candidates.map((c) => c.id);
+      const deletedRows = await sql`
+                DELETE FROM fee_challans
+                WHERE id = ANY(${candidateIds})
                 RETURNING id
             `;
       await writeServerAuditLog(
         sql,
         session,
         "Delete Challans",
-        `Deleted ${deletedRows.length} unpaid challans for ${month} ${targetYear}`,
+        `Deleted ${deletedRows.length} strictly unpaid challans for ${month} ${targetYear}`,
         effectiveSchoolId
       );
       return res.status(200).json({

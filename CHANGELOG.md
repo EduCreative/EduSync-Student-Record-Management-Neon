@@ -1,6 +1,27 @@
 
 # Changelog
 
+## [3.24.0] - 2026-11-03
+
+### Phase 1: Ledger & Payment Integrity
+- **Atomic Payment Append & Discount Validation (A8 - `src/server/handlers/write/payments.ts`)**:
+  - Replaced JavaScript memory array mutation with native PostgreSQL atomic JSONB concatenation (`payment_history = COALESCE(payment_history, '[]'::jsonb) || ${JSON.stringify([newRecord])}::jsonb`).
+  - Added strict check rejecting any payment attempt on challans with `status === 'Cancelled'`.
+  - Added strict validation rejecting negative discount values (`discount < 0`).
+  - Enforced balance protection rejecting payment amounts exceeding the net remaining balance (`total_amount - discount - paid_amount`) unless explicitly confirmed via `allowOverpayment === true`.
+- **Server-Side Payment Recalculation & Audit (A9 - `src/server/handlers/write/payments.ts`)**:
+  - In `update-payment`, ignored client-supplied `paidAmount`; recomputed `paid_amount` strictly from the server-validated sum of entries in `paymentHistory` (rejecting any negative amounts).
+  - Recalculated payment `status` ('Paid', 'Partial', 'Unpaid') strictly on the server based on the recomputed total and net payable balance.
+  - Rejected payment edits on `Cancelled` challans.
+  - Enhanced audit logging to record old `paid_amount`, old history count, new `paid_amount`, and new history count.
+- **Payment Idempotency & Double-Click Retry Guard (B1 - `FeePaymentModal.tsx` & `payments.ts`)**:
+  - In `FeePaymentModal.tsx`, generated an idempotency key using `useRef(crypto.randomUUID())` on modal mount and passed it to `recordFeePayment`.
+  - In `record-payment`, stored `idempotencyKey` inside each history entry; if an identical key is received again, returns the existing challan with HTTP 200 without duplicate billing.
+  - Passed `allowOverpayment: true` only after user confirmation in the overpayment prompt.
+- **Safe Unpaid Challan Deletion (A12 - `src/server/handlers/write/challans.ts`)**:
+  - In `delete-unpaid`, restricted deletion candidates strictly to challans with `paid_amount = 0`, `discount = 0`, empty `payment_history`, and non-cancelled status.
+  - Added historical carry-over guard: checks if any affected student has a subsequent non-cancelled challan in a later month or year; returns HTTP 409 Conflict with detailed student and challan information to prevent breaking dues carry-over chains.
+
 ## [3.23.13] - 2026-11-03
 
 ### Vercel Deployment API Rewrite & Serverless Parity

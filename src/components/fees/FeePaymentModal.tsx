@@ -35,6 +35,7 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const submissionLock = useRef(false);
+    const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
 
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -51,6 +52,7 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
     useEffect(() => {
         if (isOpen) {
             submissionLock.current = false;
+            idempotencyKeyRef.current = crypto.randomUUID();
             setTempHistory([...(challan.paymentHistory || [])]);
             if (editMode) {
                 setAmount(challan.paidAmount);
@@ -103,10 +105,12 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
             return;
         }
         
+        let allowOverpayment = false;
         if (remainingBalance < 0) {
             if (!window.confirm(`This payment will result in an overpayment of Rs. ${Math.abs(remainingBalance)}. Do you want to proceed?`)) {
                 return;
             }
+            allowOverpayment = true;
         }
 
         setIsSubmitting(true);
@@ -125,7 +129,10 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
                 ]);
             } else {
                 await Promise.race([
-                    recordFeePayment(challan.id, amount, discount, paidDate),
+                    recordFeePayment(challan.id, amount, discount, paidDate, {
+                        allowOverpayment,
+                        idempotencyKey: idempotencyKeyRef.current
+                    }),
                     timeoutPromise
                 ]);
             }

@@ -156,17 +156,65 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'Month and year are required.' });
             }
 
+            const monthIndex = MONTH_NAMES.indexOf(month) + 1;
+            if (monthIndex < 1 || monthIndex > 12) {
+                return res.status(400).json({ error: `Invalid month name: ${month}` });
+            }
+
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
 
-            const deletedRows = await sql`
-                DELETE FROM fee_challans 
-                WHERE month = ${month} 
-                AND year = ${targetYear} 
-                AND paid_amount = 0 
-                AND student_id IN (
-                    SELECT id FROM students 
-                    WHERE (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
+            // Fetch candidate unpaid challans: paid_amount = 0, discount = 0, empty payment_history, not cancelled (A12)
+            const candidates = await sql`
+                SELECT fc.id, fc.student_id, fc.challan_number, s.name as student_name, s.roll_number
+                FROM fee_challans fc
+                JOIN students s ON s.id = fc.student_id
+                WHERE fc.month = ${month} 
+                AND fc.year = ${targetYear} 
+                AND fc.paid_amount = 0 
+                AND fc.discount = 0
+                AND (fc.payment_history IS NULL OR fc.payment_history = '[]'::jsonb)
+                AND fc.status != 'Cancelled'
+                AND (${effectiveSchoolId}::uuid IS NULL OR s.school_id = ${effectiveSchoolId}::uuid)
+            `;
+
+            if (candidates.length === 0) {
+                return res.status(200).json({
+                    success: true,
+                    count: 0,
+                    message: `No eligible unpaid challans found for ${month} ${targetYear} (challans with partial payments, discounts, or payment history were preserved).`
+                });
+            }
+
+            const candidateStudentIds = Array.from(new Set(candidates.map((c: any) => c.student_id)));
+
+            // Refuse (HTTP 409) if any affected student has a non-cancelled challan for a later month/year (A12)
+            const laterChallans = await sql`
+                SELECT fc.id, fc.student_id, fc.month, fc.year, s.name as student_name, s.roll_number
+                FROM fee_challans fc
+                JOIN students s ON s.id = fc.student_id
+                WHERE fc.student_id = ANY(${candidateStudentIds})
+                AND fc.status != 'Cancelled'
+                AND (
+                    fc.year > ${targetYear}
+                    OR (
+                        fc.year = ${targetYear} 
+                        AND array_position(ARRAY['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']::text[], fc.month) > ${monthIndex}
+                    )
                 )
+                LIMIT 5
+            `;
+
+            if (laterChallans.length > 0) {
+                const sample = laterChallans[0];
+                return res.status(409).json({
+                    error: `Cannot delete unpaid challans for ${month} ${targetYear}: ${laterChallans.length} student(s) (such as ${sample.student_name}, Roll #${sample.roll_number}) have active subsequent challans (${sample.month} ${sample.year}). Deleting will break ledger continuity.`
+                });
+            }
+
+            const candidateIds = candidates.map((c: any) => c.id);
+            const deletedRows = await sql`
+                DELETE FROM fee_challans
+                WHERE id = ANY(${candidateIds})
                 RETURNING id
             `;
 
@@ -174,7 +222,7 @@ export default async function handler(req: any, res: any) {
                 sql,
                 session,
                 'Delete Challans',
-                `Deleted ${deletedRows.length} unpaid challans for ${month} ${targetYear}`,
+                `Deleted ${deletedRows.length} strictly unpaid challans for ${month} ${targetYear}`,
                 effectiveSchoolId
             );
 

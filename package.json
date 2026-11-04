@@ -1,7 +1,7 @@
 {
   "name": "edusync-student-record-management-neon",
   "private": true,
-  "version": "3.23.13",
+  "version": "3.24.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
