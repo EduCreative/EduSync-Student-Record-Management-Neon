@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import Modal from '../common/Modal';
 import { useData } from '../../context/DataContext';
@@ -6,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { usePrint } from '../../context/PrintContext';
 import { UserRole } from '../../types';
 import PrintableChallan from './PrintableChallan';
+import { naturalCompare } from '../../utils/sorting';
 
 interface ChallanRangeReportModalProps {
     isOpen: boolean;
@@ -32,7 +32,7 @@ const ChallanRangeReportModal: React.FC<ChallanRangeReportModalProps> = ({ isOpe
         if (!startChallan && !endChallan) return [];
 
         const start = startChallan || '';
-        const end = endChallan || '~~~~~~~~~~~~'; // A string that is likely to be "greater" than any challan number
+        const end = endChallan || '~~~~~~~~~~~~';
 
         return fees
             .filter(fee => {
@@ -41,7 +41,7 @@ const ChallanRangeReportModal: React.FC<ChallanRangeReportModalProps> = ({ isOpe
                        fee.challanNumber >= start &&
                        fee.challanNumber <= end;
             })
-            .sort((a, b) => a.challanNumber.localeCompare(b.challanNumber));
+            .sort((a, b) => naturalCompare(a.challanNumber, b.challanNumber));
     }, [fees, studentMap, effectiveSchoolId, startChallan, endChallan]);
     
     const handleGenerate = () => {
@@ -100,50 +100,41 @@ const ChallanRangeReportModal: React.FC<ChallanRangeReportModalProps> = ({ isOpe
                             type="number" 
                             id="penalty-amount" 
                             value={penaltyAmount} 
-                            onChange={e => setPenaltyAmount(Number(e.target.value))} 
+                            onChange={e => setPenaltyAmount(Number(e.target.value) || 0)} 
                             className="input-field" 
-                            min="0"
                         />
                     </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-secondary-200 dark:border-secondary-700">
                     <div>
-                        <label className="input-label font-semibold">Copies per Challan</label>
-                        <div className="flex flex-wrap items-center gap-3 mt-1.5">
-                            <label className="flex items-center cursor-pointer">
-                                <input type="radio" name="copiesRange" value={3} checked={copies === 3} onChange={() => setCopies(3)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
-                                <span className="ml-2 text-sm">3 Copies <span className="text-xs text-secondary-500">(Bank, Parent, School)</span></span>
-                            </label>
-                            <label className="flex items-center cursor-pointer">
-                                <input type="radio" name="copiesRange" value={2} checked={copies === 2} onChange={() => setCopies(2)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
-                                <span className="ml-2 text-sm">2 Copies <span className="text-xs text-secondary-500">(Parent, School)</span></span>
-                            </label>
-                        </div>
+                        <label htmlFor="copies" className="input-label">Copies per Challan</label>
+                        <select id="copies" value={copies} onChange={e => setCopies(Number(e.target.value) as 2 | 3)} className="input-field">
+                            <option value={2}>2 Copies (Bank & School)</option>
+                            <option value={3}>3 Copies (Bank, School & Student)</option>
+                        </select>
                     </div>
+                    <div>
+                        <label htmlFor="challans-per-page" className="input-label">Challans per Page (Print Layout)</label>
+                        <select id="challans-per-page" value={challansPerPage} onChange={e => setChallansPerPage(Number(e.target.value) as 1 | 2 | 3)} className="input-field">
+                            <option value={1}>1 Per Page</option>
+                            <option value={2}>2 Per Page</option>
+                            <option value={3}>3 Per Page</option>
+                        </select>
+                    </div>
+                </div>
 
-                    <div>
-                        <label className="input-label font-semibold">Challans per A4 Page</label>
-                        <div className="flex flex-wrap items-center gap-3 mt-1.5">
-                            <label className="flex items-center cursor-pointer">
-                                <input type="radio" name="challansPerPageRange" value={3} checked={challansPerPage === 3} onChange={() => setChallansPerPage(3)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
-                                <span className="ml-1.5 text-sm">3 per Page <span className="text-xs text-secondary-500">(Default)</span></span>
-                            </label>
-                            <label className="flex items-center cursor-pointer">
-                                <input type="radio" name="challansPerPageRange" value={2} checked={challansPerPage === 2} onChange={() => setChallansPerPage(2)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
-                                <span className="ml-1.5 text-sm">2 per Page</span>
-                            </label>
-                            <label className="flex items-center cursor-pointer">
-                                <input type="radio" name="challansPerPageRange" value={1} checked={challansPerPage === 1} onChange={() => setChallansPerPage(1)} className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300" />
-                                <span className="ml-1.5 text-sm">1 per Page</span>
-                            </label>
-                        </div>
-                    </div>
+                <div className="bg-secondary-50 dark:bg-secondary-800/50 p-3 rounded-lg text-sm text-secondary-600 dark:text-secondary-400">
+                    Found <strong>{reportData.length}</strong> challan(s) matching the specified range.
                 </div>
-                <div className="p-4 bg-secondary-50 dark:bg-secondary-700 rounded-md text-center">
-                    <p className="text-sm">Found <strong className="text-lg">{reportData.length}</strong> challans for the selected range.</p>
-                </div>
-                <div className="flex justify-end space-x-3 pt-2">
-                    <button onClick={handleGenerate} className="btn-primary" disabled={reportData.length === 0}>Print Preview</button>
+
+                <div className="flex justify-end space-x-3 pt-4">
+                    <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+                    <button 
+                        type="button" 
+                        onClick={handleGenerate} 
+                        disabled={reportData.length === 0}
+                        className="btn-primary disabled:opacity-50"
+                    >
+                        Generate Printable Challans
+                    </button>
                 </div>
             </div>
         </Modal>

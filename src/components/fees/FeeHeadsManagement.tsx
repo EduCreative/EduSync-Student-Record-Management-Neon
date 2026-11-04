@@ -8,7 +8,7 @@ import { Permission } from '../../permissions';
 
 const FeeHeadsManagement: React.FC = () => {
     const { user, activeSchoolId, hasPermission } = useAuth();
-    const { feeHeads, addFeeHead, updateFeeHead, deleteFeeHead } = useData();
+    const { feeHeads, students, addFeeHead, updateFeeHead, deleteFeeHead } = useData();
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
     const canManage = hasPermission(Permission.CAN_MANAGE_FEE_HEADS);
@@ -21,6 +21,11 @@ const FeeHeadsManagement: React.FC = () => {
         if (!effectiveSchoolId) return [];
         return feeHeads.filter(fh => fh.schoolId === effectiveSchoolId);
     }, [feeHeads, effectiveSchoolId]);
+
+    const isReferenced = useMemo(() => {
+        if (!feeHeadToDelete) return false;
+        return students.some(s => s.schoolId === effectiveSchoolId && s.feeStructure?.some(item => item.feeHeadId === feeHeadToDelete.id));
+    }, [students, effectiveSchoolId, feeHeadToDelete]);
 
     const handleOpenModal = (feeHead: FeeHead | null = null) => {
         setFeeHeadToEdit(feeHead);
@@ -43,7 +48,7 @@ const FeeHeadsManagement: React.FC = () => {
     };
 
     const handleDelete = () => {
-        if (feeHeadToDelete) {
+        if (feeHeadToDelete && !isReferenced) {
             deleteFeeHead(feeHeadToDelete.id);
             setFeeHeadToDelete(null);
         }
@@ -58,10 +63,19 @@ const FeeHeadsManagement: React.FC = () => {
                 feeHeadToEdit={feeHeadToEdit}
             />
             <Modal isOpen={!!feeHeadToDelete} onClose={() => setFeeHeadToDelete(null)} title="Confirm Deletion">
-                <p>Are you sure you want to delete the fee head "{feeHeadToDelete?.name}"? This action cannot be undone.</p>
+                {isReferenced ? (
+                    <div className="space-y-3">
+                        <p className="text-red-600 dark:text-red-400 font-medium">Cannot delete this fee head.</p>
+                        <p className="text-secondary-600 dark:text-secondary-300">The fee head "{feeHeadToDelete?.name}" is actively referenced in student custom fee structures. You must remove it from student fee profiles before deleting.</p>
+                    </div>
+                ) : (
+                    <p className="text-secondary-700 dark:text-secondary-300">Are you sure you want to delete the fee head "{feeHeadToDelete?.name}"? This action cannot be undone.</p>
+                )}
                 <div className="flex justify-end space-x-2 pt-4">
                     <button type="button" onClick={() => setFeeHeadToDelete(null)} className="btn-secondary">Cancel</button>
-                    <button type="button" onClick={handleDelete} className="btn-danger">Delete</button>
+                    {!isReferenced && (
+                        <button type="button" onClick={handleDelete} className="btn-danger">Delete</button>
+                    )}
                 </div>
             </Modal>
             

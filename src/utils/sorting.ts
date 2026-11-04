@@ -39,3 +39,8 @@ export const getClassLevel = (name: string): number => {
     
     return level;
 };
+
+export const naturalCompare = (a: string, b: string): number => {
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+};
+

@@ -202,7 +202,8 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onClose, on
             };
 
             if (studentToEdit) {
-                await onSave({ ...studentToEdit, ...saveData });
+                const { feeStructure, ...restSaveData } = saveData;
+                await onSave({ ...studentToEdit, ...restSaveData });
             } else {
                 const { status, ...rest } = saveData;
                 await onSave(rest);

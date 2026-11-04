@@ -1,6 +1,15 @@
 
 # Changelog
 
+## [3.29.0] - 2026-11-03
+
+### Phases 1-5 Audit Implementation & Administrative Polish
+- **Phase 1 (Ledger & Payment Integrity)**: Atomic JSONB payment history appends, idempotency key checks, cancellation guards, and delete-unpaid conflict checks.
+- **Phase 2 (High-Speed Challan Generation & Duplicate Guards)**: Single-query aggregated arrears, chunked batch insertions (`ON CONFLICT DO NOTHING`), unique roll numbers (`002_roll_unique.sql`), and 23505 error handling.
+- **Phase 3 (Timezone Precision & Scalability)**: Karachi timezone helper (`getTodayKarachi`), scoped attendance (45 days) and academic year fee queries, and optimistic state updates.
+- **Phase 4 (Atomic CLI Database Restore)**: Created `scripts/restore.ts` with Neon WebSocket Pool transactions (`BEGIN ... COMMIT / ROLLBACK`), and updated HTTP restore endpoint to return `410 Gone` with CLI instructions.
+- **Phase 5 (Administrative Usability & UX Polish)**: Omitted `feeStructure` on student profile updates to preserve custom tuition rates, prevented ImportModal premature completion on failure, added confirmation/validation before deleting referenced fee heads, and added natural alphanumeric sorting (`naturalCompare`) for challan reports.
+
 ## [3.28.0] - 2026-11-03
 
 ### Phase 4: Advanced Reporting, Activity Log Integration & System Verification
