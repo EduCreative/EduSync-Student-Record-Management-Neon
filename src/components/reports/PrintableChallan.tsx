@@ -33,6 +33,7 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
     studentClass,
     copies = 2,
     challansPerPage = 3,
+    lateFee = 0,
     lastPaymentDetail,
     allFees
 }) => {
@@ -73,6 +74,9 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
     const previousDues = challan.previousBalance || 0;
     const currentFees = Math.max(0, challan.totalAmount - previousDues);
     const totalDues = challan.totalAmount;
+    const isOverdue = Boolean(challan.dueDate && new Date(challan.dueDate) < new Date() && challan.status !== 'Paid');
+    const effectiveLateFee = isOverdue ? Math.max(0, Number(lateFee) || 0) : 0;
+    const finalDues = totalDues + effectiveLateFee;
     const discountAmount = challan.discount || 0;
 
     // Safely attempt to retrieve fees from DataContext if allFees prop is not passed
@@ -263,7 +267,7 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
         challan: displayChallanId,
         stdId: studentRollOrId,
         dueDate: formattedDueDate,
-        amount: totalDues
+        amount: finalDues
     });
 
     const ChallanBody: FC<{ copyName: string }> = ({ copyName }) => {
@@ -389,8 +393,14 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                                 </div>
                                 <div className="flex justify-between font-bold text-black text-[10px]">
                                     <span>Total Dues</span>
-                                    <span>Rs. {totalDues.toLocaleString()}</span>
+                                    <span>Rs. {finalDues.toLocaleString()}</span>
                                 </div>
+                                {effectiveLateFee > 0 && (
+                                    <div className="flex justify-between text-gray-900">
+                                        <span>Late Fee</span>
+                                        <span>{effectiveLateFee.toLocaleString()}</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between text-gray-800">
                                     <span>Discount Amount (D.A.)</span>
                                     <span>{discountAmount.toLocaleString()}</span>
@@ -482,7 +492,7 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
                         <span className="text-slate-900 font-extrabold">Bal.:</span>
                         <span className="font-extrabold text-[9px] text-right text-black">
                             {challan.paidAmount > 0 ? (
-                                `Rs. ${Math.max(0, totalDues - challan.paidAmount - discountAmount).toLocaleString()}`
+                                `Rs. ${Math.max(0, finalDues - challan.paidAmount - discountAmount).toLocaleString()}`
                             ) : (
                                 <span className="inline-block border-b border-slate-600 min-w-[50px] text-center text-slate-400 font-normal">
                                     &nbsp;

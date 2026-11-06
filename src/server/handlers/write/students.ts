@@ -104,8 +104,7 @@ export default async function handler(req: any, res: any) {
                         caste = ${student.caste || null},
                         last_school_attended = ${student.lastSchoolAttended || null},
                         opening_balance = ${Number(student.openingBalance) || 0},
-                        user_id = ${student.userId || null},
-                        fee_structure = ${JSON.stringify(student.feeStructure || [])}
+                        user_id = ${student.userId || null}
                     WHERE id = ${student.id}
                 `;
             } catch (err: any) {

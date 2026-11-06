@@ -9,7 +9,7 @@ import { useToast } from '../../context/ToastContext';
 
 const FeeRemindersPage: React.FC = () => {
     const { user, activeSchoolId } = useAuth();
-    const { students, fees, classes, sendFeeReminders } = useData();
+    const { students, fees, classes, sendFeeReminders, getLedgerForStudent } = useData();
     const { showToast } = useToast();
     const [isSending, setIsSending] = useState(false);
 
@@ -31,12 +31,17 @@ const FeeRemindersPage: React.FC = () => {
             if (fee.status === 'Paid') return false;
             const student = studentMap.get(fee.studentId);
             if (!student || student.schoolId !== effectiveSchoolId || student.status !== 'Active') return false;
+            
+            // Check student ledger: skip if overall balance is settled
+            const studentLedger = getLedgerForStudent(student.id);
+            if (studentLedger && studentLedger.balance <= 0) return false;
+
             if (classFilter !== 'all' && student.classId !== classFilter) return false;
             if (dueDateStart && fee.dueDate < dueDateStart) return false;
             if (dueDateEnd && fee.dueDate > dueDateEnd) return false;
             return true;
         });
-    }, [fees, studentMap, effectiveSchoolId, classFilter, dueDateStart, dueDateEnd]);
+    }, [fees, studentMap, effectiveSchoolId, classFilter, dueDateStart, dueDateEnd, getLedgerForStudent]);
 
     const handleToggleAll = () => {
         if (selectedChallanIds.size === defaulterChallans.length) {

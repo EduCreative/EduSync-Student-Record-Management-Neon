@@ -126,7 +126,7 @@ const FeeChartHeader: React.FC<{
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
     const { user, activeSchoolId } = useAuth();
-    const { users, students, getSchoolById, fees, attendance, loading, logs, classes } = useData();
+    const { users, students, getSchoolById, fees, attendance, loading, logs, classes, getLedgerForStudent } = useData();
     
     const [modalDetails, setModalDetails] = useState<{ title: string; items: { id: string; avatar: React.ReactNode; primary: string; secondary: React.ReactNode }[] } | null>(null);
     const [feeChartType, setFeeChartType] = useState<'line' | 'bar'>('line');
@@ -193,20 +193,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
             }
         });
 
-        // Calculate true net outstanding dues across active students (avoids compounding overlapping arrears)
-        const relevantStudents = students.filter(s => s.schoolId === effectiveSchoolId && s.status === 'Active');
-        const totalOutstandingDues = relevantStudents.reduce((sum, student) => {
-            const studentFees = fees.filter(f => f.studentId === student.id && f.status !== 'Cancelled');
-            const totalFeeCharged = studentFees.reduce((fSum, f) => {
-                const currentMonthFee = Number(f.totalAmount) - (Number(f.previousBalance) || 0);
-                return fSum + currentMonthFee;
-            }, 0) + (Number(student.openingBalance) || 0);
-
-            const totalPaid = studentFees.reduce((pSum, f) => pSum + Number(f.paidAmount || 0), 0);
-            const totalDiscount = studentFees.reduce((dSum, f) => dSum + Number(f.discount || 0), 0);
-            const netBalance = totalFeeCharged - totalPaid - totalDiscount;
-            return sum + (netBalance > 0.01 ? netBalance : 0);
-        }, 0);
+        // Calculate true net outstanding dues across active students using server ledger
+        const totalOutstandingDues = schoolStudents.reduce(
+            (sum, s) => sum + Math.max(0, getLedgerForStudent(s.id)?.balance || 0), 0
+        );
             
         const pendingApprovals = schoolUsers.filter(u => u.status === 'Pending Approval').length;
         
@@ -223,7 +213,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
             totalOutstandingDues: `Rs. ${totalOutstandingDues.toLocaleString()}`,
             unpaidThisMonthCount: unpaidThisMonthCount.toLocaleString(),
         };
-    }, [fees, students, schoolUsers, effectiveSchoolId]);
+    }, [fees, students, schoolUsers, effectiveSchoolId, getLedgerForStudent]);
 
 
     const feeStatusData = useMemo(() => {

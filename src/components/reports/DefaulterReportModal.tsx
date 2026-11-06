@@ -57,7 +57,7 @@ interface ClassDefaulterGroup {
 
 const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onClose }) => {
     const { user, activeSchoolId } = useAuth();
-    const { fees, students, classes, getSchoolById } = useData();
+    const { fees, students, classes, getSchoolById, getLedgerForStudent } = useData();
     const { showPrintPreview } = usePrint();
 
     const [classId, setClassId] = useState('all');
@@ -97,17 +97,28 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
 
         if (reportType === 'cumulative') {
             relevantStudents.forEach(student => {
-                const studentFees = fees.filter(f => f.studentId === student.id && f.status !== 'Cancelled');
+                const ledgerEntry = getLedgerForStudent(student.id);
                 
-                const totalFeeCharged = studentFees.reduce((sum, f) => {
-                    const currentMonthFee = Number(f.totalAmount) - (Number(f.previousBalance) || 0);
-                    return sum + currentMonthFee;
-                }, 0) + (Number(student.openingBalance) || 0);
+                let netBalance = 0;
+                let totalFeeCharged = 0;
+                let totalPaid = 0;
+                let totalDiscount = 0;
 
-                const totalPaid = studentFees.reduce((sum, f) => sum + Number(f.paidAmount || 0), 0);
-                const totalDiscount = studentFees.reduce((sum, f) => sum + Number(f.discount || 0), 0);
-                
-                const netBalance = totalFeeCharged - totalPaid - totalDiscount;
+                if (ledgerEntry) {
+                    netBalance = ledgerEntry.balance;
+                    totalFeeCharged = ledgerEntry.totalCharged;
+                    totalPaid = ledgerEntry.totalPaid;
+                    totalDiscount = ledgerEntry.totalDiscount;
+                } else {
+                    const studentFees = fees.filter(f => f.studentId === student.id && f.status !== 'Cancelled');
+                    totalFeeCharged = studentFees.reduce((sum, f) => {
+                        const currentMonthFee = Number(f.totalAmount) - (Number(f.previousBalance) || 0);
+                        return sum + currentMonthFee;
+                    }, 0) + (Number(student.openingBalance) || 0);
+                    totalPaid = studentFees.reduce((sum, f) => sum + Number(f.paidAmount || 0), 0);
+                    totalDiscount = studentFees.reduce((sum, f) => sum + Number(f.discount || 0), 0);
+                    netBalance = totalFeeCharged - totalPaid - totalDiscount;
+                }
 
                 if (netBalance > 0.01) {
                     studentSummaries.push({
@@ -201,7 +212,7 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
                 });
                 return classGroup;
             });
-    }, [fees, students, classMap, effectiveSchoolId, classId, schoolClasses, sortBy, reportType, month, year]);
+    }, [fees, students, classMap, effectiveSchoolId, classId, schoolClasses, sortBy, reportType, month, year, getLedgerForStudent]);
     
     const grandTotal = useMemo(() => {
         return reportData.reduce((acc, classGroup) => {

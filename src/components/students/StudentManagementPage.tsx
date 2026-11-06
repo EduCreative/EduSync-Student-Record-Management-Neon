@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import { Student, UserRole, FeeChallan } from '../../types';
+import { Student, UserRole } from '../../types';
 import Modal from '../common/Modal';
 import Avatar from '../common/Avatar';
 import Badge from '../common/Badge';
@@ -51,7 +51,7 @@ const parseCurrency = (value: any): number | null => {
 
 const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActiveView }) => {
     const { user, activeSchoolId, hasPermission } = useAuth();
-    const { students, classes, results, addStudent, updateStudent, deleteStudent, loading, bulkAddStudents, feeHeads, fees, reactivateGraduatedStudents, revertLastPromotion } = useData();
+    const { students, classes, results, addStudent, updateStudent, deleteStudent, loading, bulkAddStudents, feeHeads, fees, reactivateGraduatedStudents, revertLastPromotion, getLedgerForStudent } = useData();
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
 
@@ -84,38 +84,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
         [classes, effectiveSchoolId]);
     const classMap = useMemo(() => new Map(schoolClasses.map(c => [c.id, `${c.name}${c.section ? ` - ${c.section}` : ''}`])), [schoolClasses]);
 
-    const studentBalanceMap = useMemo(() => {
-        const balanceMap = new Map<string, number>();
 
-        const feesByStudent = fees.reduce((acc, fee) => {
-            if (fee.status !== 'Cancelled') {
-                if (!acc[fee.studentId]) {
-                    acc[fee.studentId] = [];
-                }
-                acc[fee.studentId].push(fee);
-            }
-            return acc;
-        }, {} as Record<string, FeeChallan[]>);
-
-        students.forEach(student => {
-            const studentFees = feesByStudent[student.id] || [];
-            
-            const totalNewFees = studentFees.reduce((sum, challan) => {
-                const newFee = (challan.totalAmount || 0) - (challan.previousBalance || 0);
-                return sum + newFee;
-            }, 0);
-            
-            const totalPaid = studentFees.reduce((sum, challan) => sum + (challan.paidAmount || 0), 0);
-            const totalDiscount = studentFees.reduce((sum, challan) => sum + (challan.discount || 0), 0);
-            const openingBalance = student.openingBalance || 0;
-
-            const balance = openingBalance + totalNewFees - totalPaid - totalDiscount;
-            
-            balanceMap.set(student.id, balance);
-        });
-    
-        return balanceMap;
-    }, [students, fees]);
 
     const filteredStudents = useMemo(() => {
         const result = students.filter(student => {
@@ -333,7 +302,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
             fatherName: s.fatherName,
             className_for_reference: classMap.get(s.classId) || 'N/A',
             status: s.status,
-            balance: studentBalanceMap.get(s.id) || 0,
+            balance: getLedgerForStudent(s.id)?.balance || 0,
             classId: s.classId,
             fatherCnic: s.fatherCnic,
             dateOfBirth: s.dateOfBirth,
@@ -480,7 +449,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                                     </thead>
                                     <tbody>
                                         {paginatedStudents.map(student => {
-                                            const balance = studentBalanceMap.get(student.id) || 0;
+                                            const balance = getLedgerForStudent(student.id)?.balance || 0;
                                             return (
                                                 <tr key={student.id} className="bg-white dark:bg-secondary-800 border-b dark:border-secondary-700 hover:bg-secondary-50 dark:hover:bg-secondary-700/50">
                                                     <td className="px-6 py-4">

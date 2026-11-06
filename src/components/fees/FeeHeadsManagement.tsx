@@ -5,6 +5,7 @@ import { FeeHead, UserRole } from '../../types';
 import Modal from '../common/Modal';
 import FeeHeadFormModal from './FeeHeadFormModal';
 import { Permission } from '../../permissions';
+import { useToast } from '../../context/ToastContext';
 
 const FeeHeadsManagement: React.FC = () => {
     const { user, activeSchoolId, hasPermission } = useAuth();
@@ -47,10 +48,16 @@ const FeeHeadsManagement: React.FC = () => {
         }
     };
 
-    const handleDelete = () => {
+    const { showToast } = useToast();
+
+    const handleDelete = async () => {
         if (feeHeadToDelete && !isReferenced) {
-            deleteFeeHead(feeHeadToDelete.id);
-            setFeeHeadToDelete(null);
+            try {
+                await deleteFeeHead(feeHeadToDelete.id);
+                setFeeHeadToDelete(null);
+            } catch (err: any) {
+                showToast('Error', `Failed to delete fee head: ${err.message || 'Unknown error'}`, 'error');
+            }
         }
     };
 

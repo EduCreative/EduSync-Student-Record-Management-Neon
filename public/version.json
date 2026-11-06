@@ -1,7 +1,7 @@
 {
-  "version": "3.31.0",
-  "releaseDate": "2026-11-04",
+  "version": "3.32.0",
+  "releaseDate": "2026-11-05",
   "changelog": [
-    "Implemented Batch F2 audit recommendations: /api/data now returns older-year outstanding dues and per-student ledger, added toLocalDateString timezone helper, and replaced .toISOString().split('T')[0] in calendar and attendance views."
+    "Implemented Batches F3 and F4: Full client ledger consumer migration across AdminDashboard, StudentManagementPage, StudentProfilePage, FeeCollectionPage, StudentFeeHistory, FeeRemindersPage, and DefaulterReportModal. Hardened payment modal with older-challan submission lock, added late fee calculations and Tailwind safelist for printable challans, included fines in challan generation preview, safeguarded fee structure preservation on student profile edits, made fee head deletion await async response with toast feedback, added 'All Months' filter option, and clamped pagination."
   ]
 }

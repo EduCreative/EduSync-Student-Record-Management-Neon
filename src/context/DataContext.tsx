@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
-import { School, User, UserRole, Class, Student, Attendance, FeeChallan, Result, ActivityLog, FeeHead, SchoolEvent, Subject, Exam } from '../types';
+import { School, User, UserRole, Class, Student, Attendance, FeeChallan, Result, ActivityLog, FeeHead, SchoolEvent, Subject, Exam, StudentLedger } from '../types';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { driveService } from '../utils/googleDriveService';
@@ -28,6 +28,7 @@ interface DataContextType {
     students: Student[];
     attendance: Attendance[];
     fees: FeeChallan[];
+    ledger: StudentLedger[];
     results: Result[];
     logs: ActivityLog[];
     feeHeads: FeeHead[];
@@ -42,6 +43,7 @@ interface DataContextType {
     updateAutoBackupSettings: (settings: Partial<AutoBackupSettings>) => void;
     fetchData: () => Promise<void>;
     getSchoolById: (schoolId: string) => School | undefined;
+    getLedgerForStudent: (studentId: string) => StudentLedger | undefined;
     updateUser: (updatedUser: User) => Promise<void>;
     deleteUser: (userId: string) => Promise<void>;
     addUserByAdmin: (userData: (Omit<User, 'id'> & { password?: string })) => Promise<void>;
@@ -130,6 +132,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [students, setStudents] = useState<Student[]>([]);
     const [attendance, setAttendanceState] = useState<Attendance[]>([]);
     const [fees, setFees] = useState<FeeChallan[]>([]);
+    const [ledger, setLedger] = useState<StudentLedger[]>([]);
     const [results, setResults] = useState<Result[]>([]);
     const [logs, setLogs] = useState<ActivityLog[]>([]);
     const [feeHeads, setFeeHeads] = useState<FeeHead[]>([]);
@@ -252,6 +255,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setUsers(data.users || []);
             setStudents(data.students || []);
             setFees(data.fees || []);
+            setLedger((data.ledger || []).map((l: any) => ({
+                studentId: l.studentId,
+                totalCharged: Number(l.totalCharged || 0),
+                totalPaid: Number(l.totalPaid || 0),
+                totalDiscount: Number(l.totalDiscount || 0),
+                openingBalance: Number(l.openingBalance || 0),
+                balance: Number(l.balance || 0),
+            })));
             setAttendanceState(data.attendance || []);
             setResults(data.results || []);
             setLogs(data.logs || []);
@@ -921,12 +932,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         showToast('Success', `Broadcasted ${challanIds.length} reminders to parent dashboard.`, 'success');
     };
 
+    const ledgerMap = React.useMemo(() => new Map(ledger.map(l => [l.studentId, l])), [ledger]);
+    const getLedgerForStudent = useCallback((id: string) => ledgerMap.get(id), [ledgerMap]);
+
     const value: DataContextType = {
-        schools, users, classes, subjects, exams, students, attendance, fees, results, logs, feeHeads, events,
+        schools, users, classes, subjects, exams, students, attendance, fees, ledger, results, logs, feeHeads, events,
         loading, isInitialLoad, lastSyncTime, syncError, syncProgress, operationProgress, 
         autoBackupSettings, updateAutoBackupSettings,
         fetchData, backupToDrive,
         getSchoolById: (id) => schools.find(s => s.id === id),
+        getLedgerForStudent,
         updateUser, deleteUser, addUserByAdmin, addStudent, updateStudent, deleteStudent,
         addClass, updateClass, deleteClass, addSubject, updateSubject, deleteSubject,
         addExam, updateExam, deleteExam, setAttendance, recordFeePayment, updateFeePayment, cancelChallan,

@@ -22,7 +22,7 @@ const getTodayString = () => getTodayKarachi();
 
 const FeeCollectionPage: React.FC = () => {
     const { user, activeSchoolId, hasPermission } = useAuth();
-    const { students, fees, classes, cancelChallan, getSchoolById } = useData();
+    const { students, fees, classes, cancelChallan, getSchoolById, getLedgerForStudent } = useData();
     const { showPrintPreview } = usePrint();
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -99,7 +99,9 @@ const FeeCollectionPage: React.FC = () => {
 
             // Status Filter
             if (statusFilter === 'Outstanding') {
-                if (challan.status === 'Paid') return false;
+                const isOutstandingChallan = challan.status === 'Unpaid' || challan.status === 'Partial';
+                const studentHasBalance = (getLedgerForStudent(challan.studentId)?.balance || 0) > 0.01;
+                if (!isOutstandingChallan && !studentHasBalance) return false;
             } else if (statusFilter !== 'All') {
                  // Map 'Partial' to match specific cases if needed, but 'Partial' status matches directly
                  if (statusFilter === 'Partial' && challan.status !== 'Partial') return false;
@@ -157,6 +159,11 @@ const FeeCollectionPage: React.FC = () => {
     }, [searchTerm, statusFilter, classFilter, monthFilter, sortBy]);
 
     const totalPages = Math.ceil(filteredChallans.length / ROWS_PER_PAGE);
+
+    useEffect(() => {
+        if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages);
+    }, [filteredChallans.length, totalPages, currentPage]);
+
     const paginatedChallans = useMemo(() => {
         const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
         return filteredChallans.slice(startIndex, startIndex + ROWS_PER_PAGE);
@@ -329,13 +336,27 @@ const FeeCollectionPage: React.FC = () => {
                     </div>
                     <div className="col-span-1">
                         <label htmlFor="month-filter" className="input-label">Challan Month</label>
-                        <input 
-                            type="month" 
+                        <select 
                             id="month-filter" 
                             value={monthFilter} 
                             onChange={e => setMonthFilter(e.target.value)} 
                             className="input-field"
-                        />
+                        >
+                            <option value="">All Months</option>
+                            {Array.from({ length: 24 }, (_, i) => {
+                                const d = new Date();
+                                d.setMonth(d.getMonth() - i + 3);
+                                const y = d.getFullYear();
+                                const m = String(d.getMonth() + 1).padStart(2, '0');
+                                const code = `${y}-${m}`;
+                                const monthName = months[d.getMonth()];
+                                return (
+                                    <option key={code} value={code}>
+                                        {monthName} {y}
+                                    </option>
+                                );
+                            })}
+                        </select>
                     </div>
                     <div className="col-span-1">
                         <label htmlFor="status-filter" className="input-label">Challan Status</label>
@@ -450,7 +471,7 @@ const FeeCollectionPage: React.FC = () => {
                                                     ) : (
                                                         <div className="flex justify-center gap-2">
                                                             {canManage && (challan.status === 'Paid' || challan.status === 'Partial') && (
-                                                                <button onClick={() => setChallanToManage({ challan, student, mode: 'edit' })} className="text-xs text-primary-600 hover:underline">Record Payment</button>
+                                                                <button onClick={() => setChallanToManage({ challan, student, mode: 'edit' })} className="text-xs text-primary-600 hover:underline">Edit Payment</button>
                                                             )}
                                                             {canManage && challan.status !== 'Paid' && challan.status !== 'Cancelled' && (
                                                                 <button onClick={() => setChallanToCancel(challan)} className="text-xs text-red-600 hover:underline">Cancel</button>

@@ -124,7 +124,8 @@ const ChallanGenerationPage: React.FC = () => {
             const studentFees = fees.filter(f => f.studentId === student.id && f.status !== 'Cancelled');
             const totalFeeCharged = studentFees.reduce((sum, f) => {
                 const feeSum = f.feeItems.reduce((acc, item) => acc + item.amount, 0);
-                return sum + feeSum;
+                const fine = Number((f as any).fineAmount || 0);
+                return sum + feeSum + fine;
             }, 0);
             const totalPaidAndDiscount = studentFees.reduce((sum, f) => {
                 return sum + (f.paidAmount || 0) + (f.discount || 0);

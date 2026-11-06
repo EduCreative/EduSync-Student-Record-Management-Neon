@@ -13,10 +13,12 @@ interface StudentFeeHistoryProps {
 }
 
 const StudentFeeHistory: React.FC<StudentFeeHistoryProps> = ({ studentId, onEditChallan }) => {
-    const { fees } = useData();
+    const { fees, getLedgerForStudent } = useData();
     const { hasPermission } = useAuth();
     const canEdit = hasPermission(Permission.CAN_MANAGE_FEES);
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+    const studentLedger = getLedgerForStudent(studentId);
 
     const studentChallans = useMemo(() => {
         return fees
@@ -37,7 +39,27 @@ const StudentFeeHistory: React.FC<StudentFeeHistoryProps> = ({ studentId, onEdit
 
     return (
         <div>
-            <h3 className="text-lg font-medium text-secondary-900 dark:text-white mb-4">Fee Payment History</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+                <h3 className="text-lg font-medium text-secondary-900 dark:text-white">Fee Payment History</h3>
+                {studentLedger && (
+                    <div className="flex items-center gap-4 bg-secondary-50 dark:bg-secondary-800/80 px-4 py-2 rounded-lg border border-secondary-200 dark:border-secondary-700 text-xs">
+                        <div>
+                            <span className="text-secondary-500 dark:text-secondary-400">Total Charged: </span>
+                            <span className="font-semibold text-secondary-900 dark:text-white">Rs. {studentLedger.totalCharged.toLocaleString()}</span>
+                        </div>
+                        <div>
+                            <span className="text-secondary-500 dark:text-secondary-400">Paid: </span>
+                            <span className="font-semibold text-green-600 dark:text-green-400">Rs. {studentLedger.totalPaid.toLocaleString()}</span>
+                        </div>
+                        <div>
+                            <span className="text-secondary-500 dark:text-secondary-400">Balance: </span>
+                            <span className={`font-bold ${studentLedger.balance > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                Rs. {studentLedger.balance.toLocaleString()}
+                            </span>
+                        </div>
+                    </div>
+                )}
+            </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                     <thead className="text-xs text-secondary-700 uppercase bg-secondary-50 dark:bg-secondary-700 dark:text-secondary-300">

@@ -1,5 +1,3 @@
-
-
 import React, { useMemo, useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { formatDate } from '../../constants';
@@ -20,7 +18,7 @@ interface StudentProfilePageProps {
 }
 
 const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setActiveView }) => {
-    const { students, classes, fees } = useData();
+    const { students, classes, getLedgerForStudent } = useData();
     const [activeTab, setActiveTab] = useState('details');
     const [challanToEdit, setChallanToEdit] = useState<FeeChallan | null>(null);
 
@@ -32,27 +30,7 @@ const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setA
         return { ...cls, fullName: `${cls.name}${cls.section ? ` - ${cls.section}` : ''}` };
     }, [classes, student]);
     
-    const feeSummary = useMemo(() => {
-        const studentFees = fees.filter(f => f.studentId === studentId && f.status !== 'Cancelled');
-        
-        const totalNewFees = studentFees.reduce((sum, challan) => {
-            const newFee = (challan.totalAmount || 0) - (challan.previousBalance || 0);
-            return sum + newFee;
-        }, 0);
-
-        const totalPaid = studentFees.reduce((sum, challan) => sum + (challan.paidAmount || 0), 0);
-        const totalDiscount = studentFees.reduce((sum, challan) => sum + (challan.discount || 0), 0);
-        const openingBalance = student?.openingBalance || 0;
-
-        const balance = openingBalance + totalNewFees - totalPaid - totalDiscount;
-
-        return {
-            totalDue: openingBalance + totalNewFees - totalDiscount,
-            totalPaid: totalPaid,
-            balance: balance,
-        };
-    }, [fees, studentId, student]);
-
+    const ledger = getLedgerForStudent(studentId);
 
     if (!student) {
         return <div className="p-8 text-center">Student not found.</div>;
@@ -152,7 +130,7 @@ const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setA
                                         <InfoItem label="Admitted in Class" value={student.admittedClass} />
                                         <InfoItem label="Last School Attended" value={student.lastSchoolAttended} />
                                         <InfoItem label="Opening Balance" value={`Rs. ${student.openingBalance?.toLocaleString() || 0}`} />
-                                        <InfoItem label="Current Fee Balance" value={`Rs. ${feeSummary.balance.toLocaleString()}`} bold={true} />
+                                        <InfoItem label="Current Fee Balance" value={`Rs. ${(ledger?.balance || 0).toLocaleString()}`} bold={true} />
                                     </dl>
                                 </div>
                             </div>

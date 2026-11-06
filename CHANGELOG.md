@@ -1,6 +1,39 @@
 
 # Changelog
 
+## [3.32.0] - 2026-11-05
+
+### Batch F3: Client Consumers Use Server-Authoritative Multi-Year Ledger
+- **F3.0 (`types.ts` & `DataContext.tsx`)**: Introduced `StudentLedger` type, `ledger` state, and `getLedgerForStudent(studentId)` helper in `DataContext.tsx`.
+- **F3.1 (`AdminDashboard.tsx`)**: Computed `totalOutstandingDues` strictly from active students' ledger balance (`Math.max(0, getLedgerForStudent(s.id)?.balance || 0)`), preventing past-year arrears from disappearing.
+- **F3.2 (`StudentManagementPage.tsx`)**: Replaced client-side `studentBalanceMap` with `getLedgerForStudent(id)?.balance || 0` across student balance columns and CSV export.
+- **F3.3 (`StudentProfilePage.tsx`)**: Sourced fee balances, total paid, and total dues directly from `getLedgerForStudent(studentId)`.
+- **F3.4 (`FeeCollectionPage.tsx`)**: Updated Outstanding filter to show challans if either the challan is Unpaid/Partial OR the student has a remaining ledger balance (`balance > 0.01`).
+- **F3.5 (`StudentFeeHistory.tsx`)**: Added a multi-year total outstanding summary banner using `getLedgerForStudent(studentId)` above the payment history table.
+- **F3.6 (`FeeRemindersPage.tsx`)**: Verified student multi-year ledger balance before skipping paid challan rows (`fee.status === 'Paid' && studentBalance <= 0.01`).
+- **F3.7 (`DefaulterReportModal.tsx`)**: Sourced cumulative defaulter balances and net dues from `getLedgerForStudent(student.id)`.
+
+### Batch F4: Remaining Client Bugs & High-Reliability Polish
+- **F4.1 (`FeePaymentModal.tsx`)**:
+  - Enforced `Math.max(0, ...)` on payment history sum recalculations.
+  - Preserved `discount` and `method` attributes per history entry during edits.
+  - Implemented an older-challan hard block (`setError('A newer challan exists for this student. Record the payment on the latest challan instead.')`).
+- **F4.2 (`PrintableChallan.tsx`)**:
+  - Implemented active `lateFee` prop handling, adding effective late fee to `finalDues` when challans are past due and unpaid.
+  - Displayed "Late Fee" breakdown row above "Discount Amount (D.A.)" and reflected final dues in the Account Desk QR code payload and bottom acknowledgment balance.
+- **F4.3 (`tailwind.config.js`)**:
+  - Added `safelist: ['per-page-1', 'per-page-2', 'per-page-3']` to prevent dynamic printable wrapper classes from being purged in production builds.
+- **F4.4 (`ChallanGenerationPage.tsx`)**:
+  - Included `fineAmount` in `handlePreview` arrears calculations to maintain 100% parity with the backend generator.
+- **F4.5 (`StudentFormModal.tsx` & `students.ts`)**:
+  - Stripped `fee_structure` from both edit submit payloads and the backend `update-student` SQL UPDATE query, ensuring custom tuition fees set via "Increase Tuition Fee" are never overwritten by routine profile updates.
+- **F4.6 (`FeeHeadsManagement.tsx`)**:
+  - Made `handleDelete` async and awaited `deleteFeeHead`, closing the confirmation dialog only on success and presenting toast errors on failure.
+- **F4.7 (`FeeCollectionPage.tsx`)**:
+  - Added an "All Months" option (`<option value="">All Months</option>`) to the Challan Month dropdown filter.
+  - Clarified button label to "Edit Payment" for already paid or partially paid challans.
+  - Added a pagination clamp effect ensuring `currentPage` automatically adjusts if filtered rows decrease below the active page.
+
 ## [3.31.0] - 2026-11-04
 
 ### Batch F2: Server-Side Ledger & Date Precision

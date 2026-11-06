@@ -128,6 +128,15 @@ export interface FeeChallan {
     fineAmount?: number; // New field for recording penalties
 }
 
+export interface StudentLedger {
+    studentId: string;
+    totalCharged: number;
+    totalPaid: number;
+    totalDiscount: number;
+    openingBalance: number;
+    balance: number;
+}
+
 
 export interface Result {
     id: string;

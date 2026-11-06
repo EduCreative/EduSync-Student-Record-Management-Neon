@@ -5,6 +5,7 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  safelist: ['per-page-1', 'per-page-2', 'per-page-3'],
   darkMode: 'class',
   theme: {
     extend: {

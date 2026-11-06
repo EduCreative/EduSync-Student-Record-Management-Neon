@@ -48,7 +48,12 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
         if (isOpen) {
             submissionLock.current = false;
             idempotencyKeyRef.current = crypto.randomUUID();
-            setTempHistory([...(challan.paymentHistory || [])]);
+            setTempHistory((challan.paymentHistory || []).map((p: any) => ({
+                date: p.date,
+                amount: Number(p.amount) || 0,
+                discount: Number(p.discount) || 0,
+                method: p.method
+            })));
             if (editMode) {
                 setAmount(challan.paidAmount);
                 setDiscount(challan.discount);
@@ -66,7 +71,7 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
     // Recalculate total amount whenever history changes in Edit mode
     useEffect(() => {
         if (editMode) {
-            const historySum = tempHistory.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+            const historySum = Math.max(0, tempHistory.reduce((sum, item) => sum + (Number(item.amount) || 0), 0));
             setAmount(historySum);
         }
     }, [tempHistory, editMode]);
@@ -97,6 +102,11 @@ const FeePaymentModal: React.FC<FeePaymentModalProps> = ({ isOpen, onClose, chal
         const todayStr = getTodayString();
         if (paidDate > todayStr) {
             setError('Payment Date cannot be in the future. Please select today or a past date.');
+            return;
+        }
+
+        if (newerChallanExists && !editMode) {
+            setError('A newer challan exists for this student. Record the payment on the latest challan instead.');
             return;
         }
         
