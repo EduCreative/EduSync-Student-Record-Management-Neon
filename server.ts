@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
     const app = express();
     // Port 3000 required by AI Studio runtime environment proxy
-    const port = 3000;
+    const port = Number(process.env.PORT) || 3000;
     const isProd = process.env.NODE_ENV === 'production';
 
     // Parse JSON bodies (with adequate limit for bulk backup/import data)

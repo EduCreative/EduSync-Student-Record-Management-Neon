@@ -7,27 +7,13 @@ import { downloadCsvString, escapeCsvCell } from '../../utils/csvHelper';
 import { UserRole } from '../../types';
 import { formatDate } from '../../constants';
 import { getClassLevel } from '../../utils/sorting';
+import { getTodayKarachi, getFirstDayOfKarachiMonth, toLocalDateString } from '../../utils/dates';
 import PrintableReportLayout from './PrintableReportLayout';
 
 interface DiscountReportModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
-
-const getTodayString = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    const day = today.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
-
-const getFirstDayOfMonthString = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    return `${year}-${month}-01`;
-};
 
 /**
  * Robust date normalization to handle inconsistent formats from database or imports.
@@ -46,20 +32,21 @@ const normalizeDate = (dateStr?: string | null): string | null => {
         if (/^\d{4}-\d{2}-\d{2}$/.test(parts[0])) return parts[0];
     }
 
-    // 3. JS Parsing
-    try {
-        const d = new Date(input);
-        if (!isNaN(d.getTime())) {
-            return d.toISOString().split('T')[0];
-        }
-    } catch { }
-
-    // 4. DD/MM/YYYY or DD-MM-YYYY
+    // 3. DD/MM/YYYY or DD-MM-YYYY (reordered before new Date so DMY wins over US-locale MDY)
     const dmY = input.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
     if (dmY) {
         const [, d, m, y] = dmY;
         return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
+
+    // 4. JS Parsing fallback using toLocalDateString
+    try {
+        const d = new Date(input);
+        if (!isNaN(d.getTime())) {
+            const res = toLocalDateString(d);
+            if (res) return res;
+        }
+    } catch { }
 
     return null;
 };
@@ -87,8 +74,8 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
     const { fees, students, classes, getSchoolById } = useData();
     const { showPrintPreview } = usePrint();
 
-    const [startDate, setStartDate] = useState(getFirstDayOfMonthString());
-    const [endDate, setEndDate] = useState(getTodayString());
+    const [startDate, setStartDate] = useState(getFirstDayOfKarachiMonth());
+    const [endDate, setEndDate] = useState(getTodayKarachi());
     const [classIdFilter, setClassIdFilter] = useState('all');
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;

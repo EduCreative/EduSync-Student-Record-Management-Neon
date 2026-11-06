@@ -1,0 +1,734 @@
+# Consolidated Master Prompt Set
+
+Yes — combining them is the right call. Claude's assessment is accurate: **its prompts cover the structural/security/setup layer**, mine cover the **specific bugs in the UI and hooks layer**. Neither is sufficient alone, and running both sets *as-is* would create **merge conflicts** in 5 specific files:
+
+- `login.ts` — both touch it
+- `LoginPage.tsx` — both touch it
+- `RegisterPage.tsx` — both touch it
+- `notifications/index.ts` — both touch it
+- `restore.ts` — Claude replaces it; my prompt says "don't touch"
+
+Below is **one merged, ordered set**. It uses Claude's batch structure (fewer AI Studio sessions, more coherent changes per session) and folds in my bug fixes at the correct points so no file is edited twice for conflicting reasons. I've also corrected the ~7 prompt errors I flagged in the previous message.
+
+**Total: 17 batches.** Run them strictly in this order, one per fresh AI Studio chat.
+
+---
+
+## How to Use
+
+- **One fresh chat per batch.** Attach only the listed files.
+- **After each batch:**
+  1. Diff the returned files. If unrelated lines were deleted or reformatted, reject and re-ask.
+  2. Save them.
+  3. Run `npx tsc --noEmit` and `npm run build`. Both must pass before the next batch.
+  4. Commit to git so you can roll back a single batch if needed.
+- **If AI Studio asks a clarifying question,** answer: *"Make the minimal change that satisfies the prompt. Show me the full file contents when done."*
+- **If any prompt conflicts with what you actually see in the code,** stop and report back — don't let AI Studio guess.
+- **Every schema change** goes into **both** `schema.sql` (source of truth) and a numbered file in `migrations/`.
+
+---
+
+## Common Preamble
+
+Paste this at the top of **every** prompt, before the task:
+
+```
+You are modifying the existing EduSync project: React 18 + TypeScript + Vite frontend; an Express router (src/server/apiRouter.ts) deployed as ONE Vercel serverless function; Neon Postgres via @neondatabase/serverless using tagged-template `sql`. Make the minimal change needed for the single task below. Do not rewrite whole files, rename things, reformat, or touch unrelated code. Keep light/dark themes and mobile layouts working. Return the FULL contents of every file you change or create, and list the files at the end. If the task conflicts with the code you actually see, STOP and tell me instead of guessing.
+```
+
+---
+
+## Batch 1 — Cleanup + login page hygiene + plaintext password removal
+
+**Attach:** `index.html`, `package.json`, `server.ts`, `src/components/auth/LoginPage.tsx`, `src/components/auth/RegisterPage.tsx`, `src/components/auth/AccountSetupPage.tsx`, `.env.example`, `.gitignore`, `src/server/handlers/auth/login.ts`, `scripts/hash-passwords.ts`
+
+```text
+Task: clean up leftovers, remove non-functional UI, and harden login. Do ONLY these:
+
+1. index.html: delete the <script type="importmap"> block entirely and the Google Identity Services <script src="https://accounts.google.com/gsi/client"> tag. Add <meta name="theme-color" content="#1e3a8a">.
+
+2. LoginPage.tsx:
+   a. Remove the "Or" divider block and the "Sign in with Google" button (it has no onClick). Remove the unused GoogleIcon component.
+   b. Remove the "Remember this device" checkbox, the `rememberMe` state variable, and its setter. It does nothing.
+   c. Change the "Register School" link text to "Create an account". Under it add one small line: "New accounts need approval from your school administrator."
+   d. Leave the password field, show/hide toggle, and email field untouched.
+
+3. RegisterPage.tsx:
+   a. In the role <select>, remove UserRole.Admin and UserRole.Accountant options. Keep only Teacher, Parent, Student.
+   b. Change the default role state from UserRole.Admin to UserRole.Teacher.
+   c. Any text saying "school registration" or "institution" should say "account request".
+
+4. AccountSetupPage.tsx: if nothing imports it, delete the file. If something imports it, tell me instead of deleting.
+
+5. package.json: change "start" to "NODE_ENV=production tsx server.ts". If "@google/genai" is not imported anywhere under src/, remove it from dependencies (tell me if it is used).
+
+6. server.ts: use `const port = Number(process.env.PORT) || 3000;`.
+
+7. Delete these files unconditionally, since they are unused scaffolding (firebase is not in package.json, so nothing can import them):
+   - public/assets/aistudio/ (the whole folder)
+   - src/lib/supabaseClient.ts
+   - firebase-applet-config.json
+   - metadata.json
+   - scripts/hash-passwords.ts (one-time migration script, now a footgun — plaintext auto-upgrade is being removed below)
+   If any of those don't exist, just note it and continue. If any of them ARE actually imported somewhere, tell me which file and don't delete that one.
+
+8. login.ts: REMOVE the plaintext-password comparison branch entirely. The block currently starts with `// Legacy plain-text check & auto-upgrade to bcrypt` and ends with the closing brace of the `if (storedPassword === password)` block. After removal, only bcrypt.compare() should verify the password. If the stored hash is not a bcrypt hash (doesn't start with $2a$/$2b$/$2y$), treat it as an invalid password and return 401. Keep every error message and status code identical.
+
+9. .gitignore: add `*.zip` and `.vercel`.
+
+Do NOT touch googleDriveService.ts or any Drive backup code. Do NOT touch src/server/_db.ts.
+```
+
+**Verify locally:** the login page has no Google button and no Remember-me checkbox; `npx tsc --noEmit` passes; `npm run build` passes; you can still log in with an existing bcrypt-hashed account.
+
+---
+
+## Batch 2 — Fresh role from DB + safer cookie
+
+**Attach:** `src/server/_db.ts`, `src/server/handlers/write/_helpers.ts`, `src/server/handlers/auth/login.ts`, `src/server/handlers/auth/me.ts`, `src/server/handlers/auth/change-password.ts`, `src/server/handlers/data/index.ts`, `src/server/handlers/data/students.ts`, `src/server/handlers/data/fees.ts`, `src/server/handlers/data/users.ts`, `src/server/handlers/data/schools.ts`, `src/server/handlers/notifications/index.ts`
+
+```text
+Task: stop trusting role/school from the JWT.
+
+1. In _db.ts add `async function getSessionUser(req, res)`:
+   - authenticateRequest(req); if none -> 401.
+   - Query profiles for that userId: id, name, email, role, school_id, status, avatar_url.
+   - If row missing, or status in ('Inactive','Suspended','Pending Approval','Pending') -> clear the cookie and 401.
+   - Return a TokenPayload-shaped object built from the DATABASE row (role, schoolId, name, avatarUrl), not from the token.
+
+2. In login.ts: after successful password verification but BEFORE issuing the cookie, if the user's status is not 'Active', return 403 with a clear message and do NOT set a cookie. (This closes a race where a Pending user could get a JWT.)
+
+3. Make verifySession in write/_helpers.ts use getSessionUser, and replace the inline authenticateRequest + status-check blocks in data/index.ts, data/students.ts, data/fees.ts, data/users.ts, data/schools.ts and notifications/index.ts with getSessionUser, so every endpoint uses the fresh role and school.
+
+4. JWT keeps only userId and email as identity; keep the 12h expiry. Never read role or schoolId back from the JWT for authorization decisions.
+
+5. Cookie settings in setSessionCookie/clearSessionCookie:
+   - httpOnly: true
+   - path: '/'
+   - maxAge: 12 * 60 * 60 (in setSessionCookie); 0 in clearSessionCookie
+   - sameSite: 'lax'   (BOTH prod and dev — do not conditionally change this)
+   - secure: (process.env.NODE_ENV === 'production' || process.env.VERCEL) ? true : false
+   - REMOVE the `partitioned` option completely.
+   These exact options must be used in both functions.
+
+6. Do not change any API response shapes.
+
+If @neondatabase/serverless is older than 0.9 and doesn't support tagged-template parameterized queries, STOP and tell me.
+```
+
+**Verify:** log in as a Teacher, then in the DB update that profile's `role` to `Student`. Refresh the browser. The UI should now reflect Student role (sidebar links change) without logging out. Login must still work in both `npm run dev` and on the deployed site.
+
+---
+
+## Batch 3 — DB-backed login rate limit
+
+**Attach:** `src/server/handlers/auth/login.ts`, `schema.sql`
+
+```text
+Task: replace the in-memory failed-login Map (useless on Vercel) with a database-backed limit.
+
+1. Add to schema.sql AND create migrations/001_login_attempts.sql with:
+   CREATE TABLE IF NOT EXISTS login_attempts (email TEXT NOT NULL, ip TEXT, attempted_at TIMESTAMPTZ NOT NULL DEFAULT now());
+   CREATE INDEX IF NOT EXISTS idx_login_attempts_email_time ON login_attempts(email, attempted_at DESC);
+   If migrations/ already contains numbered files, use the next available number instead of 001 and report which number you used.
+
+2. In login.ts:
+   - Before checking the password, count failed attempts for that email in the last 15 minutes. If >= 5, return 429 with the exact existing message.
+   - On a failed login, INSERT a row (email + IP from the first value of x-forwarded-for, or null if absent).
+   - On successful login, DELETE all rows for that email.
+   - Opportunistically, once per failed login, also DELETE rows older than 1 day (any email).
+
+3. Remove the Map and its helper functions (isRateLimited, recordFailedAttempt, clearFailedAttempts). Keep every error message and status code identical.
+
+4. If a duplicate-key or unique-violation error occurs while inserting the attempt (race), ignore it and continue.
+```
+
+**Verify:** 5 wrong passwords, then the correct one, returns 429. Wait 15 minutes and it works again.
+
+---
+
+## Batch 4 — Teacher field masking + PrintableChallan hook violation
+
+**Attach:** `src/server/handlers/data/students.ts`, `src/components/reports/PrintableChallan.tsx`
+
+```text
+Task: fix two independent bugs.
+
+1. In src/server/handlers/data/students.ts, the teacher-masking code currently does:
+     const { cnic: _c, parent_cnic: _pc, ...safeStudent } = s;
+   Neither `cnic` nor `parent_cnic` exist in the schema. The actual sensitive column is `father_cnic`. Change to:
+     const { father_cnic: _fc, ...safeStudent } = s;
+   Verify this matches the masking logic in src/server/handlers/data/index.ts (which already correctly strips father_cnic for teachers). No other change to this file.
+
+2. In src/components/reports/PrintableChallan.tsx, there is a block like:
+     let contextFees: FeeChallan[] = [];
+     try { const data = useData(); if (data?.fees) contextFees = data.fees; } catch { }
+   This violates the React hooks rules (hooks cannot be called conditionally or inside try/catch).
+   - Remove the entire try/catch block and the useData import if that was its only usage.
+   - In the props interface, make `allFees: FeeChallan[]` REQUIRED (remove the `?`).
+   - Replace the line `const feesToSearch = allFees && allFees.length > 0 ? allFees : contextFees;` with `const feesToSearch = allFees;`.
+   - Every caller (FeeCollectionPage.tsx, BulkChallanReportModal.tsx, ChallanRangeReportModal.tsx) already passes allFees. Verify this. If any caller does not, add the prop and list the file in your response.
+
+Show me the full contents of both changed files.
+```
+
+**Verify:** `npx tsc --noEmit` passes; a Teacher viewing `/api/data/students` no longer sees `father_cnic` in the response; printing a challan from FeeCollectionPage and from BulkChallanReportModal both still work.
+
+---
+
+## Batch 5 — Report modal date fixes
+
+**Attach:** `src/components/reports/AttendanceReportModal.tsx`, `src/components/reports/DiscountReportModal.tsx`, `src/components/reports/FeeCollectionReportModal.tsx`
+
+```text
+Task: fix three report modals that use timezone-shifting dates and/or the wrong DMY parsing order.
+
+1. AttendanceReportModal.tsx:
+   In the datesInRange useMemo, replace every `new Date(x).toISOString().split('T')[0]` with `toLocalDateString(x)`.
+   Import `toLocalDateString` from '../../utils/dates'.
+
+2. DiscountReportModal.tsx and FeeCollectionReportModal.tsx:
+   a. Remove the local getTodayString and getFirstDayOfMonthString helper definitions.
+   b. Import { getTodayKarachi, getFirstDayOfKarachiMonth, toLocalDateString } from '../../utils/dates'.
+   c. Replace every call to getTodayString() with getTodayKarachi().
+   d. Replace every call to getFirstDayOfMonthString() with getFirstDayOfKarachiMonth().
+   e. In normalizeDate, reorder the branches so the DMY regex match runs BEFORE `new Date(input)`:
+      Order: (1) YYYY-MM-DD regex, (2) ISO/Timestamp truncate, (3) DD/MM/YYYY or DD-MM-YYYY regex, (4) fallback via toLocalDateString(new Date(input)).
+      Reason: `new Date("01/02/2026")` parses as US-locale MDY (Jan 2), but Pakistani manual entry means DMY (Feb 1). The DMY regex must win.
+   f. Replace any `.toISOString().split('T')[0]` in these files with toLocalDateString(...).
+
+3. Do not change any report logic, only date handling.
+
+Show me the full contents of all three files.
+```
+
+**Verify:** open the Attendance report for January; the column headers should show 1 Jan through 31 Jan (not 31 Dec). Enter a manual discount with paidDate "01/02/2026" — the report for "1 Feb 2026" should include it (not "2 Jan 2026").
+
+---
+
+## Batch 6 — Atomic payments + safe cancel
+
+**Attach:** `src/server/handlers/write/payments.ts`, `src/components/fees/FeePaymentModal.tsx`
+
+```text
+Task: make payment recording safe under two cashiers at the same time.
+
+1. record-payment: move the overpayment check INTO the UPDATE. Add to the WHERE clause:
+     AND (${allowOverpayment === true} OR paid_amount + ${numAmount} <= total_amount - ${currentDiscount})
+     AND status <> 'Cancelled'
+   If the UPDATE returns zero rows, re-read the challan and return 409 with the current remaining balance (or 404 if missing) so the UI can show it. Keep the existing 400 pre-check as a friendly message, but the WHERE clause is the real guard.
+
+2. Make the idempotencyKey check atomic too: add to the WHERE clause
+     AND NOT (COALESCE(payment_history, '[]'::jsonb) @> ${JSON.stringify([{idempotencyKey: key}])}::jsonb)
+   when a key is supplied. On zero rows, re-read and check whether the idempotencyKey is present. If yes, return the same `{ success: true, challan, duplicatePrevented: true }` response. If no, return 409 with the current remaining balance.
+
+3. cancel-challan: reject with 409 if paid_amount > 0 OR discount > 0 OR payment_history is non-empty. Message: "Cannot cancel a challan that has payments or discounts. Remove the payments first or contact the owner." Only Owner/Admin may cancel; log the reason via writeServerAuditLog (same as now).
+
+4. increase-tuition: replace the per-student SELECT+UPDATE loop with either one UPDATE using jsonb_set or, if too complex, one sql.transaction([...]) of all the UPDATEs. Keep the same audit log text.
+
+5. FeePaymentModal.tsx: when apiWrite throws with a server-sent message (the `error` field from the response body), show that message in the local `error` state instead of the generic "Failed to process payment" text. Look at how the DataContext surfaces the server error and reuse it.
+
+Show me the full contents of both files.
+```
+
+**Verify:** open the same challan in two browser tabs. Pay the full amount in both. The second must return 409 and display the server message ("Payment amount exceeds the remaining balance...").
+
+---
+
+## Batch 7 — Correct arrears + atomic challan generation
+
+**Attach:** `src/server/handlers/write/challans.ts`, `src/context/DataContext.tsx`
+
+```text
+Task: fix arrears in action 'generate' AND make the generation atomic.
+
+1. Arrears aggregation: restrict to challans strictly EARLIER than the target month/year. Compute a month number inside SQL:
+     array_position(ARRAY['January','February','March','April','May','June','July','August','September','October','November','December']::text[], month)
+   Then filter:
+     (year, month_no) < (targetYear, targetMonthNo)
+   This prevents February's challan from inflating January's arrears when generating out of order.
+
+2. Fee heads: load them with `WHERE school_id = ${effectiveSchoolId}` instead of all heads.
+
+3. If a student already has an active challan in a LATER month than the target, SKIP generating a backdated challan for that student. Report the count of skipped students in the response as `skippedBackdated: number`.
+
+4. Wrap ALL chunk INSERTs in one sql.transaction([...]) so a failure leaves no partial month. The chunks are already built; combine them into a single transaction array. Keep the ON CONFLICT DO NOTHING behavior.
+
+5. In src/context/DataContext.tsx, find generateChallansForMonth. Update the success toast to include the skippedBackdated count when > 0, e.g., "15 challans generated, 2 skipped (newer challan already exists)."
+
+Keep the opening_balance handling unchanged.
+
+Show me the full contents of both files.
+```
+
+**Verify:** generate February for a class, then generate January for the same class. January's `previous_balance` on each generated challan must be 0 (or the pre-January arrears only, not February's amounts).
+
+---
+
+## Batch 8 — Atomic bulk operations
+
+**Attach:** `src/server/handlers/write/students.ts`, `src/server/handlers/write/users.ts`, `src/server/handlers/write/challans.ts`, `package.json`
+
+```text
+Task: make multi-row writes atomic.
+
+1. First, check which version of @neondatabase/serverless is installed. Read node_modules/@neondatabase/serverless/package.json's "version" field. If it is 0.9.x or newer, sql.transaction([...]) is supported. If it is older, STOP and tell me which version is installed and what transaction API is available.
+
+2. students.ts bulk-add-students:
+   - Validate all rows first: name and rollNumber required on each; duplicate roll numbers within the file return 400 with the list of duplicated roll numbers.
+   - Insert ALL rows in one sql.transaction([...]) of INSERT statements (chunked inside the transaction if you want, but every chunk must be inside the same transaction).
+   - A duplicate roll number against the database (23505) must roll back EVERYTHING and return 409 with the error code DUPLICATE_ROLL and the offending roll number.
+
+3. students.ts promote-students, reactivate-graduated, revert-promotion:
+   - Build all UPDATE statements and run them in one sql.transaction([...]).
+   - Keep the school scoping conditions on each UPDATE.
+
+4. users.ts bulk-add-users:
+   - Validate every row first; hash every password BEFORE writing (await all bcrypt.hash calls).
+   - Reject any role an Admin may not create (as now).
+   - Insert in one sql.transaction([...]); on a duplicate email return 409 with the email and write nothing.
+   - Also add duplicate-email handling (23505) to the single add-user action, returning 409 with the message "Email already exists".
+
+5. challans.ts: if you already wrapped chunk INSERTs in one transaction in Batch 7, verify it's still there and skip this step.
+
+Keep audit log entries and response shapes the same.
+
+Show me the full contents of every file you change.
+```
+
+**Verify:** import a CSV with the last row's roll number duplicated. Nothing must be imported. Response must be 409 DUPLICATE_ROLL.
+
+---
+
+## Batch 9 — First-run setup script + migration runner
+
+**Attach:** `schema.sql`, `package.json`, `.env.example`
+
+```text
+Task: add two scripts: an interactive first-run setup and a migration runner.
+
+1. scripts/migrate.ts:
+   - Reads DATABASE_URL from env.
+   - Creates a `schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now())` table if it doesn't exist.
+   - Reads all files in migrations/, sorts by filename, applies any not in schema_migrations, one per transaction.
+   - Prints "Applied <filename>" for each, and "Already up to date" if none.
+   - Add "migrate": "tsx scripts/migrate.ts" to package.json scripts.
+
+2. scripts/setup.ts:
+   - Reads DATABASE_URL from env.
+   - Checks that the profiles table is empty. If not empty and --force was not passed, print a clear message and exit 1.
+   - Prints the exact command to apply schema.sql:
+       psql "$DATABASE_URL" -f schema.sql
+     followed by:
+       If psql is not available: paste schema.sql into the Neon SQL editor and run it there, then re-run this script.
+   - Waits for the user to press Enter (readline), then checks that a `profiles` table now exists. If not, exit 1.
+   - Interactively asks (readline) for:
+       School name, School address,
+       Owner full name, Owner email, Owner password (min 10 chars, typed twice, no echo if possible),
+       Whether to add more fee heads (default: just "Tuition Fee" with amount 0).
+   - Creates exactly one school and one profile with role 'Owner', status 'Active', school_id = that school, password bcrypt-hashed with cost 12.
+   - Creates default fee heads for that school: "Tuition Fee" (default_amount 0), plus any the user wants.
+   - Prints a success summary WITHOUT printing the password.
+   - Adds "setup": "tsx scripts/setup.ts" to package.json scripts.
+
+3. .env.example: add comments for DATABASE_URL and SESSION_SECRET, with a one-line command to generate SESSION_SECRET:
+       node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+
+Do not change any app code. Show me the full contents of both new scripts and the updated package.json and .env.example.
+```
+
+**Verify:** on an empty Neon database, `npm run setup` creates the school and Owner, then you can log in with the Owner credentials. Re-run `npm run setup` — it refuses without `--force`.
+
+---
+
+## Batch 10 — Single-school mode + branches
+
+**Attach:** `schema.sql`, `src/App.tsx`, `src/context/AuthContext.tsx`, `src/context/DataContext.tsx`, `src/types.ts`, `src/components/layout/Sidebar.tsx`, `src/components/layout/Header.tsx`, `src/components/schools/SchoolManagementPage.tsx`, `src/components/schools/SchoolDetailsPage.tsx`, `src/components/dashboard/OwnerDashboard.tsx`, `src/components/classes/ClassFormModal.tsx`, `src/components/classes/ClassManagementPage.tsx`, `src/components/students/StudentManagementPage.tsx`, `src/components/settings/SettingsPage.tsx`, `src/server/handlers/write/users.ts`, `src/server/handlers/write/classes.ts`, `src/server/handlers/data/index.ts`, `src/permissions.ts`, `src/constants.tsx`
+
+This is a big batch. If AI Studio truncates its response, ask it to return files one at a time.
+
+```text
+Task: this installation serves EXACTLY ONE school, which may have MULTIPLE branches.
+
+PART A — Single school mode:
+1. Hide the "Schools" navigation item from constants.tsx NAV_LINKS for all roles.
+2. Remove the school switcher from Header.tsx. Show only the single school's name and logo.
+3. In AuthContext.tsx:
+   - When /api/auth/me or /api/auth/login returns a user, if schools.length === 1, auto-set activeSchoolId to schools[0].id.
+   - Remove switchSchoolContext entirely. Keep activeSchoolId in the state (used elsewhere) but it now only ever holds the single school's id.
+   - effectiveRole becomes: (user.role === UserRole.Owner) ? UserRole.Admin : user.role. But keep an `isOwner` boolean on the context so Settings → Branches and Settings → Backup can still be gated to the Owner.
+4. OwnerDashboard.tsx: remove the multi-school bar chart and the "Total Schools" stat. Keep Total Users, Total Students, Total Fee Collection, Pending Approvals. Change the title to "School Overview".
+5. Server (users.ts): 'add-school' and 'delete-school' return 403 with message "Single-school installation". Keep 'update-school' working.
+6. School profile editor: create a small component or reuse SchoolDetailsPage content as a card on SettingsPage where the Owner can edit the single school's name, address, logo.
+
+PART B — Branches:
+1. Database (schema.sql + migrations/YYYY_branches.sql where YYYY is the next available number):
+     CREATE TABLE IF NOT EXISTS branches (id UUID PRIMARY KEY, school_id UUID NOT NULL REFERENCES schools(id), name TEXT NOT NULL, address TEXT, UNIQUE(school_id, name));
+     ALTER TABLE classes ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES branches(id);
+   Students belong to a branch through their class. Do NOT add branch_id to students or fee_challans.
+2. types.ts: Branch interface { id, schoolId, name, address? }. Class gets optional branchId.
+3. Server (write/classes.ts): add actions add-branch / update-branch / delete-branch. Owner/Admin only, school-scoped, audit-logged.
+   delete-branch: before DELETE, SELECT COUNT(*) FROM classes WHERE branch_id = $1. If > 0, return 409 with message "Cannot delete a branch that has classes assigned."
+4. data/index.ts: include `branches` in the GET /api/data response, scoped to the school. Return branchId in classes.
+5. DataContext.tsx: branches state + addBranch/updateBranch/deleteBranch functions, same pattern as subjects. Also pass branchId through addClass/updateClass.
+6. ClassFormModal.tsx: add a Branch select (optional if the school has no branches).
+7. ClassManagementPage.tsx and StudentManagementPage.tsx: add a Branch filter dropdown, shown only when at least one branch exists.
+8. SettingsPage.tsx: add a "Branches" section (list, add, edit, delete) — Owner only.
+
+PART C — Permissions:
+Keep permissions.ts as is. Owner and Admin retain full rights. The only behavioral change is that switchSchoolContext no longer exists; anything that called it must be removed.
+
+If this batch is too large, return files in three groups (PART A, PART B, PART C) in separate messages.
+```
+
+**Verify:** log in as Owner. No school switcher. No "Schools" nav item. Settings → School Profile edits the single school. Settings → Branches works. Create two branches, assign classes, filter students by branch. `update-school` still works. `add-school` returns 403.
+
+---
+
+## Batch 11 — Real backup and restore (CLI)
+
+**Attach:** `schema.sql`, `scripts/restore.ts`, `src/server/handlers/write/restore.ts`, `package.json`, `.gitignore`
+
+```text
+Task: implement trustworthy backup and restore as CLI scripts that talk to Postgres directly. No HTTP.
+
+1. scripts/backup.ts (`npm run backup`):
+   - Dumps EVERY table in schema.sql: schools, branches (if it exists), profiles, classes, subjects, exams, students, attendance, fee_heads, fee_challans, results, activity_logs, school_events, notifications.
+   - All rows, all years, all columns, no scoping, no row limits.
+   - Pages large tables 2000 rows at a time ordered by primary key (use LIMIT/OFFSET or better, WHERE id > last_id ORDER BY id LIMIT 2000).
+   - Writes backups/edusync-YYYYMMDD-HHmmss.json with shape { version: "1.0", createdAt: ISO, tables: { name: rows[] } }.
+   - Also writes a `counts` object with per-table row counts.
+   - Prints per-table counts to console.
+   - The password column stays as the stored bcrypt hash (never decrypts).
+   - Add `backups/` to .gitignore.
+   - Add "backup": "tsx scripts/backup.ts" to package.json.
+
+2. scripts/restore.ts (`npm run restore -- <file>`):
+   - Reads DATABASE_URL from env.
+   - Refuses unless every table is empty (SELECT COUNT(*) from each, must all be 0) OR --wipe is passed. If --wipe is passed, ask the user to type the word RESTORE to confirm.
+   - Inserts in this FK-safe order (this order is critical):
+       1. schools
+       2. branches (if present in schema and file)
+       3. profiles
+       4. classes (has FKs to schools, profiles.teacher_id, branches)
+       5. subjects
+       6. exams
+       7. students (FK to classes, schools, profiles.user_id)
+       8. fee_heads
+       9. fee_challans
+       10. attendance
+       11. results
+       12. activity_logs
+       13. school_events
+       14. notifications
+   - Runs inside ONE sql.transaction([...]).
+   - After inserting, compares per-table row counts to the counts in the file and prints OK or MISMATCH per table.
+   - JSONB and array columns (fee_structure, fee_items, payment_history, child_student_ids, disabled_nav_links, permissions_overrides) must round-trip exactly. Insert them with JSON.stringify(...)::jsonb for JSONB columns and as JS arrays for array columns (let Neon handle the rest).
+   - Add "restore": "tsx scripts/restore.ts" to package.json.
+   - Add a short usage comment block at the top of both scripts.
+
+3. src/server/handlers/write/restore.ts: keep the 410 response but change the message text to:
+     "Restore is performed from the command line: npm run restore -- <file>. See the setup guide."
+
+Show me the full contents of both new scripts and the updated restore.ts handler.
+```
+
+**Verify (this is the most important verification in the whole sequence):** make a few test records, run `npm run backup`, create a fresh empty Neon branch/database, point DATABASE_URL at it, run `npm run restore -- <file>`, log in, and compare row counts. **A backup you have never restored is not a backup.**
+
+---
+
+## Batch 12 — Replace Drive backup with in-app full download
+
+**Attach:** `src/context/DataContext.tsx`, `src/components/settings/SettingsPage.tsx`, `src/utils/googleDriveService.ts`, `src/server/apiRouter.ts`, `.env.example`
+
+```text
+Task: remove the misleading Drive backup and add a working in-app "Download Full Backup".
+
+1. New server endpoint GET /api/backup (new file src/server/handlers/data/backup.ts, registered in apiRouter.ts):
+   - Owner-only (use getSessionUser + role check).
+   - Query params: `table` (must be in the whitelist of schema tables) and `offset`.
+   - Page size:
+       * students: 20 rows per page (because avatar_url is a base64 data URL up to ~60KB each)
+       * profiles: 50 rows per page (same reason)
+       * all other tables: 500 rows per page
+   - Response: { rows, nextOffset: number | null }. nextOffset is null when done.
+   - Order by primary key ascending (id) for stable pagination.
+   - Before returning, estimate payload size (JSON.stringify(rows).length). If it exceeds 3.5 MB, return only half the rows and set nextOffset accordingly so the client keeps paging. Never return more than 3.5 MB.
+
+2. In DataContext add downloadFullBackup():
+   - Loops over all tables in the same list as scripts/backup.ts.
+   - For each table, pages through /api/backup?table=X&offset=N until nextOffset is null.
+   - Uses the existing operationProgress state to show percentage + table name.
+   - Assembles the same JSON shape that scripts/backup.ts writes: { version, createdAt, tables: { name: rows[] }, counts: {...} }.
+   - Triggers a browser download of edusync-YYYYMMDD-HHmmss.json.
+   - Stores the last-downloaded timestamp in localStorage under 'edusync_last_backup_download'.
+   - Never uses the data already in memory — always fetches fresh.
+
+3. SettingsPage.tsx:
+   - Replace the Google Drive backup card with a "Download Full Backup" card:
+       * Big button "Download Full Backup" calling downloadFullBackup().
+       * Below it: "Last downloaded: <date from localStorage, or 'never'>".
+       * Note text: "This downloads every record from the database. To restore, ask your administrator to run `npm run restore -- <file>`."
+   - Remove the auto-backup toggles, the Drive file list/restore UI, and the restoreData function from SettingsPage.
+
+4. Delete src/utils/googleDriveService.ts (verify nothing else imports it — googleDriveService.ts is currently the only user; if something else does, tell me which file and stop).
+
+5. Remove backupToDrive and autoBackupSettings from DataContext (state, updater, effect, and any consumers like the Header component). Search for any usage of backupToDrive in the codebase before removing; if any remains, list the file and ask me before removing that usage.
+
+6. Remove VITE_GOOGLE_CLIENT_ID from .env.example and from src/vite-env.d.ts if present.
+
+Do not break any other settings on SettingsPage.
+
+Show me the full contents of every file you change.
+```
+
+**Verify:** click Download Full Backup in Settings as Owner. The downloaded JSON's per-table row counts match the database (query Neon directly and compare). Open the browser devtools Network tab — no single request is over 4 MB.
+
+---
+
+## Batch 13 — Installable on phone (PWA)
+
+**Attach:** `index.html`, `src/main.tsx`, `src/context/PWAInstallContext.tsx`, `src/context/SyncContext.tsx`, `src/components/common/UpdateChecker.tsx`, `vite.config.ts`, `vercel.json`, `public/favicon.svg`, `public/version.json`
+
+```text
+Task: make EduSync a proper installable PWA without adding npm dependencies.
+
+1. public/manifest.webmanifest:
+   - name "EduSync", short_name "EduSync", start_url "/", display "standalone".
+   - theme_color "#1e3a8a", background_color "#ffffff".
+   - Icons: 192 and 512 (purpose "any"), 192 and 512 (purpose "maskable"), pointing to /icons/icon-192.png and /icons/icon-512.png.
+   - I will supply the PNG files. Also add /icons/icon.svg as a fallback.
+   Link the manifest in index.html with the correct rel and add:
+   - <link rel="apple-touch-icon" href="/icons/icon-192.png">
+   - <meta name="apple-mobile-web-app-capable" content="yes">
+   - <meta name="apple-mobile-web-app-status-bar-style" content="default">
+   - <meta name="apple-mobile-web-app-title" content="EduSync">
+
+2. public/sw.js (service worker, no build tooling):
+   a. On install: fetch /version.json with cache: 'no-store'. Cache name = "edusync-" + (fetched version || "unknown"). Precache: ['/', '/index.html', '/manifest.webmanifest', '/version.json']. If the version fetch fails, still install (fail-open — the shell must be available offline). Call self.skipWaiting().
+   b. On activate: delete every cache whose name doesn't match the current cache name. Call self.clients.claim().
+   c. On fetch:
+      - If the URL path starts with /api/ → return fetch(event.request) unchanged. NEVER cache or intercept /api/.
+      - If the URL path starts with /assets/ → cache-first: check cache, then network. Cache successful responses.
+      - If the request is a navigation (event.request.mode === 'navigate') → try network first; on failure, return cached '/index.html'.
+      - Otherwise → network-first, no caching.
+
+3. Register the service worker in main.tsx ONLY when import.meta.env.PROD is true. Do not register in dev.
+
+4. UpdateChecker integration: when a new version is detected in /version.json and differs from the current one, call navigator.serviceWorker.getRegistration().then(r => r?.update()) and show the existing "update available" UI. On accept, reload the page (window.location.reload()).
+
+5. vercel.json:
+   - Serve /sw.js with header Cache-Control: no-cache, must-revalidate.
+   - Serve /manifest.webmanifest with the correct Content-Type (application/manifest+json).
+   - Ensure the SPA rewrite does NOT catch /sw.js, /manifest.webmanifest, /icons/*, /favicon.svg, or /version.json. Add explicit header/passthrough rules above the catch-all rewrite.
+
+6. Offline banner: SyncContext already exposes isOnline. Do NOT build a new offline banner — instead, ensure at least one visible place uses it. The Header.tsx SyncStatus already shows an offline dot; leave that as the single offline indicator. If a full-screen banner is desired, add it in Layout.tsx ABOVE the Header, driven by useSync().isOnline, with text: "You are offline. Records cannot be saved until the connection is restored." Use a yellow background.
+
+Show me the full contents of every file you change or create.
+```
+
+**Verify:** deploy, open in Chrome on Android. "Install app" appears. Install → opens full-screen without browser chrome. In airplane mode, the app opens to the login screen (not a blank page), and the offline banner appears. Login fails gracefully with a network error.
+
+---
+
+## Batch 14 — Performance on slow phones
+
+**Attach:** `src/App.tsx`, `src/components/layout/Layout.tsx`, `vite.config.ts`, `src/components/common/ImageUpload.tsx`, `src/context/NotificationContext.tsx`, `src/components/layout/Header.tsx`
+
+```text
+Task: improve load speed and mobile performance.
+
+1. src/App.tsx: lazy-load each PAGE component (Dashboard, StudentManagementPage, StudentProfilePage, FeeManagementPage, AttendancePage, ResultsPage, ReportsPage, ClassManagementPage, UserManagementPage, SettingsPage, UserLogsPage, AnnouncementsPage, CalendarPage, ChallanScannerPage, SchoolManagementPage, SchoolDetailsPage, LeavingCertificatePage, TeacherManagementPage, AccountantManagementPage, UserProfilePage) using React.lazy + <Suspense fallback={<Spinner />}>. Keep LoginPage, RegisterPage, RequestPasswordResetPage, ResetPasswordPage, Layout, Dashboard (the switcher), and Dashboard sub-components eager.
+   Wrap <Layout /> inside a <Suspense> if it renders lazy children; if Layout is already the switcher, just wrap the renderContent() output.
+
+2. vite.config.ts: add build.rollupOptions.output.manualChunks:
+     {
+       'react-vendor': ['react', 'react-dom'],
+       'charts': () => import('./src/components/charts'),  // or list chart files explicitly
+       'lucide': ['lucide-react'],
+       'qrcode': ['qrcode.react']
+     }
+   If manualChunks with a function import fails, list the chart component files individually as static entries. Report the chunk sizes after build. Target: the entry chunk (index-*.js) under 300 KB gzipped. If it exceeds 300 KB, tell me which chunk is largest — do NOT remove features to hit the target.
+
+3. ImageUpload.tsx: before storing, resize any image using canvas:
+   - Load via createImageBitmap or HTMLImageElement.
+   - Draw into an offscreen canvas at max 400x400 (preserve aspect ratio, center-crop if needed — or contain — your choice, but consistent).
+   - Export as image/jpeg quality 0.75 via canvas.toDataURL.
+   - Reject files over 10 MB with a clear user-facing message: "Photo is too large (max 10 MB). Please choose a smaller image."
+   - Typical output should be under 60 KB; log the final size to console.debug for verification.
+
+4. NotificationContext.tsx:
+   - Poll every 5 minutes (300_000 ms) instead of 60 seconds.
+   - Skip polling when document.visibilityState === 'hidden'.
+   - Add a visibilitychange listener that, when the tab becomes visible, calls fetchNotifications() immediately and resumes polling.
+
+5. Header.tsx SyncStatus: add a 30-second interval that forces the component to re-render so "Synced: Xs ago" doesn't freeze. Use useState with a counter and forceTick(t => t + 1).
+
+Show me the full contents of every file you change.
+```
+
+**Verify:** `npm run build` and compare chunk sizes. The new photo upload produces files under ~100 KB. Notification bell doesn't poll when the tab is hidden (check Network tab).
+
+---
+
+## Batch 15 — Real data in Parent and Student dashboards
+
+**Attach:** `src/components/dashboard/ParentDashboard.tsx`, `src/components/dashboard/StudentDashboard.tsx`, `src/utils/dates.ts`, `src/context/DataContext.tsx`
+
+```text
+Task: replace hardcoded statistics in ParentDashboard and StudentDashboard with real data.
+
+1. ParentDashboard.tsx:
+   For each child:
+   a. Attendance % (last 30 days):
+      - Get attendance records for child.id with date >= getKarachiDateOffset(-30).
+      - Percentage = (Present count / total) * 100, rounded.
+      - If 0 records, show "N/A".
+   b. Class name:
+      - classes.find(c => c.id === child.classId).
+      - Format `${name}${section ? ' - ' + section : ''}`.
+      - Replace the literal "Class Name" in the header with this.
+   c. Fee status:
+      - Ledger from getLedgerForStudent(child.id).
+      - balance <= 0.01 → "Paid" (green).
+      - balance > 0 → `Rs. ${balance.toLocaleString()} due` (red).
+      - Ledger undefined → "N/A".
+   d. Overall grade:
+      - Latest exam = exams sorted alphabetically, take last, filter results for that exam and that student.
+      - Sum marks / sum totalMarks, convert to percentage.
+      - Grade scale: A1+ (>=90), A1 (>=80), A (>=70), B (>=60), C (>=50), D (>=40), F (<40). Match StudentResults.tsx.
+      - If no results, "N/A".
+   e. Remove the hardcoded "Announcements" list if present in this file.
+   Import getKarachiDateOffset from '../../utils/dates'.
+
+2. StudentDashboard.tsx:
+   Same treatment:
+   a. My Attendance % (last 30 days, same calculation).
+   b. Overall Grade (latest exam, same scale).
+   c. Fee Status (getLedgerForStudent).
+   d. Replace "Upcoming Exams: 2" with "Exams Taken: N" — count distinct exam names in results for this student.
+   e. Remove the hardcoded "Announcements" section (it contains literal strings about a PTA meeting, science fair, and a national holiday — none of it real). The NotificationBell in the header serves this purpose.
+   Import getKarachiDateOffset from '../../utils/dates'.
+
+3. Do not change any other dashboard. Do not modify the DataContext fetch logic.
+
+Show me the full contents of both files.
+```
+
+**Verify:** log in as a real Parent. The Attendance card must show the actual percentage for the child (compare with the Attendance Report). Fee Status must match the actual balance. Overall Grade must match the child's latest exam report card.
+
+---
+
+## Batch 16 — Student profile polish
+
+**Attach:** `src/components/students/StudentProfilePage.tsx`, `src/components/reports/ReportCardModal.tsx`
+
+```text
+Task: two small UX fixes on the student profile.
+
+1. "View Report Card" should open the report card MODAL prefilled for this student, not navigate to the Reports center.
+   a. In ReportCardModal.tsx, extend props with optional `initialStudentId?: string` and `initialStudentClassId?: string`.
+   b. When `initialStudentId` is set:
+      - Auto-select `initialStudentClassId` in the class dropdown (or hide the class dropdown entirely).
+      - Auto-select the latest exam in the exam dropdown (still visible, changeable).
+      - handleGenerate generates only that one student's report card.
+   c. When `initialStudentId` is not set, keep the current behavior exactly (ReportsPage usage must not break).
+   d. In StudentProfilePage.tsx, replace the "View Report Card" onClick from `setActiveView({ view: 'reports' })` with local state: `const [isReportCardOpen, setIsReportCardOpen] = useState(false)`. Render the modal with initialStudentId + initialStudentClassId. onClick sets it to true.
+
+2. Reactivate "Left" students:
+   - On StudentProfilePage, if `student.status === 'Left'`, show a "Reactivate Student" button (btn-secondary) in the action row.
+   - onClick: window.confirm("Reactivate this student to Active status? This will not affect their historical attendance, fees, or leaving certificate fields."). If confirmed, call updateStudent({ ...student, status: 'Active' }), then showToast('Success', 'Student reactivated.', 'success').
+   - The reactivation must NOT clear dateOfLeaving, reasonForLeaving, conduct, progress, or placeOfBirth — those remain as historical data. Only `status` changes.
+   - Import useToast from '../../context/ToastContext'. updateStudent is already in useData.
+
+Show me the full contents of both files.
+```
+
+**Verify:** from a student profile, click View Report Card — modal opens with that student and the latest exam preselected. Reactivate a Left student — status becomes Active, leaving certificate fields remain filled in the DB (check via the app).
+
+---
+
+## Batch 17 — Documentation + final cleanup
+
+**Attach:** `README.md`, `UserManual.md`, `CHANGELOG.md`
+
+```text
+Task: documentation only; no code changes.
+
+1. README.md: rewrite as a short, accurate README (under 120 lines):
+   - What EduSync is: single-school student record management, optional branches.
+   - Tech stack: React 18 + TypeScript + Vite; Express API on Vercel; Neon Postgres.
+   - Environment variables: DATABASE_URL, SESSION_SECRET (with the generate command).
+   - Commands: dev, build, setup, migrate, backup, restore.
+   - Folder structure.
+   - Remove: long per-version feature history, "Auto-Seeded Demo Mode", multi-school/Owner-comparison claims, Google Drive backup section, Google sign-in references.
+   - Do NOT write installation steps; I will add them later.
+
+2. UserManual.md: update to current version. Single school, branches, roles, "Download Full Backup" button, reactivate students. Remove: Drive backup, school switching, Google sign-in, "Remember this device".
+
+3. CHANGELOG.md: keep existing history AS IS. Add one new entry for this batch summarizing the changes (security: fresh role from DB, DB-backed login limit; correctness: atomic payments, correct arrears, atomic bulk ops; infrastructure: setup script, backup/restore CLI, single-school mode, branches, PWA, performance).
+
+Do NOT touch instructions.md (do not even attach it). Do NOT modify any source file.
+```
+
+**Verify:** README doesn't mention features that don't exist. UserManual matches the actual UI.
+
+---
+
+## Final Verification (after all 17 batches)
+
+Run these in order. Each must pass before you consider the project ready to hand back.
+
+1. `npx tsc --noEmit` — clean.
+2. `npm run build` — clean, initial JS chunk under 300 KB gzipped (check the build output).
+3. **Fresh database test:** create a brand-new Neon database, run `psql "$DATABASE_URL" -f schema.sql`, run `npm run setup`, log in as Owner. Everything should work end-to-end.
+4. **Backup/restore round-trip:** on the fresh database, add 2 students, 1 fee challan, record 1 payment, mark attendance. Run `npm run backup`. Delete those records. Run `npm run restore -- <file>`. Log in — all records back, challet ledger balance correct.
+5. **Mobile test:** open the deployed site on a real Android phone. Install the PWA. In airplane mode, the app opens to the login screen. Log in with wifi on. Set one payment, record it. Verify the ParentDashboard (Parent login) shows the correct balance.
+6. **Concurrency test:** two browser tabs, same challan, both submit the full payment. Second must be rejected with a clear message.
+7. **Bulk rollback test:** import a CSV with a duplicate roll number at the end. Nothing imported.
+
+---
+
+## Order of Batches — At a Glance
+
+| # | Batch | Why here |
+|---|---|---|
+| 1 | Cleanup + LoginPage hygiene + plaintext removal | Foundation; touches files later batches modify |
+| 2 | Fresh role from DB + cookie | Auth backbone; everything downstream uses this |
+| 3 | DB rate limit | Independent, small |
+| 4 | Teacher masking + PrintableChallan hook | Two isolated 5-min fixes |
+| 5 | Report modal dates | Isolated |
+| 6 | Atomic payments | Money safety |
+| 7 | Arrears + atomic challan generation | Ledger safety |
+| 8 | Atomic bulk ops | Data integrity |
+| 9 | Setup + migration runner | Needed before any real DB is used |
+| 10 | Single-school + branches | Structural; big batch |
+| 11 | Backup/restore CLI | Must come after schema stabilizes |
+| 12 | In-app download + Drive removal | Depends on Batch 11's table list |
+| 13 | PWA | Needs stable version.json |
+| 14 | Performance | Needs the codebase stable |
+| 15 | Real dashboard data | Highest-user-impact bug fixed last so it's tested on final code |
+| 16 | Student profile polish | Small UX |
+| 17 | Docs | Must be last |
+
+---
+
+## What To Send Me When Done
+
+1. The full project zip (without `node_modules`, `dist`, `.env`).
+2. `git diff --stat` from the starting commit to the final commit.
+3. Output of `npm run build` showing the initial JS chunk size.
+4. A screenshot of ParentDashboard logged in as a real Parent (Batch 15 verification).
+5. The console output from a successful `npm run backup` → `npm run restore` round-trip.
+
+I'll then do a final code review pass and write the first-time setup guide with:
+- Neon project creation
+- `SESSION_SECRET` generation
+- `schema.sql` load
+- `npm run setup` (Owner credentials)
+- Vercel deploy with environment variables
+- Post-deploy verification checklist
+- Backup schedule recommendation
+- Troubleshooting (login failure, CORS/cookie issues, `SESSION_SECRET` boot failure, Neon connection errors)
+
+You're close. These 17 batches close every gap both reviews found.

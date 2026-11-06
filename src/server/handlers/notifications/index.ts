@@ -1,8 +1,8 @@
-import { getDb, authenticateRequest } from '../../_db';
+import { getDb, getSessionUser } from '../../_db';
 import crypto from 'crypto';
 
 export default async function handler(req: any, res: any) {
-    const session = authenticateRequest(req);
+    const session = await getSessionUser(req, res);
     if (!session) {
         return res.status(401).json({ error: 'Unauthorized: Valid session required.' });
     }
@@ -65,10 +65,23 @@ export default async function handler(req: any, res: any) {
                 }
 
                 const uniqueUserIds = Array.from(new Set(userIds));
+
+                // Restrict recipients to the caller's school
+                const recipientRows = await sql`
+                    SELECT id FROM profiles
+                    WHERE id = ANY(${uniqueUserIds})
+                      AND (${session.role === 'Owner'}::boolean OR school_id = ${session.schoolId || null}::uuid)
+                `;
+
+                const scopedUserIds: string[] = recipientRows.map((r: any) => r.id);
+                if (scopedUserIds.length === 0) {
+                    return res.status(403).json({ error: 'Forbidden: No valid recipient user IDs belong to your school.' });
+                }
+
                 const CHUNK_SIZE = 25;
 
-                for (let i = 0; i < uniqueUserIds.length; i += CHUNK_SIZE) {
-                    const chunk = uniqueUserIds.slice(i, i + CHUNK_SIZE);
+                for (let i = 0; i < scopedUserIds.length; i += CHUNK_SIZE) {
+                    const chunk = scopedUserIds.slice(i, i + CHUNK_SIZE);
                     await Promise.all(chunk.map((targetUserId: string) =>
                         sql`
                             INSERT INTO notifications (id, user_id, title, message, link, is_read, timestamp)
@@ -77,7 +90,11 @@ export default async function handler(req: any, res: any) {
                     ));
                 }
 
-                return res.status(200).json({ success: true, count: uniqueUserIds.length });
+                return res.status(200).json({ 
+                    success: true, 
+                    count: scopedUserIds.length,
+                    skipped: uniqueUserIds.length - scopedUserIds.length
+                });
             }
 
             return res.status(400).json({ error: 'Unknown action specified' });

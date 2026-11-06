@@ -6,7 +6,7 @@ import { usePrint } from '../../context/PrintContext';
 import { UserRole } from '../../types';
 import { formatDate } from '../../constants';
 import { getClassLevel } from '../../utils/sorting';
-import { getTodayKarachi, getFirstDayOfKarachiMonth } from '../../utils/dates';
+import { getTodayKarachi, getFirstDayOfKarachiMonth, toLocalDateString } from '../../utils/dates';
 import PrintableReportLayout from './PrintableReportLayout';
 
 interface AttendanceReportModalProps {
@@ -44,7 +44,7 @@ const AttendanceReportModal: React.FC<AttendanceReportModalProps> = ({ isOpen, o
         if (start > end) return [];
         
         while (start <= end) {
-            dates.push(new Date(start).toISOString().split('T')[0]);
+            dates.push(toLocalDateString(start));
             start.setDate(start.getDate() + 1);
         }
         return dates;

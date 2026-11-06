@@ -7,26 +7,12 @@ import { usePrint } from '../../context/PrintContext';
 import { downloadCsvString, escapeCsvCell } from '../../utils/csvHelper';
 import { UserRole } from '../../types';
 import { formatDate } from '../../constants';
+import { getTodayKarachi, getFirstDayOfKarachiMonth, toLocalDateString } from '../../utils/dates';
 import PrintableReportLayout from './PrintableReportLayout';
 
 interface FeeCollectionReportModalProps {
     isOpen: boolean;
     onClose: () => void;
-}
-
-const getTodayString = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    const day = today.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
-
-const getFirstDayOfMonthString = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    return `${year}-${month}-01`;
 }
 
 /**
@@ -47,21 +33,22 @@ const normalizeDate = (dateStr?: string | null): string | null => {
         if (/^\d{4}-\d{2}-\d{2}$/.test(parts[0])) return parts[0];
     }
 
-    // 3. Try standard Javascript parsing as fallback
-    try {
-        const d = new Date(input);
-        if (!isNaN(d.getTime())) {
-            return d.toISOString().split('T')[0];
-        }
-    } catch {
-        // Fall through to pattern matching
-    }
-
-    // 4. Pattern match DD/MM/YYYY or DD.MM.YYYY (very common in manual data)
+    // 3. Pattern match DD/MM/YYYY or DD-MM-YYYY (reordered before new Date so DMY wins over US-locale MDY)
     const dmY = input.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
     if (dmY) {
         const [, d, m, y] = dmY;
         return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+
+    // 4. Try standard Javascript parsing fallback using toLocalDateString
+    try {
+        const d = new Date(input);
+        if (!isNaN(d.getTime())) {
+            const res = toLocalDateString(d);
+            if (res) return res;
+        }
+    } catch {
+        // Fall through to pattern matching
     }
 
     return null;
@@ -83,8 +70,8 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
     const { fees, students, classes, getSchoolById } = useData();
     const { showPrintPreview } = usePrint();
 
-    const [startDate, setStartDate] = useState(getFirstDayOfMonthString());
-    const [endDate, setEndDate] = useState(getTodayString());
+    const [startDate, setStartDate] = useState(getFirstDayOfKarachiMonth());
+    const [endDate, setEndDate] = useState(getTodayKarachi());
     const [sortBy, setSortBy] = useState('rollNumber'); 
 
     const [selectedColumns, setSelectedColumns] = useState<Record<ColumnKey, boolean>>({

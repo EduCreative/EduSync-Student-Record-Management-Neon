@@ -1,4 +1,4 @@
-import { getDb, verifyToken, extractToken, toCamelCase } from '../../_db';
+import { getDb, getSessionUser, toCamelCase } from '../../_db';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'GET' && req.method !== 'POST') {
@@ -7,15 +7,9 @@ export default async function handler(req: any, res: any) {
     }
 
     try {
-        const token = extractToken(req);
-
-        if (!token) {
-            return res.status(401).json({ user: null, error: 'No active session found' });
-        }
-
-        const payload = verifyToken(token);
-        if (!payload || !payload.userId) {
-            return res.status(401).json({ user: null, error: 'Session expired or invalid' });
+        const session = await getSessionUser(req, res);
+        if (!session) {
+            return res.status(401).json({ user: null, error: 'Session expired, invalid, or account inactive' });
         }
 
         const sql = getDb();
@@ -23,7 +17,7 @@ export default async function handler(req: any, res: any) {
             SELECT id, school_id, name, email, role, status, 
                    avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login
             FROM profiles 
-            WHERE id = ${payload.userId} 
+            WHERE id = ${session.userId} 
             LIMIT 1
         `;
 
@@ -32,10 +26,6 @@ export default async function handler(req: any, res: any) {
         }
 
         const user = users[0];
-
-        if (user.status === 'Suspended' || user.status === 'Inactive') {
-            return res.status(403).json({ user: null, error: 'Account suspended or inactive' });
-        }
 
         // Return user profile without password
         const safeUser = toCamelCase(user);

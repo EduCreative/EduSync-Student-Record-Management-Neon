@@ -1,6 +1,47 @@
 
 # Changelog
 
+## [3.34.0] - 2026-11-06
+
+### Phase B: Cleanup, DB Sessions & Migration Baseline
+- **P04 (Leftover Scaffolding & Dead UI Cleanup)**:
+  - Cleaned `index.html`: deleted `<script type="importmap">` and Google gsi client script; added `<meta name="theme-color" content="#1e3a8a">`.
+  - Removed dead "Sign in with Google" button, "Or" divider, unused `GoogleIcon`, and no-op `Remember this device` checkbox from `LoginPage.tsx`.
+  - Changed registration link text to "Create an account" with "New accounts need approval from your school administrator".
+  - Cleaned `RegisterPage.tsx`: removed `Admin` and `Accountant` options from self-registration (restricted to Teacher, Parent, Student) and defaulted to `Teacher`.
+  - Deleted unused files `src/components/auth/AccountSetupPage.tsx`, `src/lib/supabaseClient.ts`, `firebase-applet-config.json`, and one-time script `scripts/hash-passwords.ts`.
+  - Kept `metadata.json` for AI Studio frame permissions (`camera` support for barcode scanning).
+  - Updated `package.json` start script to `NODE_ENV=production tsx server.ts` and removed unused `@google/genai` dependency.
+  - Set `server.ts` port to `Number(process.env.PORT) || 3000`.
+- **P05 (Database-Verified Sessions & Hardened Cookies)**:
+  - Added `getSessionUser(req, res)` to `src/server/_db.ts` to query `profiles` on each request for fresh role, schoolId, name, avatar, and active status.
+  - Invalidated cookies and rejected requests immediately for suspended/inactive/pending users.
+  - Replaced inline token checks with `getSessionUser` across `verifySession` (`_helpers.ts`), `data/index.ts`, `data/students.ts`, `data/fees.ts`, `data/users.ts`, `data/schools.ts`, `auth/me.ts`, and `notifications/index.ts`.
+  - Standardized cookie security flags across prod and dev: `httpOnly: true`, `sameSite: 'lax'`, `secure: isProd`, `maxAge: 12h`, and eliminated non-standard `partitioned` option.
+- **P06 (Migration Runner & Baseline Sync)**:
+  - Cleaned obsolete migration files (`001_schema_sync.sql`, `002_roll_unique.sql`, `003_challan_number.sql`) whose definitions are now established directly in `schema.sql`.
+  - Created `migrations/README.md` defining strict idempotent SQL migration standards.
+  - Implemented `scripts/migrate.ts` (`npm run migrate`) to apply pending SQL migrations in individual transactions and record execution in `schema_migrations`.
+- **P07 (PostgreSQL-Backed Rate Limiting)**:
+  - Created `migrations/001_login_attempts.sql` and added `login_attempts` table with `(email, attempted_at DESC)` index to `schema.sql`.
+  - Replaced Vercel-ineffective in-memory Map in `src/server/handlers/auth/login.ts` with database queries against `login_attempts` (max 5 failed attempts per 15 min).
+  - Enforced strict bcrypt password verification, deleting legacy plaintext comparisons and auto-upgrades.
+  - Automatically cleared failed attempts on valid login and pruned attempts older than 1 day.
+
+## [3.33.0] - 2026-11-06
+
+### Phase A: Small Bug Fixes & Privacy Hardening
+- **P01 (`PrintableChallan.tsx`)**:
+  - Eliminated React hook rule violation where `useData()` was conditionally invoked within a `try/catch` block.
+  - Made `allFees: FeeChallan[]` a required prop across all printable challan instances (`FeeCollectionPage`, `BulkChallanReportModal`, `ChallanRangeReportModal`), ensuring stable, predictable rendering during single, bulk, and ranged printing.
+- **P02 (`AttendanceReportModal.tsx`, `DiscountReportModal.tsx`, `FeeCollectionReportModal.tsx`)**:
+  - Replaced `.toISOString().split('T')[0]` invocations with `toLocalDateString()` from `utils/dates` to prevent 1-day timezone boundary shifts in Asia/Karachi (UTC+5).
+  - Adopted `getTodayKarachi()` and `getFirstDayOfKarachiMonth()` for report filter default states.
+  - Reordered `normalizeDate` branches so that DMY regex matching precedes `new Date()` parsing, preventing dates such as `01/02/2026` from misinterpreting as US-locale MDY (Jan 2) rather than Pakistan standard DMY (Feb 1).
+- **P03 (`students.ts` & `notifications/index.ts`)**:
+  - Corrected teacher field masking in `/api/data/students` from non-existent `cnic`/`parent_cnic` keys to `father_cnic`, matching the privacy masking in `/api/data`.
+  - Added strict school-scoping verification on recipient profiles in `/api/notifications` `send` action, preventing cross-school notification leaks.
+
 ## [3.32.0] - 2026-11-05
 
 ### Batch F3: Client Consumers Use Server-Authoritative Multi-Year Ledger

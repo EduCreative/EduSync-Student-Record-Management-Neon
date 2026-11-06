@@ -3,7 +3,6 @@ import { QRCodeSVG } from 'qrcode.react';
 import { GraduationCap } from 'lucide-react';
 import { FeeChallan, Student, School } from '../../types';
 import { formatDate } from '../../constants';
-import { useData } from '../../context/DataContext';
 
 export interface LastPaymentDetail {
     challanNumber?: string;
@@ -23,7 +22,7 @@ interface PrintableChallanProps {
     challansPerPage?: 1 | 2 | 3;
     lateFee?: number;
     lastPaymentDetail?: LastPaymentDetail;
-    allFees?: FeeChallan[];
+    allFees: FeeChallan[];
 }
 
 const PrintableChallan: FC<PrintableChallanProps> = ({
@@ -79,18 +78,7 @@ const PrintableChallan: FC<PrintableChallanProps> = ({
     const finalDues = totalDues + effectiveLateFee;
     const discountAmount = challan.discount || 0;
 
-    // Safely attempt to retrieve fees from DataContext if allFees prop is not passed
-    let contextFees: FeeChallan[] = [];
-    try {
-        const data = useData();
-        if (data && data.fees) {
-            contextFees = data.fees;
-        }
-    } catch {
-        // Fallback when rendered outside DataProvider context
-    }
-
-    const feesToSearch = allFees && allFees.length > 0 ? allFees : contextFees;
+    const feesToSearch = allFees;
 
     // Helper to compute numeric month index
     const getMonthIndex = (monthStr?: string) => {

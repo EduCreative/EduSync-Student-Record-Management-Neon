@@ -34,3 +34,4 @@ dist-ssr
 # Vercel & Bundles
 .vercel
 cookies.txt
+*.zip

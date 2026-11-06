@@ -1,4 +1,4 @@
-import { authenticateRequest, getDb, clearSessionCookie, TokenPayload } from '../../_db';
+import { getSessionUser, getDb, TokenPayload } from '../../_db';
 import crypto from 'crypto';
 
 export type UserRoleType = 'Owner' | 'Admin' | 'Accountant' | 'Teacher' | 'Parent' | 'Student';
@@ -10,24 +10,12 @@ export interface AuthenticatedContext {
 }
 
 export async function verifySession(req: any, res: any): Promise<{ session: TokenPayload; sql: ReturnType<typeof getDb> } | null> {
-    const session = authenticateRequest(req);
+    const session = await getSessionUser(req, res);
     if (!session) {
-        res.status(401).json({ error: 'Unauthorized: Valid session required.' });
+        res.status(401).json({ error: 'Unauthorized: Session invalid or account inactive.' });
         return null;
     }
     const sql = getDb();
-    try {
-        const users = await sql`SELECT status FROM profiles WHERE id = ${session.userId} LIMIT 1`;
-        if (!users || users.length === 0 || (users[0].status && (users[0].status === 'Inactive' || users[0].status === 'Suspended'))) {
-            clearSessionCookie(res);
-            res.status(401).json({ error: 'Unauthorized: Account is inactive or suspended.' });
-            return null;
-        }
-    } catch (err) {
-        console.error("verifySession status check error:", err);
-        res.status(401).json({ error: 'Unauthorized: Session validation failed.' });
-        return null;
-    }
     return { session, sql };
 }
 

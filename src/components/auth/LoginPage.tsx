@@ -38,18 +38,10 @@ const EyeOffIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <title>Google</title>
-        <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.85 3.18-1.73 4.1-1.02 1.02-2.62 2.04-4.82 2.04-5.82 0-9.6-4.82-9.6-9.6s3.78-9.6 9.6-9.6c2.53 0 4.46.93 5.96 2.33l2.04-2.04C18.96 1.82 16.11 0 12.48 0 5.82 0 .06 5.82.06 12.48s5.76 12.48 12.42 12.48c3.32 0 6.02-1.12 7.99-3.1 2.08-2.08 2.84-5.04 2.84-8.32 0-.66-.07-1.32-.2-1.98z" />
-    </svg>
-);
-
 const LoginPage: React.FC<LoginPageProps> = ({ onSwitchToRegister, onForgotPassword }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const { login } = useAuth();
@@ -164,18 +156,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchToRegister, onForgotPassw
                             </div>
                         </div>
 
-                        <div className="flex items-center text-sm">
-                            <label className="flex items-center text-primary-200 cursor-pointer select-none">
-                                <input 
-                                    className="h-4 w-4 text-primary-600 rounded border-white/50 focus:ring-white bg-white/20 cursor-pointer"
-                                    type="checkbox"
-                                    checked={rememberMe}
-                                    onChange={(e) => setRememberMe(e.target.checked)}
-                                />
-                                <span className="ml-2 text-xs">Remember this device</span>
-                            </label>
-                        </div>
-
                         <button
                             type="submit"
                             disabled={loading}
@@ -185,25 +165,17 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchToRegister, onForgotPassw
                         </button>
                     </form>
 
-
-                    <div className="my-5 flex items-center">
-                        <div className="flex-grow border-t border-white/15"></div>
-                        <span className="flex-shrink mx-3 text-[10px] text-primary-300 uppercase tracking-wider">Or</span>
-                        <div className="flex-grow border-t border-white/15"></div>
+                    <div className="text-center text-xs mt-6 space-y-1">
+                        <p className="text-primary-200">
+                            Don't have an account?{' '}
+                            <button onClick={onSwitchToRegister} className="font-bold text-white hover:underline">
+                                Create an account
+                            </button>
+                        </p>
+                        <p className="text-[11px] text-primary-300">
+                            New accounts need approval from your school administrator.
+                        </p>
                     </div>
-
-                    <div className="flex items-center justify-center">
-                        <button className="w-full flex items-center justify-center gap-2.5 py-2.5 border border-white/30 rounded-xl text-xs font-semibold text-white hover:bg-white/15 transition shadow-sm">
-                           <GoogleIcon className="w-4 h-4 fill-white" /> Sign in with Google
-                        </button>
-                    </div>
-
-                    <p className="text-center text-primary-200 text-xs mt-6">
-                        Don't have an institution account?{' '}
-                        <button onClick={onSwitchToRegister} className="font-bold text-white hover:underline">
-                            Register School
-                        </button>
-                    </p>
                 </div>
             </div>
         </div>

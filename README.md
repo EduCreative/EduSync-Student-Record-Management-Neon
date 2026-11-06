@@ -34,7 +34,7 @@
 ## ✨ Previous Features (v3.13.0)
 - **Vercel Serverless Authentication Architecture (Stage 1)**: Shifted authentication logic from browser-side queries into secure serverless API endpoints (`/api/auth/login`, `/api/auth/me`, `/api/auth/logout`, `/api/auth/change-password`, `/api/auth/register`).
 - **Zero Database Exposure**: Database connections on auth are performed via server-only `process.env.DATABASE_URL`, keeping master connection strings hidden from browser clients.
-- **Bcrypt Password Security & Auto-Upgrade**: Plain-text passwords are completely eliminated. Any legacy user logging in has their password automatically upgraded to a salted bcrypt hash, or administrators can run the one-time migration script `scripts/hash-passwords.ts`.
+- **Bcrypt Password Security**: Passwords are authenticated strictly using standard salted bcrypt hashes. Plaintext fallback has been eliminated.
 - **Brute-Force Rate Limiting**: Built-in protection against brute-force attacks limiting failed login attempts to a maximum of 5 attempts per email per 15-minute window (HTTP 429).
 - **Secure HttpOnly Cookie Sessions**: Authentication tokens are signed with JWT (`SESSION_SECRET`) with 12-hour expiration and delivered via `httpOnly`, `Secure`, `SameSite=Strict` cookies, completely eliminating the vulnerability of treating unverified `localStorage` data as identity proof.
 - **Zero Client Password Leakage**: Passwords and password hashes are never returned to client applications across login, me, and user list responses.

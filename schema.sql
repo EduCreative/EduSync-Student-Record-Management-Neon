@@ -203,3 +203,11 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_timestamp ON activity_logs(timestam
 
 -- Unique Indexes for Fee Challans
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_student_challan ON fee_challans (student_id, month, year) WHERE status <> 'Cancelled';
+
+-- Login attempts table (Persistent rate-limiting for serverless environments)
+CREATE TABLE IF NOT EXISTS login_attempts (
+    email TEXT NOT NULL,
+    ip TEXT,
+    attempted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_email_time ON login_attempts(email, attempted_at DESC);

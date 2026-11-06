@@ -1,4 +1,4 @@
-import { getDb, authenticateRequest, toCamelCase } from '../../_db';
+import { getDb, getSessionUser, toCamelCase } from '../../_db';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'GET') {
@@ -7,7 +7,7 @@ export default async function handler(req: any, res: any) {
     }
 
     try {
-        const session = authenticateRequest(req);
+        const session = await getSessionUser(req, res);
         if (!session) {
             return res.status(401).json({ error: 'Unauthorized: Session invalid or expired' });
         }

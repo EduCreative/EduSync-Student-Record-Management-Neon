@@ -1,4 +1,4 @@
-import { getDb, authenticateRequest, clearSessionCookie, toCamelCase } from '../../_db';
+import { getDb, getSessionUser, toCamelCase } from '../../_db';
 import { getCurrentKarachiYear, getKarachiDateOffset } from '../../../utils/dates';
 
 export default async function handler(req: any, res: any) {
@@ -8,18 +8,12 @@ export default async function handler(req: any, res: any) {
     }
 
     try {
-        const session = authenticateRequest(req);
+        const session = await getSessionUser(req, res);
         if (!session) {
             return res.status(401).json({ error: 'Unauthorized: Session invalid or expired' });
         }
 
         const sql = getDb();
-        const userCheck = await sql`SELECT status FROM profiles WHERE id = ${session.userId} LIMIT 1`;
-        if (!userCheck || userCheck.length === 0 || (userCheck[0].status && (userCheck[0].status === 'Inactive' || userCheck[0].status === 'Suspended'))) {
-            clearSessionCookie(res);
-            return res.status(401).json({ error: 'Unauthorized: Account is inactive or suspended' });
-        }
-
         const { role, userId, schoolId: userSchoolId } = session;
         const requestedSchoolId = req.query?.schoolId || req.query?.activeSchoolId;
 

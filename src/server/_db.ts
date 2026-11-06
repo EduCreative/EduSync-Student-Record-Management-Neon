@@ -104,12 +104,58 @@ export function authenticateRequest(req: any): TokenPayload | null {
     return verifyToken(token);
 }
 
+/**
+ * Validates session against live database record.
+ * Re-queries role, school_id, status, name, and avatar directly from DB,
+ * preventing stale privilege claims from token payloads.
+ */
+export async function getSessionUser(req: any, res?: any): Promise<TokenPayload | null> {
+    const token = extractToken(req);
+    if (!token) return null;
+    const payload = verifyToken(token);
+    if (!payload || !payload.userId) return null;
+
+    try {
+        const sql = getDb();
+        const rows = await sql`
+            SELECT id, name, email, role, school_id, status, avatar_url
+            FROM profiles
+            WHERE id = ${payload.userId}
+            LIMIT 1
+        `;
+
+        if (!rows || rows.length === 0) {
+            if (res) clearSessionCookie(res);
+            return null;
+        }
+
+        const user = rows[0];
+        const invalidStatuses = ['Inactive', 'Suspended', 'Pending Approval', 'Pending'];
+        if (invalidStatuses.includes(user.status)) {
+            if (res) clearSessionCookie(res);
+            return null;
+        }
+
+        return {
+            userId: user.id,
+            email: user.email,
+            role: user.role,
+            schoolId: user.school_id || null,
+            name: user.name || '',
+            avatarUrl: user.avatar_url || ''
+        };
+    } catch (err) {
+        console.error("getSessionUser error:", err);
+        return null;
+    }
+}
+
 export function setSessionCookie(res: any, token: string) {
+    const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
     const cookieStr = serializeCookie(COOKIE_NAME, token, {
         httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        partitioned: true,
+        secure: isProd,
+        sameSite: 'lax',
         path: '/',
         maxAge: 12 * 60 * 60 // 12 hours
     });
@@ -117,11 +163,11 @@ export function setSessionCookie(res: any, token: string) {
 }
 
 export function clearSessionCookie(res: any) {
+    const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
     const cookieStr = serializeCookie(COOKIE_NAME, '', {
         httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        partitioned: true,
+        secure: isProd,
+        sameSite: 'lax',
         path: '/',
         maxAge: 0
     });

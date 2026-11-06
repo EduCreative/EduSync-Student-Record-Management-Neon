@@ -1,4 +1,4 @@
-import { getDb, authenticateRequest, toCamelCase } from '../../_db';
+import { getDb, getSessionUser, toCamelCase } from '../../_db';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'GET') {
@@ -7,7 +7,7 @@ export default async function handler(req: any, res: any) {
     }
 
     try {
-        const session = authenticateRequest(req);
+        const session = await getSessionUser(req, res);
         if (!session) {
             return res.status(401).json({ error: 'Unauthorized: Session invalid or expired' });
         }
@@ -27,10 +27,10 @@ export default async function handler(req: any, res: any) {
                 ? await sql`SELECT * FROM students WHERE school_id = ${effectiveSchoolId} ORDER BY roll_number ASC, name ASC`
                 : await sql`SELECT * FROM students ORDER BY roll_number ASC, name ASC`;
 
-            // Mask/omit CNICs for teachers
+            // Mask/omit sensitive father_cnic for teachers
             if (role === 'Teacher') {
                 students = students.map((s: any) => {
-                    const { cnic: _c, parent_cnic: _pc, ...safeStudent } = s;
+                    const { father_cnic: _fc, ...safeStudent } = s;
                     return safeStudent;
                 });
             }

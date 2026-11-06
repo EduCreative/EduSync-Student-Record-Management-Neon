@@ -61,7 +61,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ onSwitchToLogin }) => {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [role, setRole] = useState<UserRole>(UserRole.Admin);
+    const [role, setRole] = useState<UserRole>(UserRole.Teacher);
     const [error, setError] = useState('');
     const [formErrors, setFormErrors] = useState<{ name?: string, email?: string; password?: string, confirmPassword?: string }>({});
     const [loading, setLoading] = useState(false);
@@ -122,9 +122,9 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ onSwitchToLogin }) => {
         return (
             <div className="min-h-screen w-full bg-gradient-to-br from-purple-800 to-indigo-950 flex flex-col justify-center items-center p-4 text-white">
                 <div className="w-full max-w-md bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl p-8 sm:p-10 text-center">
-                    <h1 className="text-2xl font-bold">Registration Successful!</h1>
+                    <h1 className="text-2xl font-bold">Account Request Submitted!</h1>
                     <p className="text-purple-200 mt-4">
-                        Your account has been created. An administrator will need to approve your account before you can log in.
+                        Your account request has been submitted. A school administrator will need to approve your account before you can log in.
                     </p>
                     <button onClick={onSwitchToLogin} className="mt-6 w-full bg-white text-purple-800 font-bold py-3 px-4 rounded-lg hover:bg-purple-100 transition-colors">
                         Back to Login
@@ -159,10 +159,10 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ onSwitchToLogin }) => {
                 <div className="w-full max-w-md bg-black/20 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl p-8 sm:p-10">
                     <div className="mb-8 text-center lg:text-left">
                         <h2 className="text-3xl font-bold tracking-tight text-white">
-                            Create Account
+                            Request Account
                         </h2>
                         <p className="text-purple-200 mt-2">
-                            Fill in your details to get started.
+                            Fill in your details to submit an account request.
                         </p>
                     </div>
 
@@ -212,8 +212,6 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ onSwitchToLogin }) => {
                             <div className="relative">
                                 <BriefcaseIcon className="pointer-events-none w-5 h-5 absolute top-1/2 transform -translate-y-1/2 left-3 text-purple-200/80"/>
                                 <select id="role" value={role} onChange={(e) => setRole(e.target.value as UserRole)} className={inputAuthClass}>
-                                    <option className="text-black" value={UserRole.Admin}>Admin</option>
-                                    <option className="text-black" value={UserRole.Accountant}>Accountant</option>
                                     <option className="text-black" value={UserRole.Teacher}>Teacher</option>
                                     <option className="text-black" value={UserRole.Parent}>Parent</option>
                                     <option className="text-black" value={UserRole.Student}>Student</option>
@@ -222,7 +220,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ onSwitchToLogin }) => {
                         </div>
                         <div className="pt-2">
                             <button type="submit" disabled={loading} className="w-full bg-white text-purple-800 font-bold py-3 px-4 rounded-lg hover:bg-purple-100 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
-                                {loading ? <SpinnerIcon /> : 'Create Account'}
+                                {loading ? <SpinnerIcon /> : 'Submit Account Request'}
                             </button>
                         </div>
                     </form>
