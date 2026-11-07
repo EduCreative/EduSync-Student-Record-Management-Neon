@@ -33,12 +33,20 @@ export interface School {
     logoUrl?: string | null;
 }
 
+export interface Branch {
+    id: string;
+    name: string;
+    address?: string | null;
+    schoolId: string;
+}
+
 export interface Class {
     id: string;
     name: string;
     section?: string | null;
     teacherId: string | null;
     schoolId: string;
+    branchId?: string | null;
     sortOrder?: number;
 }
 

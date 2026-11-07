@@ -1,7 +1,7 @@
 {
-  "version": "3.34.0",
+  "version": "3.37.0",
   "releaseDate": "2026-11-06",
   "changelog": [
-    "Phase B (P04-P07): Cleaned dead UI (removed Google sign-in button & dead RememberMe), removed plaintext password fallback in favor of strict bcrypt. Implemented DB-backed session resolution (getSessionUser) validating live roles/status directly from profiles. Set up atomic migration runner (scripts/migrate.ts) with migrations/README.md. Replaced in-memory login rate limiting with persistent Postgres login_attempts table."
+    "Phase E (P14-P16): Single-school architecture, first-run setup script, and campus branches. Implemented interactive CLI setup script (npm run setup) with schema verification, bcrypt cost 12 hashing, initial tuition fee head, and schema_migrations tracking. Streamlined UI into single-school mode: Owner role is preserved with elevated full Admin access, school switcher and multi-school comparisons removed, and school mutations restricted to single-school updates. Added branches table and branch_id on classes, complete with server-side validation against orphaned class deletions, branch assignment in ClassFormModal, and branch filters in ClassManagementPage and StudentManagementPage."
   ]
 }

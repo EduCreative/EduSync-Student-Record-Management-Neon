@@ -51,11 +51,12 @@ const parseCurrency = (value: any): number | null => {
 
 const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActiveView }) => {
     const { user, activeSchoolId, hasPermission } = useAuth();
-    const { students, classes, results, addStudent, updateStudent, deleteStudent, loading, bulkAddStudents, feeHeads, fees, reactivateGraduatedStudents, revertLastPromotion, getLedgerForStudent } = useData();
+    const { students, classes, branches, results, addStudent, updateStudent, deleteStudent, loading, bulkAddStudents, feeHeads, fees, reactivateGraduatedStudents, revertLastPromotion, getLedgerForStudent } = useData();
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
 
     const [searchTerm, setSearchTerm] = useState('');
+    const [branchFilter, setBranchFilter] = useState<string>('all');
     const [classFilter, setClassFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<Student['status'] | 'all'>('Active');
     const [sortBy, setSortBy] = useState<'name' | 'rollNumber' | 'class'>('rollNumber');
@@ -79,16 +80,20 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
         return Boolean(localStorage.getItem('edusync_last_promotion_snapshot'));
     }, [students]);
 
+    const classBranchMap = useMemo(() => new Map(classes.map(c => [c.id, c.branchId])), [classes]);
+
     const schoolClasses = useMemo(() => classes.filter(c => c.schoolId === effectiveSchoolId)
         .sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name)), 
         [classes, effectiveSchoolId]);
     const classMap = useMemo(() => new Map(schoolClasses.map(c => [c.id, `${c.name}${c.section ? ` - ${c.section}` : ''}`])), [schoolClasses]);
 
-
-
     const filteredStudents = useMemo(() => {
         const result = students.filter(student => {
             if (student.schoolId !== effectiveSchoolId) return false;
+            if (branchFilter !== 'all') {
+                const bId = classBranchMap.get(student.classId);
+                if (bId !== branchFilter) return false;
+            }
             if (classFilter !== 'all' && student.classId !== classFilter) return false;
             if (statusFilter !== 'all' && student.status !== statusFilter) return false;
             if (searchTerm && !student.name.toLowerCase().includes(searchTerm.toLowerCase()) && !student.rollNumber.toLowerCase().includes(searchTerm.toLowerCase())) return false;
@@ -409,13 +414,19 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                 )}
 
                 <div className="p-4 bg-white dark:bg-secondary-800 rounded-lg shadow-md">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <input type="text" placeholder="Search by name or roll number..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="input-field" />
-                        <select value={classFilter} onChange={e => setClassFilter(e.target.value)} className="input-field">
+                    <div className={`grid grid-cols-1 sm:grid-cols-2 ${branches.length > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
+                        <input type="text" placeholder="Search by name or roll number..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="input-field" />
+                        {branches.length > 0 && (
+                            <select value={branchFilter} onChange={e => { setBranchFilter(e.target.value); setCurrentPage(1); }} className="input-field">
+                                <option value="all">All Branches ({branches.length})</option>
+                                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
+                        )}
+                        <select value={classFilter} onChange={e => { setClassFilter(e.target.value); setCurrentPage(1); }} className="input-field">
                             <option value="all">All Classes</option>
                             {schoolClasses.map(c => <option key={c.id} value={c.id}>{`${c.name}${c.section ? ` - ${c.section}` : ''}`}</option>)}
                         </select>
-                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="input-field">
+                        <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value as any); setCurrentPage(1); }} className="input-field">
                             <option value="all">All Statuses</option>
                             <option value="Active">Active</option>
                             <option value="Graduated">Graduated</option>

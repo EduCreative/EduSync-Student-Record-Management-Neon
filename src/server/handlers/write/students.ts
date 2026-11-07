@@ -160,31 +160,55 @@ export default async function handler(req: any, res: any) {
 
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
 
-            try {
-                const BATCH_SIZE = 25;
-                for (let i = 0; i < students.length; i += BATCH_SIZE) {
-                    const batch = students.slice(i, i + BATCH_SIZE);
-                    await Promise.all(batch.map((s: any) => {
-                        const id = crypto.randomUUID();
-                        return sql`
-                            INSERT INTO students (
-                                id, name, roll_number, class_id, school_id, father_name, father_cnic, 
-                                date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
-                                address, status, gender, admitted_class, gr_number, religion, caste, 
-                                last_school_attended, opening_balance, user_id, fee_structure
-                            ) VALUES (
-                                ${id}, ${s.name}, ${s.rollNumber || s.roll_number}, ${s.classId || s.class_id || null}, 
-                                ${effectiveSchoolId}, ${s.fatherName || s.father_name || null}, ${s.fatherCnic || s.father_cnic || null}, 
-                                ${s.dateOfBirth || s.date_of_birth || null}, ${s.dateOfAdmission || s.date_of_admission || null}, 
-                                ${s.contactNumber || s.contact_number || null}, ${s.secondaryContactNumber || s.secondary_contact_number || null}, 
-                                ${s.address || null}, 'Active', ${s.gender || 'Male'}, ${s.admittedClass || s.admitted_class || null}, 
-                                ${s.grNumber || s.gr_number || null}, ${s.religion || null}, ${s.caste || null}, 
-                                ${s.lastSchoolAttended || s.last_school_attended || null}, ${Number(s.openingBalance || s.opening_balance) || 0}, 
-                                ${s.userId || s.user_id || null}, ${JSON.stringify(s.feeStructure || s.fee_structure || [])}
-                            )
-                        `;
-                    }));
+            // Validate all rows first (P10)
+            const seenRollNumbers = new Set<string>();
+            const fileDuplicates: string[] = [];
+
+            for (let i = 0; i < students.length; i++) {
+                const s = students[i];
+                const name = (s.name || '').toString().trim();
+                const roll = (s.rollNumber || s.roll_number || '').toString().trim();
+
+                if (!name || !roll) {
+                    return res.status(400).json({ error: `Student name and roll number are required for all rows (row ${i + 1} is missing required fields).` });
                 }
+
+                if (seenRollNumbers.has(roll)) {
+                    fileDuplicates.push(roll);
+                }
+                seenRollNumbers.add(roll);
+            }
+
+            if (fileDuplicates.length > 0) {
+                const uniqueDupes = Array.from(new Set(fileDuplicates));
+                return res.status(400).json({ error: `Duplicate roll number(s) found in file: ${uniqueDupes.join(', ')}` });
+            }
+
+            try {
+                // Build all INSERTs and run in one atomic sql.transaction (P10)
+                const queries = students.map((s: any) => {
+                    const id = crypto.randomUUID();
+                    const roll = (s.rollNumber || s.roll_number).toString().trim();
+                    return sql`
+                        INSERT INTO students (
+                            id, name, roll_number, class_id, school_id, father_name, father_cnic, 
+                            date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
+                            address, status, gender, admitted_class, gr_number, religion, caste, 
+                            last_school_attended, opening_balance, user_id, fee_structure
+                        ) VALUES (
+                            ${id}, ${s.name.trim()}, ${roll}, ${s.classId || s.class_id || null}, 
+                            ${effectiveSchoolId}, ${s.fatherName || s.father_name || null}, ${s.fatherCnic || s.father_cnic || null}, 
+                            ${s.dateOfBirth || s.date_of_birth || null}, ${s.dateOfAdmission || s.date_of_admission || null}, 
+                            ${s.contactNumber || s.contact_number || null}, ${s.secondaryContactNumber || s.secondary_contact_number || null}, 
+                            ${s.address || null}, 'Active', ${s.gender || 'Male'}, ${s.admittedClass || s.admitted_class || null}, 
+                            ${s.grNumber || s.gr_number || null}, ${s.religion || null}, ${s.caste || null}, 
+                            ${s.lastSchoolAttended || s.last_school_attended || null}, ${Number(s.openingBalance || s.opening_balance) || 0}, 
+                            ${s.userId || s.user_id || null}, ${JSON.stringify(s.feeStructure || s.fee_structure || [])}::jsonb
+                        )
+                    `;
+                });
+
+                await sql.transaction(queries);
 
                 await writeServerAuditLog(
                     sql,
@@ -248,17 +272,18 @@ export default async function handler(req: any, res: any) {
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
 
             let updatedCount = 0;
+            const queries: any[] = [];
 
             if (Array.isArray(graduations) && graduations.length > 0) {
                 const CHUNK = 50;
                 for (let i = 0; i < graduations.length; i += CHUNK) {
                     const chunk = graduations.slice(i, i + CHUNK);
-                    await sql`
+                    queries.push(sql`
                         UPDATE students 
                         SET status = 'Graduated' 
                         WHERE id = ANY(${chunk})
                         AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
-                    `;
+                    `);
                 }
                 updatedCount += graduations.length;
             }
@@ -269,16 +294,20 @@ export default async function handler(req: any, res: any) {
                         const CHUNK = 50;
                         for (let i = 0; i < stdIds.length; i += CHUNK) {
                             const chunk = stdIds.slice(i, i + CHUNK);
-                            await sql`
+                            queries.push(sql`
                                 UPDATE students 
                                 SET class_id = ${targetClassId}, status = 'Active' 
                                 WHERE id = ANY(${chunk})
                                 AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
-                            `;
+                            `);
                         }
                         updatedCount += stdIds.length;
                     }
                 }
+            }
+
+            if (queries.length > 0) {
+                await sql.transaction(queries);
             }
 
             await writeServerAuditLog(
@@ -299,24 +328,29 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'studentIds array is required.' });
             }
 
+            const queries: any[] = [];
             const CHUNK = 50;
             for (let i = 0; i < studentIds.length; i += CHUNK) {
                 const chunk = studentIds.slice(i, i + CHUNK);
                 if (targetClassId) {
-                    await sql`
+                    queries.push(sql`
                         UPDATE students 
                         SET status = 'Active', class_id = ${targetClassId} 
                         WHERE id = ANY(${chunk})
                         AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
-                    `;
+                    `);
                 } else {
-                    await sql`
+                    queries.push(sql`
                         UPDATE students 
                         SET status = 'Active' 
                         WHERE id = ANY(${chunk})
                         AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
-                    `;
+                    `);
                 }
+            }
+
+            if (queries.length > 0) {
+                await sql.transaction(queries);
             }
 
             await writeServerAuditLog(
@@ -338,6 +372,7 @@ export default async function handler(req: any, res: any) {
             }
 
             let revertedCount = 0;
+            const queries: any[] = [];
             for (const [key, ids] of Object.entries(groups)) {
                 const [classId, status] = key.split('__');
                 const idList = ids as string[];
@@ -345,15 +380,19 @@ export default async function handler(req: any, res: any) {
                     const CHUNK = 50;
                     for (let i = 0; i < idList.length; i += CHUNK) {
                         const chunk = idList.slice(i, i + CHUNK);
-                        await sql`
+                        queries.push(sql`
                             UPDATE students 
                             SET class_id = ${classId}, status = ${status} 
                             WHERE id = ANY(${chunk})
                             AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
-                        `;
+                        `);
                     }
                     revertedCount += idList.length;
                 }
+            }
+
+            if (queries.length > 0) {
+                await sql.transaction(queries);
             }
 
             await writeServerAuditLog(

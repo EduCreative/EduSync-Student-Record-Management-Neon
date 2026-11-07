@@ -21,7 +21,7 @@ const DragHandleIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props}
 
 const ClassManagementPage: React.FC = () => {
     const { user: currentUser, activeSchoolId, effectiveRole, hasPermission } = useAuth();
-    const { classes, users, students, fees, results, addClass, updateClass, deleteClass, loading, bulkAddClasses, promoteAllStudents, reactivateGraduatedStudents, revertLastPromotion, bulkUpdateClassOrder } = useData();
+    const { classes, branches, users, students, fees, results, addClass, updateClass, deleteClass, loading, bulkAddClasses, promoteAllStudents, reactivateGraduatedStudents, revertLastPromotion, bulkUpdateClassOrder } = useData();
     const { showToast } = useToast();
 
     const effectiveSchoolId = currentUser?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : currentUser?.schoolId;
@@ -36,6 +36,7 @@ const ClassManagementPage: React.FC = () => {
     const [classToDelete, setClassToDelete] = useState<Class | null>(null);
     const [draggedItem, setDraggedItem] = useState<Class | null>(null);
     const [classToViewDetails, setClassToViewDetails] = useState<Class | null>(null);
+    const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
     
     const canEditClasses = hasPermission(Permission.CAN_EDIT_CLASSES);
     const canDeleteClasses = hasPermission(Permission.CAN_DELETE_CLASSES);
@@ -57,11 +58,15 @@ const ClassManagementPage: React.FC = () => {
         } else {
             filteredClasses = classes.filter(c => c.schoolId === effectiveSchoolId);
         }
+        if (selectedBranchId !== 'all') {
+            filteredClasses = filteredClasses.filter(c => c.branchId === selectedBranchId);
+        }
         return [...filteredClasses].sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name));
-    }, [classes, effectiveSchoolId, effectiveRole, currentUser]);
+    }, [classes, effectiveSchoolId, effectiveRole, currentUser, selectedBranchId]);
     
     const teachers = useMemo(() => users.filter(u => u.schoolId === effectiveSchoolId && u.role === UserRole.Teacher), [users, effectiveSchoolId]);
     const teacherMap = useMemo(() => new Map(teachers.map(t => [t.id, t.name])), [teachers]);
+    const branchMap = useMemo(() => new Map(branches.map(b => [b.id, b.name])), [branches]);
     const studentCountMap = useMemo(() => {
         return schoolClasses.reduce((acc, c) => {
             acc[c.id] = students.filter(s => s.classId === c.id && s.status === 'Active').length;
@@ -364,6 +369,18 @@ const ClassManagementPage: React.FC = () => {
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">{canEditClasses ? 'Class Management' : 'My Classes'}</h1>
                     <div className="flex items-center gap-2 flex-wrap justify-end">
+                        {branches.length > 0 && (
+                            <select
+                                value={selectedBranchId}
+                                onChange={e => setSelectedBranchId(e.target.value)}
+                                className="input-field text-sm py-1.5 px-3 max-w-xs"
+                            >
+                                <option value="all">All Branches ({branches.length})</option>
+                                {branches.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                ))}
+                            </select>
+                        )}
                          {canEditClasses && (
                              <button onClick={() => setIsImportModalOpen(true)} className="btn-secondary">
                                 <UploadIcon className="w-4 h-4" /> Import CSV
@@ -425,6 +442,7 @@ const ClassManagementPage: React.FC = () => {
                                         {canReorder && <th scope="col" className="px-2 py-3 w-12"></th>}
                                         <th scope="col" className="px-6 py-3">ID</th>
                                         <th scope="col" className="px-6 py-3">Class Name</th>
+                                        {branches.length > 0 && <th scope="col" className="px-6 py-3">Branch</th>}
                                         <th scope="col" className="px-6 py-3">Teacher</th>
                                         <th scope="col" className="px-6 py-3">No. of Students</th>
                                         {showActionsColumn && <th scope="col" className="px-6 py-3">Actions</th>}
@@ -449,6 +467,17 @@ const ClassManagementPage: React.FC = () => {
                                             )}
                                             <td className="px-6 py-4">{index + 1}</td>
                                             <td className="px-6 py-4 font-medium text-secondary-900 dark:text-white">{`${c.name}${c.section ? ` - ${c.section}` : ''}`}</td>
+                                            {branches.length > 0 && (
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {c.branchId && branchMap.get(c.branchId) ? (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300">
+                                                            {branchMap.get(c.branchId)}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-secondary-400 text-xs italic">Main Campus</span>
+                                                    )}
+                                                </td>
+                                            )}
                                             <td className="px-6 py-4">{c.teacherId ? teacherMap.get(c.teacherId) || 'Not Assigned' : 'Not Assigned'}</td>
                                             <td className="px-6 py-4">{studentCountMap[c.id] || 0}</td>
                                             {showActionsColumn && (

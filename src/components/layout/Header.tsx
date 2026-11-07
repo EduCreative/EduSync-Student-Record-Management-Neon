@@ -3,7 +3,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useData } from '../../context/DataContext';
-import { UserRole } from '../../types';
 import { ActiveView } from './Layout';
 import Avatar from '../common/Avatar';
 import { EduSyncLogo } from '../../constants';
@@ -91,15 +90,13 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAboutModal }) => {
-    const { user, logout, activeSchoolId, switchSchoolContext } = useAuth();
+    const { user, logout, activeSchoolId } = useAuth();
     const { theme, toggleTheme } = useTheme();
-    const { schools, getSchoolById, fetchData, loading, isInitialLoad, syncProgress } = useData();
+    const { getSchoolById, fetchData, loading, isInitialLoad, syncProgress } = useData();
     const { isOnline } = useSync();
     const [profileOpen, setProfileOpen] = useState(false);
-    const [schoolSwitcherOpen, setSchoolSwitcherOpen] = useState(false);
 
     const profileDropdownRef = useRef<HTMLDivElement>(null);
-    const schoolSwitcherRef = useRef<HTMLDivElement>(null);
 
     const isSyncing = loading && !isInitialLoad;
 
@@ -109,27 +106,13 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAbou
             if (profileDropdownRef.current && profileOpen && !profileDropdownRef.current.contains(target as Node)) {
                 setProfileOpen(false);
             }
-            if (schoolSwitcherRef.current && schoolSwitcherOpen && !schoolSwitcherRef.current.contains(target as Node)) {
-                setSchoolSwitcherOpen(false);
-            }
         };
         document.addEventListener('click', clickHandler);
         return () => document.removeEventListener('click', clickHandler);
-    }, [profileOpen, schoolSwitcherOpen]);
+    }, [profileOpen]);
 
-    const displaySchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
-    const school = user ? getSchoolById(displaySchoolId as string) : null;
-    
-    const handleReturnToOwnerView = () => {
-        switchSchoolContext(null);
-        setActiveView({ view: 'overview' });
-    };
-
-    const handleSchoolSelect = (schoolId: string) => {
-        switchSchoolContext(schoolId);
-        setActiveView({ view: 'dashboard' });
-        setSchoolSwitcherOpen(false);
-    };
+    const displaySchoolId = activeSchoolId || user?.schoolId;
+    const school = displaySchoolId ? getSchoolById(displaySchoolId) : null;
 
     return (
         <header className="sticky top-0 z-30 border-b border-secondary-200 bg-white dark:border-secondary-700 dark:bg-secondary-800 no-print transition-colors duration-300">
@@ -159,66 +142,17 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAbou
                         </svg>
                     </button>
 
-                    {/* Logo and School Name / Switcher */}
-                    <div className="flex items-center gap-1 overflow-hidden">
-                        {user?.role === UserRole.Owner ? (
-                            activeSchoolId ? (
-                                <>
-                                    {school?.logoUrl ? (
-                                        <img src={school.logoUrl} alt={`${school.name} Logo`} className="h-6 sm:h-7 w-auto max-w-[30px] sm:max-w-[100px] object-contain" />
-                                    ) : (
-                                        <EduSyncLogo className="h-6 sm:h-7 w-auto text-primary-600 dark:text-primary-400 neon-glow-primary shrink-0" />
-                                    )}
-                                    <div className="flex flex-col overflow-hidden">
-                                        <div className="flex items-center gap-1 overflow-hidden">
-                                            <h1 className="text-xs sm:text-lg font-semibold leading-tight truncate max-w-[60px] sm:max-w-none">{school?.name}</h1>
-                                            <span className="bg-neon-accent/20 text-neon-accent text-[8px] sm:text-[10px] px-1 py-0.5 rounded font-bold border border-neon-accent/30 hidden xs:inline-block">NEON</span>
-                                        </div>
-                                        <button onClick={handleReturnToOwnerView} className="text-[9px] sm:text-[10px] text-primary-600 hover:underline text-left truncate">
-                                            &larr; <span className="hidden xs:inline">Owner</span>
-                                        </button>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="relative" ref={schoolSwitcherRef}>
-                                    <button 
-                                        className="flex items-center gap-1 text-sm sm:text-lg font-semibold text-secondary-800 dark:text-secondary-200"
-                                        onClick={() => setSchoolSwitcherOpen(prev => !prev)}
-                                    >
-                                        <span className="truncate max-w-[80px] sm:max-w-none">Owner</span>
-                                        <span className="bg-neon-accent text-secondary-900 text-[8px] sm:text-[10px] px-1 py-0.5 rounded font-bold hidden xs:inline-block">NEON</span>
-                                        <ChevronDownIcon className={`h-4 w-4 transition-transform ${schoolSwitcherOpen ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    {schoolSwitcherOpen && (
-                                        <div className="origin-top-left absolute left-0 mt-2 w-64 rounded-md shadow-lg py-1 bg-white dark:bg-secondary-800 ring-1 ring-black ring-opacity-5 focus:outline-none z-[70]">
-                                            <div className="px-4 py-2 text-xs text-secondary-500 uppercase font-semibold">Switch School View</div>
-                                            {schools.map(s => (
-                                                <button
-                                                    key={s.id}
-                                                    onClick={() => handleSchoolSelect(s.id)}
-                                                    className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-secondary-700 dark:text-secondary-200 hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors"
-                                                >
-                                                    {s.logoUrl ? <img src={s.logoUrl} alt={`${s.name} logo`} className="w-6 h-6 object-contain rounded-sm bg-white" /> : <div className="w-6 h-6 bg-secondary-200 dark:bg-secondary-700 rounded-sm flex items-center justify-center text-xs">?</div>}
-                                                    <span className="truncate">{s.name}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )
+                    {/* Institution Logo and School Name */}
+                    <div className="flex items-center gap-2 overflow-hidden">
+                        {school?.logoUrl ? (
+                            <img src={school.logoUrl} alt={`${school.name} Logo`} className="h-7 sm:h-8 w-auto max-w-[40px] sm:max-w-[120px] object-contain" />
                         ) : (
-                            <>
-                                {school?.logoUrl ? (
-                                    <img src={school.logoUrl} alt={`${school.name} Logo`} className="h-6 sm:h-7 w-auto max-w-[30px] sm:max-w-[100px] object-contain" />
-                                 ) : (
-                                    <EduSyncLogo className="h-6 sm:h-7 w-auto text-primary-600 dark:text-primary-400 neon-glow-primary shrink-0" />
-                                )}
-                                <div className="flex items-center gap-1 overflow-hidden">
-                                    <h1 className="text-xs sm:text-lg font-semibold truncate max-w-[80px] sm:max-w-none">{school?.name || 'EduSync'}</h1>
-                                    <span className="bg-neon-accent/20 text-neon-accent text-[8px] sm:text-[10px] px-1 py-0.5 rounded font-bold border border-neon-accent/30 hidden xs:inline-block">NEON</span>
-                                </div>
-                            </>
+                            <EduSyncLogo className="h-7 sm:h-8 w-auto text-primary-600 dark:text-primary-400 neon-glow-primary shrink-0" />
                         )}
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                            <h1 className="text-xs sm:text-base font-semibold truncate max-w-[120px] sm:max-w-none">{school?.name || 'EduSync'}</h1>
+                            <span className="bg-neon-accent/20 text-neon-accent text-[8px] sm:text-[10px] px-1 py-0.5 rounded font-bold border border-neon-accent/30 hidden xs:inline-block">NEON</span>
+                        </div>
                     </div>
                 </div>
 
@@ -311,10 +245,5 @@ const SunIcon = () => (
 const MoonIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 sm:w-5 sm:h-5"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
 );
-
-const ChevronDownIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-);
-
 
 export default Header;

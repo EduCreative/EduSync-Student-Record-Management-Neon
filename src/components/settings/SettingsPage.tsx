@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { DownloadIcon } from '../../constants';
 import Modal from '../common/Modal';
-import { UserRole } from '../../types';
+import { UserRole, Branch } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import ImageUpload from '../common/ImageUpload';
 import { driveService, DriveFile } from '../../utils/googleDriveService';
@@ -18,7 +18,7 @@ const CloudIcon = (props: React.SVGProps<SVGSVGElement>) => (
 const SettingsPage: React.FC = () => {
     const { toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, sidebarMode, setSidebarMode } = useTheme();
     const { user, effectiveRole, activeSchoolId } = useAuth();
-    const { schools, backupData, backupToDrive, restoreData, updateSchool, feeHeads, addFeeHead, updateFeeHead, autoBackupSettings, updateAutoBackupSettings } = useData();
+    const { schools, classes, branches, addBranch, updateBranch, deleteBranch, backupData, backupToDrive, restoreData, updateSchool, feeHeads, addFeeHead, updateFeeHead, autoBackupSettings, updateAutoBackupSettings } = useData();
     const { showToast } = useToast();
 
     // State for School Details
@@ -28,6 +28,12 @@ const SettingsPage: React.FC = () => {
     
     const [schoolDetails, setSchoolDetails] = useState({ name: '', address: '', logoUrl: null as string | null | undefined });
     const [defaultTuitionFee, setDefaultTuitionFee] = useState(0);
+
+    // State for Branches
+    const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
+    const [branchToEdit, setBranchToEdit] = useState<Branch | null>(null);
+    const [branchForm, setBranchForm] = useState({ name: '', address: '' });
+    const [isBranchSaving, setIsBranchSaving] = useState(false);
 
     // Cloud Backup State
     const [isCloudBackingUp, setIsCloudBackingUp] = useState(false);
@@ -89,6 +95,60 @@ const SettingsPage: React.FC = () => {
         }
     };
 
+    const handleOpenBranchModal = (branch: Branch | null = null) => {
+        setBranchToEdit(branch);
+        setBranchForm({
+            name: branch?.name || '',
+            address: branch?.address || ''
+        });
+        setIsBranchModalOpen(true);
+    };
+
+    const handleSaveBranch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!branchForm.name.trim() || !effectiveSchoolId) return;
+        setIsBranchSaving(true);
+        try {
+            if (branchToEdit) {
+                await updateBranch({
+                    ...branchToEdit,
+                    name: branchForm.name.trim(),
+                    address: branchForm.address.trim() || null
+                });
+                showToast('Success', 'Branch updated successfully!', 'success');
+            } else {
+                await addBranch({
+                    name: branchForm.name.trim(),
+                    address: branchForm.address.trim() || null,
+                    schoolId: effectiveSchoolId
+                });
+                showToast('Success', 'Branch created successfully!', 'success');
+            }
+            setIsBranchModalOpen(false);
+        } catch (err: any) {
+            showToast('Error', err.message || 'Failed to save branch.', 'error');
+        } finally {
+            setIsBranchSaving(false);
+        }
+    };
+
+    const handleDeleteBranch = async (branch: Branch) => {
+        const assignedClasses = classes.filter(c => c.branchId === branch.id);
+        if (assignedClasses.length > 0) {
+            showToast('Cannot Delete Branch', `Cannot delete branch: ${assignedClasses.length} class(es) are currently assigned to this branch. Reassign or delete these classes first.`, 'error');
+            return;
+        }
+
+        if (!window.confirm(`Are you sure you want to delete branch "${branch.name}"?`)) return;
+
+        try {
+            await deleteBranch(branch.id);
+            showToast('Success', `Branch "${branch.name}" removed successfully.`, 'success');
+        } catch (err: any) {
+            showToast('Error', err.message || 'Failed to delete branch.', 'error');
+        }
+    };
+
     const handleManualDriveBackup = async () => {
         setIsCloudBackingUp(true);
         await backupToDrive();
@@ -139,24 +199,59 @@ const SettingsPage: React.FC = () => {
                 </div>
             </Modal>
 
+            <Modal isOpen={isBranchModalOpen} onClose={() => setIsBranchModalOpen(false)} title={branchToEdit ? 'Edit Campus Branch' : 'Add Campus Branch'}>
+                <form onSubmit={handleSaveBranch} className="space-y-4">
+                    <div>
+                        <label className="input-label">Branch Name *</label>
+                        <input
+                            type="text"
+                            required
+                            value={branchForm.name}
+                            onChange={e => setBranchForm(p => ({ ...p, name: e.target.value }))}
+                            placeholder="e.g. North Campus, City Branch"
+                            className="input-field"
+                        />
+                    </div>
+                    <div>
+                        <label className="input-label">Mailing Address (optional)</label>
+                        <textarea
+                            value={branchForm.address}
+                            onChange={e => setBranchForm(p => ({ ...p, address: e.target.value }))}
+                            placeholder="Campus address, street, phone"
+                            rows={2}
+                            className="input-field"
+                        />
+                    </div>
+                    <div className="flex justify-end gap-3 pt-3">
+                        <button type="button" onClick={() => setIsBranchModalOpen(false)} className="btn-secondary">
+                            Cancel
+                        </button>
+                        <button type="submit" disabled={isBranchSaving} className="btn-primary">
+                            {isBranchSaving ? 'Saving...' : (branchToEdit ? 'Save Changes' : 'Create Branch')}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+
             <IncreaseTuitionFeeModal isOpen={isTuitionFeeModalOpen} onClose={() => setIsTuitionFeeModalOpen(false)} />
 
             <div className="max-w-4xl mx-auto space-y-8">
                 <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Settings</h1>
 
-                {/* WHATSAPP STYLE BACKUP SECTION */}
-                <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
-                    <div className="flex items-start gap-4 mb-6">
-                        <div className="p-3 bg-primary-100 dark:bg-primary-900/30 rounded-full">
-                            <CloudIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+                {/* WHATSAPP STYLE BACKUP SECTION - OWNER ONLY */}
+                {user?.role === UserRole.Owner && (
+                    <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
+                        <div className="flex items-start gap-4 mb-6">
+                            <div className="p-3 bg-primary-100 dark:bg-primary-900/30 rounded-full">
+                                <CloudIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-secondary-900 dark:text-white leading-tight">Google Drive Backup</h2>
+                                <p className="text-sm text-secondary-500 mt-1 max-w-lg">
+                                    Backup institutional records to your private Google Drive vault. You can restore them when switching devices or reinstalling the app.
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-secondary-900 dark:text-white leading-tight">Google Drive Backup</h2>
-                            <p className="text-sm text-secondary-500 mt-1 max-w-lg">
-                                Backup institutional records to your private Google Drive vault. You can restore them when switching devices or reinstalling the app.
-                            </p>
-                        </div>
-                    </div>
 
                     <div className="bg-secondary-50 dark:bg-secondary-900/40 rounded-xl p-5 mb-6 border dark:border-secondary-700">
                         <h3 className="text-xs font-bold text-secondary-400 uppercase tracking-widest mb-3">Last Backup</h3>
@@ -241,6 +336,7 @@ const SettingsPage: React.FC = () => {
                         </div>
                     </div>
                 </div>
+                )}
 
                 {/* INTERFACE & OTHER SETTINGS - Standard Style */}
                 <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
@@ -277,7 +373,7 @@ const SettingsPage: React.FC = () => {
                     </div>
                 </div>
 
-                 {effectiveRole === UserRole.Admin && (
+                {(effectiveRole === UserRole.Admin || effectiveRole === UserRole.Owner) && (
                     <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
                         <div className="flex justify-between items-center border-b pb-3 dark:border-secondary-700 mb-6">
                             <h2 className="text-xl font-semibold">Institution Profile</h2>
@@ -302,7 +398,76 @@ const SettingsPage: React.FC = () => {
                     </div>
                 )}
 
+                {/* CAMPUS BRANCHES SECTION */}
                 {(effectiveRole === UserRole.Admin || effectiveRole === UserRole.Owner) && (
+                    <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
+                        <div className="flex justify-between items-center border-b pb-3 dark:border-secondary-700 mb-6">
+                            <div>
+                                <h2 className="text-xl font-semibold text-secondary-900 dark:text-white">Campus Branches</h2>
+                                <p className="text-xs text-secondary-500 mt-0.5">Manage separate campuses and branch locations for your institution.</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => handleOpenBranchModal()}
+                                className="btn-primary text-xs font-bold py-1.5 px-3"
+                            >
+                                + Add Branch
+                            </button>
+                        </div>
+
+                        {branches.length === 0 ? (
+                            <div className="text-center py-8 px-4 border-2 border-dashed border-secondary-200 dark:border-secondary-700 rounded-lg">
+                                <p className="text-sm font-medium text-secondary-600 dark:text-secondary-300">No branches configured yet.</p>
+                                <p className="text-xs text-secondary-400 mt-1">If your school operates multiple campus sites, add them here to group classes and filter students.</p>
+                                <button
+                                    type="button"
+                                    onClick={() => handleOpenBranchModal()}
+                                    className="btn-secondary text-xs mt-3 shadow-none"
+                                >
+                                    Create First Branch
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-secondary-100 dark:divide-secondary-700">
+                                {branches.map(branch => {
+                                    const assignedClassesCount = classes.filter(c => c.branchId === branch.id).length;
+                                    return (
+                                        <div key={branch.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="font-semibold text-sm text-secondary-900 dark:text-white">{branch.name}</h4>
+                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
+                                                        {assignedClassesCount} {assignedClassesCount === 1 ? 'class' : 'classes'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-secondary-500 mt-0.5">{branch.address || 'No address specified'}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2 self-end sm:self-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenBranchModal(branch)}
+                                                    className="text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline px-2 py-1"
+                                                >
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteBranch(branch)}
+                                                    className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline px-2 py-1"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* DATA SNAPSHOTS - OWNER ONLY */}
+                {user?.role === UserRole.Owner && (
                     <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6 border-t-4 border-primary-500">
                         <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Data Snapshots & Recovery</h2>
                         <div className="space-y-4">

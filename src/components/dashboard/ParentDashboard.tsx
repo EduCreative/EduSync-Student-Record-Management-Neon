@@ -1,14 +1,23 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import { Student, Result } from '../../types';
+import { Student, Result, Class } from '../../types';
 import Avatar from '../common/Avatar';
 import StatCard from '../common/StatCard';
 import BarChart from '../charts/BarChart';
+import { getGrade } from '../students/StudentResults';
+import { getKarachiDateOffset, getTodayKarachi } from '../../utils/dates';
 
 const ParentDashboard: React.FC = () => {
     const { user } = useAuth();
-    const { students, results, loading } = useData();
+    const { students, results, loading, loadAttendanceRange } = useData();
+
+    const thirtyDaysAgo = useMemo(() => getKarachiDateOffset(-30), []);
+    const today = useMemo(() => getTodayKarachi(), []);
+
+    useEffect(() => {
+        loadAttendanceRange(thirtyDaysAgo, today);
+    }, [thirtyDaysAgo, today, loadAttendanceRange]);
 
     const myChildren = useMemo(() => {
         if (!user || !user.childStudentIds) return [];
@@ -69,7 +78,52 @@ const ParentDashboard: React.FC = () => {
 };
 
 const ChildCard: React.FC<{ student: Student; results: Result[] }> = ({ student, results }) => {
-    
+    const { classes, attendance, getLedgerForStudent } = useData();
+    const thirtyDaysAgo = useMemo(() => getKarachiDateOffset(-30), []);
+    const today = useMemo(() => getTodayKarachi(), []);
+
+    const studentClass = useMemo(() => {
+        const cls = classes.find((c: Class) => c.id === student.classId);
+        if (!cls) return 'N/A';
+        return `${cls.name}${cls.section ? ' - ' + cls.section : ''}`;
+    }, [classes, student.classId]);
+
+    const attendanceStat = useMemo(() => {
+        const records = attendance.filter(a => a.studentId === student.id && a.date >= thirtyDaysAgo && a.date <= today);
+        if (records.length === 0) return 'N/A';
+        const present = records.filter(a => a.status === 'Present').length;
+        return `${Math.round((present / records.length) * 100)}%`;
+    }, [attendance, student.id, thirtyDaysAgo, today]);
+
+    const overallGrade = useMemo(() => {
+        const studentResults = results.filter((r: Result) => r.studentId === student.id);
+        const allExams = [...new Set(studentResults.map((r: Result) => r.exam))];
+        if (allExams.length === 0) return 'N/A';
+        const latestExam = allExams.sort().pop();
+        if (!latestExam) return 'N/A';
+        const examResults = studentResults.filter((r: Result) => r.exam === latestExam);
+        const totalMarks = examResults.reduce((sum, r) => sum + r.marks, 0);
+        const totalMaxMarks = examResults.reduce((sum, r) => sum + r.totalMarks, 0);
+        if (totalMaxMarks === 0) return 'N/A';
+        const grade = getGrade(totalMarks, totalMaxMarks);
+        return grade === '-' ? 'N/A' : grade;
+    }, [results, student.id]);
+
+    const feeStatus = useMemo(() => {
+        const ledger = getLedgerForStudent(student.id);
+        if (!ledger) return { label: 'N/A', color: 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-600 dark:text-yellow-300' };
+        if (ledger.balance <= 0.01) {
+            return {
+                label: 'Paid',
+                color: 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300'
+            };
+        }
+        return {
+            label: `Rs. ${Math.round(ledger.balance).toLocaleString()} due`,
+            color: 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300'
+        };
+    }, [getLedgerForStudent, student.id]);
+
     const recentExamPerformance = useMemo(() => {
         const studentResults = results.filter((r: Result) => r.studentId === student.id);
         const allExams = [...new Set(studentResults.map((r: Result) => r.exam))];
@@ -93,13 +147,13 @@ const ChildCard: React.FC<{ student: Student; results: Result[] }> = ({ student,
                 <Avatar student={student} className="w-16 h-16"/>
                 <div>
                     <h2 className="text-2xl font-bold">{student.name}</h2>
-                    <p className="text-secondary-500">Class: Class Name | <span className="font-bold text-primary-700 dark:text-primary-400">ID: {student.rollNumber}</span></p>
+                    <p className="text-secondary-500">Class: {studentClass} | <span className="font-bold text-primary-700 dark:text-primary-400">ID: {student.rollNumber}</span></p>
                 </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Attendance" value="95%" color="bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300" icon={<CheckCircleIcon />} />
-                <StatCard title="Overall Grade" value="A" color="bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300" icon={<AwardIcon />} />
-                <StatCard title="Fee Status" value="Paid" color="bg-yellow-100 dark:bg-yellow-900/50 text-yellow-600 dark:text-yellow-300" icon={<DollarSignIcon />} />
+                <StatCard title="Attendance" value={attendanceStat} color="bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-300" icon={<CheckCircleIcon />} />
+                <StatCard title="Overall Grade" value={overallGrade} color="bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300" icon={<AwardIcon />} />
+                <StatCard title="Fee Status" value={feeStatus.label} color={feeStatus.color} icon={<DollarSignIcon />} />
                 <button className="h-full flex items-center justify-center p-4 bg-secondary-50 dark:bg-secondary-700 rounded-lg hover:bg-secondary-100 dark:hover:bg-secondary-600">
                     <span className="font-semibold">View Full Details &rarr;</span>
                 </button>

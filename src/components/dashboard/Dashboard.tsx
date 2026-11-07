@@ -4,7 +4,6 @@
 import type { FC } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types';
-import OwnerDashboard from './OwnerDashboard';
 import AdminDashboard from './AdminDashboard';
 import AccountantDashboard from './AccountantDashboard';
 import TeacherDashboard from './TeacherDashboard';
@@ -17,17 +16,14 @@ interface DashboardProps {
 }
 
 const Dashboard: FC<DashboardProps> = ({ setActiveView }) => {
-    const { user, activeSchoolId } = useAuth();
+    const { user } = useAuth();
 
     if (!user) {
         return <div className="text-center p-8">Loading user data...</div>;
     }
 
-    const effectiveRole = user.role === UserRole.Owner && activeSchoolId ? UserRole.Admin : user.role;
-
-    switch (effectiveRole) {
+    switch (user.role) {
         case UserRole.Owner:
-            return <OwnerDashboard setActiveView={setActiveView} />;
         case UserRole.Admin:
             return <AdminDashboard setActiveView={setActiveView} />;
         case UserRole.Accountant:

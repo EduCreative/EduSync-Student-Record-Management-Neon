@@ -14,10 +14,10 @@ interface ClassFormModalProps {
 
 const ClassFormModal: React.FC<ClassFormModalProps> = ({ isOpen, onClose, onSave, classToEdit }) => {
     const { user: currentUser, activeSchoolId } = useAuth();
-    const { users } = useData();
+    const { users, branches } = useData();
     const { showToast } = useToast();
 
-    const [formData, setFormData] = useState({ name: '', section: '', teacherId: '' });
+    const [formData, setFormData] = useState({ name: '', section: '', teacherId: '', branchId: '' });
     const [error, setError] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
@@ -27,12 +27,21 @@ const ClassFormModal: React.FC<ClassFormModalProps> = ({ isOpen, onClose, onSave
         return users.filter(u => u.schoolId === effectiveSchoolId && u.role === UserRole.Teacher);
     }, [users, effectiveSchoolId]);
 
+    const schoolBranches = useMemo(() => {
+        return branches.filter(b => b.schoolId === effectiveSchoolId);
+    }, [branches, effectiveSchoolId]);
+
     useEffect(() => {
         if (isOpen) {
             if (classToEdit) {
-                setFormData({ name: classToEdit.name, section: classToEdit.section || '', teacherId: classToEdit.teacherId || '' });
+                setFormData({ 
+                    name: classToEdit.name, 
+                    section: classToEdit.section || '', 
+                    teacherId: classToEdit.teacherId || '',
+                    branchId: classToEdit.branchId || ''
+                });
             } else {
-                setFormData({ name: '', section: '', teacherId: '' });
+                setFormData({ name: '', section: '', teacherId: '', branchId: '' });
             }
             setError('');
         }
@@ -59,6 +68,7 @@ const ClassFormModal: React.FC<ClassFormModalProps> = ({ isOpen, onClose, onSave
                 ...formData,
                 section: formData.section.trim() || null,
                 teacherId: formData.teacherId || null,
+                branchId: formData.branchId || null,
                 schoolId: effectiveSchoolId,
             };
 
@@ -90,6 +100,19 @@ const ClassFormModal: React.FC<ClassFormModalProps> = ({ isOpen, onClose, onSave
                         <input type="text" name="section" id="section" value={formData.section} onChange={e => setFormData(p => ({...p, section: e.target.value}))} className="input-field" placeholder="e.g., A, Blue, Morning" />
                     </div>
                 </div>
+
+                {schoolBranches.length > 0 && (
+                    <div>
+                        <label htmlFor="branchId" className="input-label">Branch Campus (optional)</label>
+                        <select name="branchId" id="branchId" value={formData.branchId} onChange={e => setFormData(p => ({...p, branchId: e.target.value}))} className="input-field">
+                            <option value="">Main Campus / Unassigned</option>
+                            {schoolBranches.map(branch => (
+                                <option key={branch.id} value={branch.id}>{branch.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
                 <div>
                     <label htmlFor="teacherId" className="input-label">Assign Teacher</label>
                     <select name="teacherId" id="teacherId" value={formData.teacherId} onChange={e => setFormData(p => ({...p, teacherId: e.target.value}))} className="input-field">

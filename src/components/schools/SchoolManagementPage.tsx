@@ -138,7 +138,7 @@ interface SchoolManagementPageProps {
 
 const SchoolManagementPage: React.FC<SchoolManagementPageProps> = ({ setActiveView }) => {
     const { schools, students, classes, addSchool, updateSchool, deleteSchool } = useData();
-    const { switchSchoolContext, hasPermission } = useAuth();
+    const { hasPermission } = useAuth();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [schoolToEdit, setSchoolToEdit] = useState<School | null>(null);
     const [schoolToDelete, setSchoolToDelete] = useState<School | null>(null);
@@ -151,8 +151,7 @@ const SchoolManagementPage: React.FC<SchoolManagementPageProps> = ({ setActiveVi
         }
     };
 
-    const handleSchoolClick = (schoolId: string) => {
-        switchSchoolContext(schoolId);
+    const handleSchoolClick = (_schoolId: string) => {
         setActiveView({ view: 'dashboard' });
     };
     

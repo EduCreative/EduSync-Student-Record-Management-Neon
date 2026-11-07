@@ -7,6 +7,18 @@ interface StudentResultsProps {
     studentId: string;
 }
 
+export const getGrade = (marks: number, totalMarks: number): string => {
+    if (totalMarks === 0) return '-';
+    const percentage = (marks / totalMarks) * 100;
+    if (percentage >= 90) return 'A1+';
+    if (percentage >= 80) return 'A1';
+    if (percentage >= 70) return 'A';
+    if (percentage >= 60) return 'B';
+    if (percentage >= 50) return 'C';
+    if (percentage >= 40) return 'D';
+    return 'F';
+};
+
 const StudentResults: React.FC<StudentResultsProps> = ({ studentId }) => {
     const { results } = useData();
 
@@ -27,18 +39,6 @@ const StudentResults: React.FC<StudentResultsProps> = ({ studentId }) => {
                 return acc;
             }, {} as Record<string, Result[]>);
     }, [results, studentId]);
-
-    const getGrade = (marks: number, totalMarks: number) => {
-        if (totalMarks === 0) return '-';
-        const percentage = (marks / totalMarks) * 100;
-        if (percentage >= 90) return 'A1+';
-        if (percentage >= 80) return 'A1';
-        if (percentage >= 70) return 'A';
-        if (percentage >= 60) return 'B';
-        if (percentage >= 50) return 'C';
-        if (percentage >= 40) return 'D';
-        return 'F';
-    };
 
     return (
         <div className="space-y-8">

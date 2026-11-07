@@ -7,6 +7,8 @@ import BarChart from '../charts/BarChart';
 import DoughnutChart from '../charts/DoughnutChart';
 import ChartSkeleton from '../common/skeletons/ChartSkeleton';
 
+import { getTodayKarachi } from '../../utils/dates';
+
 const QuickAction: React.FC<{ title: string; icon: React.ReactElement; }> = ({ title, icon }) => (
      <button className="flex flex-col items-center justify-center space-y-2 p-4 bg-secondary-50 dark:bg-secondary-700 dark:bg-opacity-50 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900 dark:hover:bg-opacity-50 hover:text-primary-600 transition-all text-center">
         {icon}
@@ -28,16 +30,18 @@ const AccountantDashboard: React.FC = () => {
             return student?.schoolId === user.schoolId;
         });
 
+        const todayStr = getTodayKarachi();
+        const [currY, currM] = todayStr.split('-').map(Number);
+        const currentYear = currY;
+        const currentMonth = currM - 1;
         const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
 
         let collectedThisMonth = 0;
         schoolFees.forEach(fee => {
             const history = fee.paymentHistory || [];
             if (history.length > 0) {
                 history.forEach((payment: any) => {
-                    const pDate = payment.date || payment.paidDate;
+                    const pDate = payment.date || payment.paidDate || payment.paidAt;
                     const pAmount = Number(payment.amount || 0);
                     if (!pDate || pAmount <= 0) return;
                     const normDate = String(pDate).slice(0, 10);
@@ -47,12 +51,12 @@ const AccountantDashboard: React.FC = () => {
                         collectedThisMonth += pAmount;
                     }
                 });
-            } else if (fee.paidDate && (fee.paidAmount || 0) > 0) {
+            } else if (fee.paidDate && (Number(fee.paidAmount) || 0) > 0) {
                 const normDate = String(fee.paidDate).slice(0, 10);
                 const pYear = parseInt(normDate.slice(0, 4), 10);
                 const pMonth = parseInt(normDate.slice(5, 7), 10) - 1;
                 if (pYear === currentYear && pMonth === currentMonth) {
-                    collectedThisMonth += fee.paidAmount;
+                    collectedThisMonth += Number(fee.paidAmount);
                 }
             }
         });
@@ -81,13 +85,36 @@ const AccountantDashboard: React.FC = () => {
             const monthKey = d.toLocaleString('default', { month: 'short', year: '2-digit' });
             collections[monthKey] = 0;
         }
-    
+
+        const addMonthly = (dateStr?: string | null, amount?: number) => {
+            if (!dateStr || !amount || amount <= 0) return;
+            const normDate = String(dateStr).slice(0, 10);
+            const parts = normDate.split('-');
+            if (parts.length < 3) return;
+            const year = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const day = parseInt(parts[2], 10);
+            const d = new Date(year, month, day);
+            const monthKey = d.toLocaleString('default', { month: 'short', year: '2-digit' });
+            if (monthKey in collections) {
+                collections[monthKey] += amount;
+            }
+        };
+
         schoolFees.forEach(fee => {
-            if(fee.paidDate) {
-                const d = new Date(fee.paidDate);
-                const monthKey = d.toLocaleString('default', { month: 'short', year: '2-digit' });
-                if (monthKey in collections) {
-                    collections[monthKey] += fee.paidAmount;
+            const history = fee.paymentHistory || [];
+            if (history.length > 0) {
+                history.forEach((payment: any) => {
+                    const pDate = payment.date || payment.paidDate || payment.paidAt;
+                    const pAmount = Number(payment.amount || 0);
+                    if (pDate && pAmount > 0) {
+                        addMonthly(pDate, pAmount);
+                    }
+                });
+            } else {
+                const pAmount = Number(fee.paidAmount || 0);
+                if (pAmount > 0 && fee.paidDate) {
+                    addMonthly(fee.paidDate, pAmount);
                 }
             }
         });

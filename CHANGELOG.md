@@ -1,6 +1,79 @@
 
 # Changelog
 
+## [3.37.0] - 2026-11-06
+
+### Phase E: Single-School Architecture & Branches
+- **P14 (First-Run Interactive Setup Script)**:
+  - Created interactive CLI script `scripts/setup.ts` runnable via `npm run setup`.
+  - Verifies database connection and checks if table `profiles` exists; if missing, outputs Neon SQL instructions and exits with code 2.
+  - Refuses execution if `profiles` table already contains records unless `--force` flag is provided.
+  - Interactively requests School Name, School Address, Owner Name, Owner Email, and Owner Password (hidden with confirmation, minimum 10 characters).
+  - Hashes owner password using `bcryptjs` with cost factor 12 and inserts initial school institution and Owner account with 'Active' status.
+  - Automatically seeds default fee head "Tuition Fee" with amount Rs. 0 and prompts for optional additional fee heads.
+  - Ensures `schema_migrations` table exists and records all existing migration scripts from `migrations/*.sql` as already applied.
+  - Prints clear completion summary with credentials masked. Registered script `"setup": "tsx scripts/setup.ts"` in `package.json`.
+- **P15 (Single-School Interface Mode & Owner Elevation)**:
+  - In `AuthContext.tsx`, ensured `effectiveRole` is always `user.role`, eliminating legacy role downgrades of Owner to Admin.
+  - Automatically resolves and populates `activeSchoolId` to `user.schoolId` for all users including Owner during session hydration and login.
+  - Removed `switchSchoolContext` method and cleaned up all callers across the codebase.
+  - Removed "Schools" nav item from `NAV_LINKS[UserRole.Owner]`, equipping Owner with the complete suite of institutional management links (Dashboard, Class Management, Students, Fee Management, Scan & Pay, Attendance, Results, Reports, Announcements, User Accounts, User Logs, Settings).
+  - Streamlined `Header.tsx` to display single institution branding (logo, legal name, NEON badge) for all users, completely removing the school switcher dropdown.
+  - In `Dashboard.tsx`, configured Owner to seamlessly open the primary `AdminDashboard` view.
+  - In `Layout.tsx`, updated view routing permissions so Owner maintains full access across all Admin and academic views.
+  - In `src/server/handlers/write/users.ts`, blocked `add-school` and `delete-school` with HTTP 403 "Single-school installation", while keeping `update-school` accessible to Owner and Admin.
+  - In `SettingsPage.tsx`, gated Google Drive Backup and Data Snapshots to `user.role === 'Owner'`, while keeping the Institution Profile editor accessible to both Owner and Admin.
+- **P16 (Branches Table, Class Branch Assignment, and Branch Filters)**:
+  - Created `branches` table in `schema.sql` (prior to `classes`) with unique constraint on `(school_id, name)`.
+  - Added `branch_id UUID REFERENCES branches(id) ON DELETE SET NULL` column to `classes` table in `schema.sql` and created `migrations/002_branches.sql`.
+  - Added `Branch` interface and optional `branchId` to `Class` in `src/types.ts`.
+  - In `src/server/handlers/data/index.ts`, fetched `branches` and selected `branch_id` on classes, returning `branches: transformedBranches` in API responses.
+  - In `src/server/handlers/write/classes.ts`, added `add-branch`, `update-branch`, and `delete-branch` actions with 409 conflict checks preventing branch deletion while classes remain assigned.
+  - Handled `branchId` persistence in `add-class` and `update-class` handlers.
+  - In `DataContext.tsx`, added `branches` state, `addBranch`, `updateBranch`, `deleteBranch` methods, and included branches in JSON backups.
+  - In `SettingsPage.tsx`, added a dedicated "Campus Branches" management card allowing Owner and Admin to view assigned class counts, create, edit, and delete branches.
+  - In `ClassFormModal.tsx`, added branch selector dropdown shown when branches exist.
+  - In `ClassManagementPage.tsx`, added branch filter dropdown and a Branch badge column in the classes table when branches are configured.
+  - In `StudentManagementPage.tsx`, added branch filter dropdown when branches are configured, scoping students whose class belongs to the chosen branch.
+
+## [3.36.0] - 2026-11-06
+
+### Phase D: Real Dashboard Metrics
+- **P11 (ParentDashboard Live Metrics)**:
+  - Replaced hardcoded "95%" attendance with real 30-day attendance percentage (`Present / total`) calculated from records within `[getKarachiDateOffset(-30), getTodayKarachi()]`. Automatically invokes `loadAttendanceRange` if needed.
+  - Replaced literal "Class Name" with dynamically resolved `${class.name}${class.section ? ' - ' + class.section : ''}`.
+  - Replaced hardcoded "Paid" with real balance status from `getLedgerForStudent(child.id)`: displays "Paid" (green) if `balance <= 0.01` or `Rs. X due` (red).
+  - Replaced hardcoded "A" grade with real grade calculated across the latest exam results using the canonical grading scale exported from `StudentResults.tsx`.
+- **P12 (StudentDashboard Live Metrics & Announcements Cleanup)**:
+  - Wired student attendance, overall grade, and fee status to live 30-day attendance, latest exam grade, and student ledger balance identically to ParentDashboard.
+  - Replaced placeholder "Upcoming Exams: 2" with "Exams Taken" displaying the exact count of distinct exams recorded for the student.
+  - Removed static placeholder Announcements section in favor of real notifications via the notification bell.
+- **P13 (Unified Cashier Collection Math)**:
+  - Rewrote daily, monthly, and range collection calculations in `AdminDashboard.tsx` and `AccountantDashboard.tsx` to follow a single unified collection rule: iterates through each `payment_history` entry on its respective payment date (`String(date).slice(0, 10)`), with single-payment fallback on `paidDate` for legacy/simple records.
+  - Removed flawed assumption in `feeCollectionData` and `monthlyCollection` that credited entire challan payments to a single date, ensuring multi-instalment payments reflect accurately across day and month charts matching `FeeCollectionReportModal`.
+
+## [3.35.0] - 2026-11-06
+
+### Phase C: Money Safety & Atomic Database Transactions
+- **P08 (Payments Atomic Overpayment Guard & Safe Cancellation)**:
+  - Moved overpayment checks directly into SQL `UPDATE fee_challans` `WHERE` clause: `status <> 'Cancelled' AND (allowOverpayment = true OR (paid_amount + numAmount) <= (total_amount - discount))`.
+  - Added atomic idempotency check: `AND (idempotencyKey IS NULL OR NOT (payment_history @> ...))`.
+  - On 0 rows updated, queries fresh database row to distinguish missing challan (404), cancelled challan (409), previously committed idempotent request (200 duplicatePrevented), or concurrent payment collision (409 with fresh remaining balance).
+  - Hardened `cancel-challan`: strictly restricted to `Owner` and `Admin`, rejecting cancellation with HTTP 409 if `paid_amount > 0`, `discount > 0`, or `payment_history` is non-empty.
+  - Converted `increase-tuition` from sequential per-student queries into an atomic batch `sql.transaction([...])`.
+  - Verified `FeePaymentModal.tsx` surfaces the exact server-side HTTP 409 conflict message.
+- **P09 (Challan Arrears Strictly Prior Months & Scoped Fee Heads)**:
+  - Scoped historical arrears aggregation in `challans.ts` strictly to months/years earlier than the target generation date using SQL `array_position(ARRAY['January',...,'December']::text[], month)`.
+  - Filtered fee head lookup during generation by `school_id = effectiveSchoolId`.
+  - Added guard against backdated challan generation: students with existing non-cancelled challans in later months are skipped to preserve ledger monotonicity.
+  - Returned `skippedBackdated` in API response and displayed count in `DataContext.tsx` success toast.
+- **P10 (Atomic Multi-Row Writes with sql.transaction)**:
+  - `students.ts` `bulk-add-students`: pre-validates all records before querying; returns 400 listing duplicates if identical roll numbers exist in payload; executes all inserts inside `sql.transaction([...])`; intercepts Postgres unique violations (`23505`) and rolls back entirely with HTTP 409 `DUPLICATE_ROLL`.
+  - `students.ts` `promote-students`, `reactivate-graduated`, and `revert-promotion`: wrapped chunked status and class updates into single all-or-nothing `sql.transaction([...])` executions.
+  - `users.ts` `bulk-add-users`: validates all user rows and hashes all passwords with bcrypt *before* database writing; executes inserts in `sql.transaction([...])`; catches email uniqueness violations (`23505`) and returns 409 naming the conflicting email with zero partial rows written.
+  - `users.ts` `add-user`: added HTTP 409 response on duplicate email (`23505`).
+  - `challans.ts` `generate`: executes all multi-row chunk inserts within one `sql.transaction([...])`, preventing partial monthly batches on database failures.
+
 ## [3.34.0] - 2026-11-06
 
 ### Phase B: Cleanup, DB Sessions & Migration Baseline

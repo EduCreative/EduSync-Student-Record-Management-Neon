@@ -142,21 +142,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
     const schoolUsers = useMemo(() => users.filter(u => u.schoolId === effectiveSchoolId && u.id !== user.id), [users, effectiveSchoolId, user.id]);
 
     const stats = useMemo(() => {
-        const now = new Date();
-        const dYear = now.getFullYear();
-        const dMonth = String(now.getMonth() + 1).padStart(2, '0');
-        const dDay = String(now.getDate()).padStart(2, '0');
-        const todayStr = `${dYear}-${dMonth}-${dDay}`;
-        const currentMonthIdx = now.getMonth();
+        const todayStr = getTodayKarachi();
+        const [currY, currM] = todayStr.split('-').map(Number);
+        const currentYear = currY;
+        const currentMonthIdx = currM - 1;
         const currentMonthName = months[currentMonthIdx];
-        const currentYear = now.getFullYear();
 
         const schoolFees = fees.filter(fee => {
             const student = students.find(s => s.id === fee.studentId);
             return student?.schoolId === effectiveSchoolId;
         });
 
-        // Reconcile collections from payment_history to match day-end registers & Fee Collection Report
+        // Reconcile collections from payment_history to match day-end registers & Fee Collection Report (P13)
         let feesCollectedToday = 0;
         let collectedThisMonth = 0;
 
@@ -273,9 +270,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
     const feeCollectionData = useMemo(() => {
         const schoolFees = fees.filter(fee => students.find(s => s.id === fee.studentId)?.schoolId === effectiveSchoolId);
         const collectionsByDay: Record<string, number> = {};
+
+        // Walk payment history with single-payment fallback on paidDate (P13)
         schoolFees.forEach(fee => {
-            if (fee.paidDate) {
-                collectionsByDay[fee.paidDate] = (collectionsByDay[fee.paidDate] || 0) + fee.paidAmount;
+            const history = fee.paymentHistory || [];
+            if (history.length > 0) {
+                history.forEach((payment: any) => {
+                    const pDate = payment.date || payment.paidDate || payment.paidAt;
+                    const pAmount = Number(payment.amount || 0);
+                    if (!pDate || pAmount <= 0) return;
+                    const normDate = String(pDate).slice(0, 10);
+                    collectionsByDay[normDate] = (collectionsByDay[normDate] || 0) + pAmount;
+                });
+            } else {
+                const pAmount = Number(fee.paidAmount || 0);
+                if (pAmount > 0 && fee.paidDate) {
+                    const normDate = String(fee.paidDate).slice(0, 10);
+                    collectionsByDay[normDate] = (collectionsByDay[normDate] || 0) + pAmount;
+                }
             }
         });
 

@@ -89,10 +89,17 @@ export function UploadIcon(props: SVGProps<SVGSVGElement>) {
 
 export const NAV_LINKS: Record<UserRole, { name: string; path: string; icon: ReactElement }[]> = {
     [UserRole.Owner]: [
-        { name: 'Overview', path: '/overview', icon: <DashboardIcon /> },
-        { name: 'Schools', path: '/schools', icon: <SchoolIcon /> },
-        { name: 'Users', path: '/users', icon: <UsersIcon /> },
+        { name: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
+        { name: 'Class Management', path: '/classes', icon: <SchoolIcon /> },
+        { name: 'Students', path: '/students', icon: <UsersIcon /> },
+        { name: 'Fee Management', path: '/fees', icon: <DollarSignIcon /> },
+        { name: 'Scan & Pay', path: '/scan-pay', icon: <ScanIcon /> },
+        { name: 'Attendance', path: '/attendance', icon: <CheckCircleIcon /> },
+        { name: 'Results', path: '/results', icon: <BarChartIcon /> },
+        { name: 'Reports', path: '/reports', icon: <FileTextIcon /> },
         { name: 'Announcements', path: '/announcements', icon: <MegaphoneIcon /> },
+        { name: 'User Accounts', path: '/users', icon: <UsersIcon /> },
+        { name: 'User Logs', path: '/logs', icon: <FileCheckIcon /> },
         { name: 'Settings', path: '/settings', icon: <SettingsIcon /> },
     ],
     [UserRole.Admin]: [

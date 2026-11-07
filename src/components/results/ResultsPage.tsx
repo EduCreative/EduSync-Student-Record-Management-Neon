@@ -414,7 +414,7 @@ const ResultsEntry: React.FC = () => {
 const ResultsPage: React.FC = () => {
     const { effectiveRole } = useAuth();
     
-    const canEnterResults = effectiveRole === UserRole.Admin || effectiveRole === UserRole.Teacher;
+    const canEnterResults = effectiveRole === UserRole.Admin || effectiveRole === UserRole.Teacher || effectiveRole === UserRole.Owner;
 
     if (canEnterResults) {
         return <ResultsEntry />;

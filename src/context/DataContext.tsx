@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
-import { School, User, UserRole, Class, Student, Attendance, FeeChallan, Result, ActivityLog, FeeHead, SchoolEvent, Subject, Exam, StudentLedger } from '../types';
+import { School, User, UserRole, Class, Student, Attendance, FeeChallan, Result, ActivityLog, FeeHead, SchoolEvent, Subject, Exam, StudentLedger, Branch } from '../types';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import { driveService } from '../utils/googleDriveService';
@@ -23,6 +23,7 @@ interface DataContextType {
     schools: School[];
     users: User[];
     classes: Class[];
+    branches: Branch[];
     subjects: Subject[];
     exams: Exam[];
     students: Student[];
@@ -53,6 +54,9 @@ interface DataContextType {
     addClass: (classData: Omit<Class, 'id'>) => Promise<void>;
     updateClass: (updatedClass: Class) => Promise<void>;
     deleteClass: (classId: string) => Promise<void>;
+    addBranch: (branchData: Omit<Branch, 'id'>) => Promise<void>;
+    updateBranch: (updatedBranch: Branch) => Promise<void>;
+    deleteBranch: (branchId: string) => Promise<void>;
     addSubject: (subjectData: Omit<Subject, 'id'>) => Promise<void>;
     updateSubject: (updatedSubject: Subject) => Promise<void>;
     deleteSubject: (subjectId: string) => Promise<void>;
@@ -127,6 +131,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [schools, setSchools] = useState<School[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [classes, setClasses] = useState<Class[]>([]);
+    const [branches, setBranches] = useState<Branch[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [exams, setExams] = useState<Exam[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
@@ -248,6 +253,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             setSchools(data.schools || []);
             setClasses(data.classes || []);
+            setBranches(data.branches || []);
             setSubjects(data.subjects || []);
             setExams(data.exams || []);
             setFeeHeads(data.feeHeads || []);
@@ -390,6 +396,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             name: data.name, 
             section: data.section, 
             teacherId: data.teacherId, 
+            branchId: data.branchId || null,
             schoolId: data.schoolId, 
             sortOrder: data.sortOrder || 0 
         });
@@ -403,6 +410,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             name: cls.name, 
             section: cls.section, 
             teacherId: cls.teacherId, 
+            branchId: cls.branchId || null,
             sortOrder: cls.sortOrder 
         });
         await fetchData();
@@ -410,6 +418,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const deleteClass = async (id: string) => {
         await apiWrite('/api/write/classes', { action: 'delete-class', id });
+        await fetchData();
+    };
+
+    const addBranch = async (data: Omit<Branch, 'id'>) => {
+        const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+        await apiWrite('/api/write/classes', {
+            action: 'add-branch',
+            name: data.name,
+            address: data.address || null,
+            schoolId: data.schoolId || effectiveSchoolId
+        });
+        await fetchData();
+    };
+
+    const updateBranch = async (b: Branch) => {
+        await apiWrite('/api/write/classes', {
+            action: 'update-branch',
+            id: b.id,
+            name: b.name,
+            address: b.address || null
+        });
+        await fetchData();
+    };
+
+    const deleteBranch = async (id: string) => {
+        await apiWrite('/api/write/classes', {
+            action: 'delete-branch',
+            id
+        });
         await fetchData();
     };
 
@@ -597,7 +634,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setOperationProgress({ percentage: 0, status: '' });
         const count = res.count || 0;
         const skipped = res.skippedDuplicates || 0;
-        showToast('Success', `${count} challan(s) generated for ${month} ${year}${skipped > 0 ? ` (${skipped} duplicates skipped)` : ''}.`, 'success');
+        const skippedBackdated = res.skippedBackdated || 0;
+        let details = '';
+        if (skipped > 0 && skippedBackdated > 0) {
+            details = ` (${skipped} duplicates, ${skippedBackdated} backdated skipped)`;
+        } else if (skipped > 0) {
+            details = ` (${skipped} duplicates skipped)`;
+        } else if (skippedBackdated > 0) {
+            details = ` (${skippedBackdated} backdated skipped)`;
+        }
+        showToast('Success', `${count} challan(s) generated for ${month} ${year}${details}.`, 'success');
         return count;
     };
 
@@ -883,6 +929,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             schools, 
             users, 
             classes, 
+            branches,
             students, 
             fees, 
             attendance, 
@@ -936,14 +983,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getLedgerForStudent = useCallback((id: string) => ledgerMap.get(id), [ledgerMap]);
 
     const value: DataContextType = {
-        schools, users, classes, subjects, exams, students, attendance, fees, ledger, results, logs, feeHeads, events,
+        schools, users, classes, branches, subjects, exams, students, attendance, fees, ledger, results, logs, feeHeads, events,
         loading, isInitialLoad, lastSyncTime, syncError, syncProgress, operationProgress, 
         autoBackupSettings, updateAutoBackupSettings,
         fetchData, backupToDrive,
         getSchoolById: (id) => schools.find(s => s.id === id),
         getLedgerForStudent,
         updateUser, deleteUser, addUserByAdmin, addStudent, updateStudent, deleteStudent,
-        addClass, updateClass, deleteClass, addSubject, updateSubject, deleteSubject,
+        addClass, updateClass, deleteClass, addBranch, updateBranch, deleteBranch, addSubject, updateSubject, deleteSubject,
         addExam, updateExam, deleteExam, setAttendance, recordFeePayment, updateFeePayment, cancelChallan,
         generateChallansForMonth, deleteChallansForMonth, addSchool, updateSchool, deleteSchool,
         addEvent, updateEvent, deleteEvent, bulkAddStudents, bulkAddUsers, bulkAddClasses,

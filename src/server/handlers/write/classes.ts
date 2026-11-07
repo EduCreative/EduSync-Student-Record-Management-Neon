@@ -21,25 +21,25 @@ export default async function handler(req: any, res: any) {
 
         // Class operations
         if (action === 'add-class') {
-            const { name, section, teacherId, sortOrder, schoolId } = body;
+            const { name, section, teacherId, branchId, sortOrder, schoolId } = body;
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
             const id = crypto.randomUUID();
 
             await sql`
-                INSERT INTO classes (id, name, section, teacher_id, school_id, sort_order)
-                VALUES (${id}, ${name}, ${section || null}, ${teacherId || null}, ${effectiveSchoolId}, ${sortOrder || 0})
+                INSERT INTO classes (id, name, section, teacher_id, school_id, branch_id, sort_order)
+                VALUES (${id}, ${name}, ${section || null}, ${teacherId || null}, ${effectiveSchoolId}, ${branchId || null}, ${sortOrder || 0})
             `;
             await writeServerAuditLog(sql, session, 'Add Class', `Added class: ${name} ${section || ''}`, effectiveSchoolId);
             return res.status(200).json({ success: true, id });
 
         } else if (action === 'update-class') {
-            const { id, name, section, teacherId, sortOrder } = body;
+            const { id, name, section, teacherId, branchId, sortOrder } = body;
             const records = await sql`SELECT school_id FROM classes WHERE id = ${id} LIMIT 1`;
             if (!records || records.length === 0) return res.status(404).json({ error: 'Class not found.' });
             if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`
                 UPDATE classes 
-                SET name = ${name}, section = ${section || null}, teacher_id = ${teacherId || null}, sort_order = ${sortOrder || 0}
+                SET name = ${name}, section = ${section || null}, teacher_id = ${teacherId || null}, branch_id = ${branchId || null}, sort_order = ${sortOrder || 0}
                 WHERE id = ${id}
             `;
             return res.status(200).json({ success: true });
@@ -50,6 +50,66 @@ export default async function handler(req: any, res: any) {
             if (!records || records.length === 0) return res.status(404).json({ error: 'Class not found.' });
             if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
             await sql`DELETE FROM classes WHERE id = ${id}`;
+            return res.status(200).json({ success: true });
+
+        // Branch operations
+        } else if (action === 'add-branch') {
+            const { name, address, schoolId } = body;
+            if (!name || !name.trim()) {
+                return res.status(400).json({ error: 'Branch name is required.' });
+            }
+            const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
+            const id = crypto.randomUUID();
+            try {
+                await sql`
+                    INSERT INTO branches (id, name, address, school_id)
+                    VALUES (${id}, ${name.trim()}, ${address || null}, ${effectiveSchoolId})
+                `;
+            } catch (err: any) {
+                if (err?.code === '23505' || err?.message?.includes('23505')) {
+                    return res.status(409).json({ error: `A branch named "${name}" already exists.` });
+                }
+                throw err;
+            }
+            await writeServerAuditLog(sql, session, 'Add Branch', `Added branch: ${name}`, effectiveSchoolId);
+            return res.status(200).json({ success: true, id });
+
+        } else if (action === 'update-branch') {
+            const { id, name, address } = body;
+            if (!id || !name || !name.trim()) {
+                return res.status(400).json({ error: 'Branch ID and name are required.' });
+            }
+            const records = await sql`SELECT school_id FROM branches WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Branch not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
+            try {
+                await sql`
+                    UPDATE branches
+                    SET name = ${name.trim()}, address = ${address || null}
+                    WHERE id = ${id}
+                `;
+            } catch (err: any) {
+                if (err?.code === '23505' || err?.message?.includes('23505')) {
+                    return res.status(409).json({ error: `A branch named "${name}" already exists.` });
+                }
+                throw err;
+            }
+            return res.status(200).json({ success: true });
+
+        } else if (action === 'delete-branch') {
+            const { id } = body;
+            if (!id) return res.status(400).json({ error: 'Branch ID is required.' });
+            const records = await sql`SELECT school_id FROM branches WHERE id = ${id} LIMIT 1`;
+            if (!records || records.length === 0) return res.status(404).json({ error: 'Branch not found.' });
+            if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
+
+            const classCount = await sql`SELECT COUNT(*)::int as count FROM classes WHERE branch_id = ${id}`;
+            if (classCount[0]?.count > 0) {
+                return res.status(409).json({ error: `Cannot delete branch: ${classCount[0].count} class(es) are currently assigned to this branch.` });
+            }
+
+            await sql`DELETE FROM branches WHERE id = ${id}`;
+            await writeServerAuditLog(sql, session, 'Delete Branch', `Deleted branch ID ${id}`, records[0].school_id);
             return res.status(200).json({ success: true });
 
         } else if (action === 'bulk-add-classes') {

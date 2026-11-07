@@ -47,14 +47,18 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'No active students found for challan generation.' });
             }
 
-            // Fetch all fee heads for reference
-            const feeHeads = await sql`SELECT id, name, default_amount FROM fee_heads`;
+            // Fetch fee heads for reference scoped to effectiveSchoolId (P09)
+            const feeHeads = await sql`
+                SELECT id, name, default_amount 
+                FROM fee_heads 
+                WHERE (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
+            `;
             const feeHeadMap = new Map(feeHeads.map((fh: any) => [fh.id, fh.name]));
 
             const monthIndex = MONTH_NAMES.indexOf(month) + 1;
             const monthStr = String(monthIndex).padStart(2, '0');
 
-            // Compute historical arrears for all students in ONE aggregated SQL query (A11)
+            // Compute historical arrears for all students in ONE aggregated SQL query, strictly for EARLIER months (P09)
             const studentIdsToQuery = students.map((s: any) => s.id);
             const arrearsAggregation = await sql`
                 SELECT 
@@ -71,6 +75,13 @@ export default async function handler(req: any, res: any) {
                 FROM fee_challans
                 WHERE student_id = ANY(${studentIdsToQuery})
                 AND status <> 'Cancelled'
+                AND (
+                    year < ${targetYear}
+                    OR (
+                        year = ${targetYear}
+                        AND array_position(ARRAY['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']::text[], month) < ${monthIndex}
+                    )
+                )
                 GROUP BY student_id
             `;
 
@@ -81,8 +92,30 @@ export default async function handler(req: any, res: any) {
                 arrearsMap.set(row.student_id, Math.max(0, charged - collected));
             }
 
+            // Check if any student already has an active challan in a LATER month (P09)
+            const laterChallans = await sql`
+                SELECT DISTINCT student_id 
+                FROM fee_challans 
+                WHERE student_id = ANY(${studentIdsToQuery})
+                AND status <> 'Cancelled'
+                AND (
+                    year > ${targetYear}
+                    OR (
+                        year = ${targetYear}
+                        AND array_position(ARRAY['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']::text[], month) > ${monthIndex}
+                    )
+                )
+            `;
+            const laterStudentIdSet = new Set(laterChallans.map((r: any) => r.student_id));
+
+            let skippedBackdated = 0;
             const challanRowsToInsert: any[] = [];
             for (const student of students) {
+                if (laterStudentIdSet.has(student.id)) {
+                    skippedBackdated++;
+                    continue;
+                }
+
                 const historicalDues = arrearsMap.get(student.id) ?? 0;
                 const totalArrears = Math.max(0, (Number(student.opening_balance) || 0) + historicalDues);
 
@@ -121,10 +154,11 @@ export default async function handler(req: any, res: any) {
                 });
             }
 
-            // Insert in chunks of 100 students with single multi-row INSERT ... ON CONFLICT DO NOTHING (A11)
+            // Insert in chunks of 100 students wrapped in one sql.transaction (P10)
             let generatedCount = 0;
             let skippedDuplicates = 0;
             const CHUNK_SIZE = 100;
+            const chunkQueries: any[] = [];
 
             for (let i = 0; i < challanRowsToInsert.length; i += CHUNK_SIZE) {
                 const chunk = challanRowsToInsert.slice(i, i + CHUNK_SIZE);
@@ -162,24 +196,33 @@ export default async function handler(req: any, res: any) {
                     RETURNING id
                 `;
 
-                const insertedRows: any[] = await sql(insertQuery, params);
-                const count = insertedRows ? insertedRows.length : 0;
-                generatedCount += count;
-                skippedDuplicates += (chunk.length - count);
+                chunkQueries.push(sql(insertQuery, params));
+            }
+
+            if (chunkQueries.length > 0) {
+                const results = await sql.transaction(chunkQueries);
+                for (let i = 0; i < results.length; i++) {
+                    const chunkLength = Math.min(CHUNK_SIZE, challanRowsToInsert.length - (i * CHUNK_SIZE));
+                    const insertedRows = results[i] || [];
+                    const count = insertedRows.length;
+                    generatedCount += count;
+                    skippedDuplicates += (chunkLength - count);
+                }
             }
 
             await writeServerAuditLog(
                 sql,
                 session,
                 'Generate Challans',
-                `Generated ${generatedCount} fee challans for ${month} ${targetYear} (Skipped ${skippedDuplicates} duplicates)`,
+                `Generated ${generatedCount} fee challans for ${month} ${targetYear} (Skipped ${skippedDuplicates} duplicates, ${skippedBackdated} backdated)`,
                 effectiveSchoolId
             );
 
             return res.status(200).json({
                 success: true,
                 count: generatedCount,
-                skippedDuplicates
+                skippedDuplicates,
+                skippedBackdated
             });
 
         } else if (action === 'delete-unpaid') {

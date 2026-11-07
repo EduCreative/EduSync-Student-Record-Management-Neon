@@ -24,6 +24,16 @@ CREATE TABLE IF NOT EXISTS profiles (
     phone_number TEXT
 );
 
+-- Branches table
+CREATE TABLE IF NOT EXISTS branches (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    address TEXT,
+    school_id UUID REFERENCES schools(id) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(school_id, name)
+);
+
 -- Classes table
 CREATE TABLE IF NOT EXISTS classes (
     id UUID PRIMARY KEY,
@@ -31,6 +41,7 @@ CREATE TABLE IF NOT EXISTS classes (
     section TEXT,
     teacher_id UUID REFERENCES profiles(id),
     school_id UUID REFERENCES schools(id) NOT NULL,
+    branch_id UUID REFERENCES branches(id) ON DELETE SET NULL,
     sort_order INTEGER DEFAULT 0
 );
 

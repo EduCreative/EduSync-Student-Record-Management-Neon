@@ -44,10 +44,17 @@ export default async function handler(req: any, res: any) {
             const hashedPassword = await bcrypt.hash(password, saltRounds);
             const id = crypto.randomUUID();
 
-            await sql`
-                INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url)
-                VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, 'Active', ${avatarUrl || null})
-            `;
+            try {
+                await sql`
+                    INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url)
+                    VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, 'Active', ${avatarUrl || null})
+                `;
+            } catch (err: any) {
+                if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('profiles_email_key')) {
+                    return res.status(409).json({ error: 'Email already exists', message: `A user with email "${email}" already exists.` });
+                }
+                throw err;
+            }
 
             await writeServerAuditLog(
                 sql,
@@ -142,46 +149,86 @@ export default async function handler(req: any, res: any) {
 
             const effectiveSchoolId = session.role === 'Admin' ? session.schoolId : (session.role === 'Owner' && schoolId ? schoolId : session.schoolId);
 
+            // P10: Validate all rows and detect duplicates in payload first
+            const seenEmails = new Set<string>();
+            const duplicateEmailsInFile: string[] = [];
             for (const u of users) {
-                if (!u.password) {
-                    return res.status(400).json({ error: `Password is required for user ${u.email || u.name || 'unknown'}.` });
+                const cleanEmail = (u.email || '').toLowerCase().trim();
+                if (cleanEmail) {
+                    if (seenEmails.has(cleanEmail)) {
+                        duplicateEmailsInFile.push(cleanEmail);
+                    }
+                    seenEmails.add(cleanEmail);
                 }
-                if (!u.role) {
-                    return res.status(400).json({ error: `Role is required for user ${u.email || u.name || 'unknown'}.` });
+            }
+
+            if (duplicateEmailsInFile.length > 0) {
+                const uniqueDupes = Array.from(new Set(duplicateEmailsInFile));
+                return res.status(400).json({ error: `Duplicate email(s) found in payload: ${uniqueDupes.join(', ')}` });
+            }
+
+            // Validate fields, roles, and hash all passwords BEFORE writing to DB (P10)
+            const preparedUsers: any[] = [];
+            for (let i = 0; i < users.length; i++) {
+                const u = users[i];
+                if (!u.name || !u.email || !u.password || !u.role) {
+                    return res.status(400).json({ error: `Name, email, password, and role are required for all users (row ${i + 1} is missing required fields).` });
                 }
                 if (session.role === 'Admin') {
                     if (!['Accountant', 'Teacher', 'Parent', 'Student'].includes(u.role)) {
-                        return res.status(403).json({ error: 'Admin may create only Accountant, Teacher, Parent, or Student accounts.' });
+                        return res.status(403).json({ error: `Admin may create only Accountant, Teacher, Parent, or Student accounts (found '${u.role}' at row ${i + 1}).` });
                     }
                 } else if (session.role === 'Owner') {
                     if (!['Owner', 'Admin', 'Accountant', 'Teacher', 'Parent', 'Student'].includes(u.role)) {
-                        return res.status(400).json({ error: `Invalid role specified for user ${u.email || u.name || 'unknown'}.` });
+                        return res.status(400).json({ error: `Invalid role specified for user '${u.email}' at row ${i + 1}.` });
                     }
                 }
-                const id = crypto.randomUUID();
+
                 const hashedPassword = await bcrypt.hash(u.password, 10);
-                await sql`
-                    INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url)
-                    VALUES (${id}, ${u.name}, ${u.email.toLowerCase().trim()}, ${hashedPassword}, ${u.role}, ${effectiveSchoolId}, 'Active', ${u.avatarUrl || u.avatar_url || null})
-                `;
+                preparedUsers.push({
+                    id: crypto.randomUUID(),
+                    name: u.name.trim(),
+                    email: u.email.toLowerCase().trim(),
+                    password: hashedPassword,
+                    role: u.role,
+                    avatarUrl: u.avatarUrl || u.avatar_url || null
+                });
             }
 
-            return res.status(200).json({ success: true, count: users.length });
+            // Insert in one atomic sql.transaction (P10)
+            const queries = preparedUsers.map(u => sql`
+                INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url)
+                VALUES (${u.id}, ${u.name}, ${u.email}, ${u.password}, ${u.role}, ${effectiveSchoolId}, 'Active', ${u.avatarUrl})
+            `);
 
-        // School operations (Owner only)
+            try {
+                await sql.transaction(queries);
+            } catch (err: any) {
+                if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('profiles_email_key')) {
+                    const match = err?.detail?.match(/Key \(email\)=\(([^)]+)\)/);
+                    const conflictedEmail = match ? match[1] : 'duplicate email';
+                    return res.status(409).json({ error: `Email "${conflictedEmail}" already exists. No users were created.`, email: conflictedEmail });
+                }
+                throw err;
+            }
+
+            await writeServerAuditLog(
+                sql,
+                session,
+                'Bulk Import Users',
+                `Bulk created ${preparedUsers.length} user accounts`,
+                effectiveSchoolId
+            );
+
+            return res.status(200).json({ success: true, count: preparedUsers.length });
+
+        // School operations
         } else if (action === 'add-school') {
-            if (session.role !== 'Owner') {
-                return res.status(403).json({ error: 'Only Owner can create schools.' });
-            }
-
-            const { name, address, logoUrl } = body;
-            const id = crypto.randomUUID();
-            await sql`INSERT INTO schools (id, name, address, logo_url) VALUES (${id}, ${name}, ${address || ''}, ${logoUrl || null})`;
-            return res.status(200).json({ success: true, id });
+            return res.status(403).json({ error: 'Single-school installation: Adding additional schools is disabled.' });
 
         } else if (action === 'update-school') {
-            if (session.role !== 'Owner') {
-                return res.status(403).json({ error: 'Only Owner can edit schools.' });
+            if (!isAuthorized(session, ['Owner', 'Admin'])) {
+                return res.status(403).json({ error: 'Access denied: Only Owner or Admin can update institution profile.' });
             }
 
             const { id, name, address, logoUrl } = body;
@@ -199,16 +246,11 @@ export default async function handler(req: any, res: any) {
             }
 
             await sql`UPDATE schools SET name = ${name}, address = ${address || ''}, logo_url = ${logoUrl || null} WHERE id = ${id}`;
+            await writeServerAuditLog(sql, session, 'Update School', `Updated institution profile: ${name}`, id);
             return res.status(200).json({ success: true });
 
         } else if (action === 'delete-school') {
-            if (session.role !== 'Owner') {
-                return res.status(403).json({ error: 'Only Owner can delete schools.' });
-            }
-
-            const { id } = body;
-            await sql`DELETE FROM schools WHERE id = ${id}`;
-            return res.status(200).json({ success: true });
+            return res.status(403).json({ error: 'Single-school installation: Deleting the school institution is disabled.' });
 
         } else if (action === 'add-log') {
             if (!isAuthorized(session, ['Owner', 'Admin', 'Accountant'])) {

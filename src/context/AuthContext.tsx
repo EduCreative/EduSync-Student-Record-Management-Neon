@@ -10,7 +10,6 @@ interface AuthContextType {
     updateUserPassword: (newPassword: string, currentPassword?: string) => Promise<{ success: boolean; error?: string }>;
     sendPasswordResetEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
     activeSchoolId: string | null;
-    switchSchoolContext: (schoolId: string | null) => void;
     effectiveRole: UserRole | null;
     hasPermission: (permission: Permission) => boolean;
     authEvent: string | null;
@@ -40,9 +39,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     if (data?.user && isMounted) {
                         setUser(data.user);
                         localStorage.setItem('edusync_user', JSON.stringify(data.user));
-                        if (data.user.role !== UserRole.Owner) {
-                            setActiveSchoolId(data.user.schoolId);
-                        }
+                        setActiveSchoolId(data.user.schoolId || null);
                         return;
                     }
                 }
@@ -113,9 +110,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (data.user) {
                 setUser(data.user);
                 localStorage.setItem('edusync_user', JSON.stringify(data.user));
-                if (data.user.role !== UserRole.Owner) {
-                    setActiveSchoolId(data.user.schoolId);
-                }
+                setActiveSchoolId(data.user.schoolId || null);
             }
 
             setAuthEvent('SIGNED_IN');
@@ -202,13 +197,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const switchSchoolContext = (schoolId: string | null) => {
-        if (user?.role === UserRole.Owner) {
-            setActiveSchoolId(schoolId);
-        }
-    };
-
-    const effectiveRole = user?.role === UserRole.Owner && activeSchoolId ? UserRole.Admin : user?.role || null;
+    const effectiveRole = user?.role || null;
 
     const hasPermission = (permission: Permission): boolean => {
         if (!effectiveRole) return false;
@@ -240,7 +229,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             updateUserPassword,
             sendPasswordResetEmail,
             activeSchoolId,
-            switchSchoolContext,
             effectiveRole,
             hasPermission,
             authEvent

@@ -69,7 +69,7 @@ export default async function handler(req: any, res: any) {
                 return res.status(200).json({ success: true, challan, duplicatePrevented: true });
             }
 
-            // Reject amount exceeding remaining balance unless overpayment is explicitly allowed (A8)
+            // Pre-check for friendly instant client validation (real guard is in SQL WHERE below)
             const currentDiscount = numDiscount > 0 ? numDiscount : Number(challan.discount || 0);
             const remainingBalance = Math.max(0, Number(challan.total_amount) - currentDiscount - Number(challan.paid_amount || 0));
             if (numAmount > remainingBalance && allowOverpayment !== true) {
@@ -91,7 +91,7 @@ export default async function handler(req: any, res: any) {
                 idempotencyKey: idempotencyKey || null
             };
 
-            // Atomic database update with SQL jsonb concatenation (A8 & B1)
+            // Atomic database update with SQL condition guards against race conditions (P08)
             const updateResult = await sql`
                 UPDATE fee_challans
                 SET 
@@ -104,8 +104,50 @@ export default async function handler(req: any, res: any) {
                     END,
                     payment_history = COALESCE(payment_history, '[]'::jsonb) || ${JSON.stringify([newRecord])}::jsonb
                 WHERE id = ${challanId}
+                AND status <> 'Cancelled'
+                AND (${allowOverpayment === true}::boolean OR (paid_amount + ${numAmount}) <= (total_amount - ${currentDiscount}))
+                AND (${!idempotencyKey}::boolean OR NOT (COALESCE(payment_history, '[]'::jsonb) @> ${JSON.stringify([{ idempotencyKey }])}::jsonb))
                 RETURNING *
             `;
+
+            // If 0 rows were updated, a concurrency condition or duplicate was hit
+            if (updateResult.length === 0) {
+                const freshRows = await sql`
+                    SELECT fc.*, s.school_id, s.name as student_name, s.roll_number
+                    FROM fee_challans fc
+                    JOIN students s ON s.id = fc.student_id
+                    WHERE fc.id = ${challanId}
+                    LIMIT 1
+                `;
+
+                if (freshRows.length === 0) {
+                    return res.status(404).json({ error: 'Challan not found.' });
+                }
+
+                const freshChallan = freshRows[0];
+
+                if (freshChallan.status === 'Cancelled') {
+                    return res.status(409).json({ error: 'Cannot record payment: Challan has been cancelled.' });
+                }
+
+                // Check if idempotency key was previously processed
+                let freshHistory = freshChallan.payment_history || [];
+                if (typeof freshHistory === 'string') {
+                    try { freshHistory = JSON.parse(freshHistory); } catch { freshHistory = []; }
+                }
+                if (Array.isArray(freshHistory) && idempotencyKey && freshHistory.some((entry: any) => entry.idempotencyKey === idempotencyKey)) {
+                    return res.status(200).json({ success: true, challan: freshChallan, duplicatePrevented: true });
+                }
+
+                // Balance was modified by another concurrent cashier
+                const freshDiscount = numDiscount > 0 ? numDiscount : Number(freshChallan.discount || 0);
+                const freshRemaining = Math.max(0, Number(freshChallan.total_amount) - freshDiscount - Number(freshChallan.paid_amount || 0));
+                return res.status(409).json({
+                    error: `Payment rejected: The remaining balance is now Rs. ${freshRemaining.toLocaleString()} (was Rs. ${remainingBalance.toLocaleString()}). Another payment was recorded concurrently.`,
+                    requiresOverpaymentConfirmation: true,
+                    remainingBalance: freshRemaining
+                });
+            }
 
             // Server-side audit log
             await writeServerAuditLog(
@@ -207,6 +249,11 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({ success: true, challan: updateResult[0] });
 
         } else if (action === 'cancel-challan') {
+            // P08: Only Owner and Admin may cancel challans
+            if (!isAuthorized(session, ['Owner', 'Admin'])) {
+                return res.status(403).json({ error: 'Access denied: Only Admins and Owners can cancel fee challans.' });
+            }
+
             const { challanId } = body;
             if (!challanId) {
                 return res.status(400).json({ error: 'Challan ID is required.' });
@@ -227,6 +274,21 @@ export default async function handler(req: any, res: any) {
             const challan = challanRows[0];
             if (session.role !== 'Owner' && session.schoolId && challan.school_id !== session.schoolId) {
                 return res.status(403).json({ error: 'Unauthorized: This challan belongs to another school.' });
+            }
+
+            // P08: Safe cancel guard: refuse if paid_amount > 0, discount > 0, or payment_history is non-empty
+            let history = challan.payment_history || [];
+            if (typeof history === 'string') {
+                try { history = JSON.parse(history); } catch { history = []; }
+            }
+            const hasHistory = Array.isArray(history) && history.length > 0;
+            const paidAmt = Number(challan.paid_amount) || 0;
+            const discountAmt = Number(challan.discount) || 0;
+
+            if (paidAmt > 0 || discountAmt > 0 || hasHistory) {
+                return res.status(409).json({
+                    error: 'Cannot cancel a challan that has payments or discounts. Remove the payments first or contact the owner.'
+                });
             }
 
             await sql`UPDATE fee_challans SET status = 'Cancelled' WHERE id = ${challanId}`;
@@ -264,40 +326,49 @@ export default async function handler(req: any, res: any) {
 
             const tuitionHead = headRows[0];
 
-            for (const sId of studentIds) {
-                const sRows = await sql`SELECT id, school_id, fee_structure FROM students WHERE id = ${sId}`;
-                if (sRows.length > 0) {
-                    const student = sRows[0];
-                    if (session.role !== 'Owner' && session.schoolId && student.school_id !== session.schoolId) {
-                        continue;
-                    }
+            // P08: Atomic batch tuition increase with sql.transaction
+            const students = await sql`
+                SELECT id, school_id, fee_structure 
+                FROM students 
+                WHERE id = ANY(${studentIds})
+                AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
+            `;
 
-                    let structure = student.fee_structure || [];
-                    if (typeof structure === 'string') {
-                        try { structure = JSON.parse(structure); } catch { structure = []; }
-                    }
-                    if (!Array.isArray(structure)) structure = [];
-
-                    const idx = structure.findIndex((item: any) => item.feeHeadId === tuitionHead.id);
-                    if (idx !== -1) {
-                        structure[idx].amount = (Number(structure[idx].amount) || 0) + incAmount;
-                    } else {
-                        structure.push({ feeHeadId: tuitionHead.id, amount: Number(tuitionHead.default_amount) + incAmount });
-                    }
-
-                    await sql`UPDATE students SET fee_structure = ${JSON.stringify(structure)} WHERE id = ${sId}`;
+            const updateQueries: any[] = [];
+            for (const student of students) {
+                let structure = student.fee_structure || [];
+                if (typeof structure === 'string') {
+                    try { structure = JSON.parse(structure); } catch { structure = []; }
                 }
+                if (!Array.isArray(structure)) structure = [];
+
+                const idx = structure.findIndex((item: any) => item.feeHeadId === tuitionHead.id);
+                if (idx !== -1) {
+                    structure[idx].amount = (Number(structure[idx].amount) || 0) + incAmount;
+                } else {
+                    structure.push({ feeHeadId: tuitionHead.id, amount: Number(tuitionHead.default_amount) + incAmount });
+                }
+
+                updateQueries.push(sql`
+                    UPDATE students 
+                    SET fee_structure = ${JSON.stringify(structure)}::jsonb 
+                    WHERE id = ${student.id}
+                `);
+            }
+
+            if (updateQueries.length > 0) {
+                await sql.transaction(updateQueries);
             }
 
             await writeServerAuditLog(
                 sql,
                 session,
                 'Fee Adjustment',
-                `Adjusted tuition fee by Rs. ${incAmount.toLocaleString()} for ${studentIds.length} student(s)`,
+                `Adjusted tuition fee by Rs. ${incAmount.toLocaleString()} for ${students.length} student(s)`,
                 effectiveSchoolId
             );
 
-            return res.status(200).json({ success: true, count: studentIds.length });
+            return res.status(200).json({ success: true, count: students.length });
 
         } else {
             return res.status(400).json({ error: `Unknown action: ${action}` });

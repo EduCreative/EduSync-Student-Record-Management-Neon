@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { useData } from '../../context/DataContext';
-import { useAuth } from '../../context/AuthContext';
 import { ActiveView } from '../layout/Layout';
 import Avatar from '../common/Avatar';
 import StatCard from '../common/StatCard';
@@ -22,7 +21,6 @@ type DetailsTab = 'students' | 'teachers' | 'classes';
 
 const SchoolDetailsPage: React.FC<SchoolDetailsPageProps> = ({ schoolId, setActiveView }) => {
     const { getSchoolById, students, classes, users, fees } = useData();
-    const { switchSchoolContext } = useAuth();
     const [activeTab, setActiveTab] = useState<DetailsTab>('students');
     
     const school = useMemo(() => getSchoolById(schoolId), [schoolId, getSchoolById]);
@@ -53,7 +51,6 @@ const SchoolDetailsPage: React.FC<SchoolDetailsPageProps> = ({ schoolId, setActi
     }
     
     const handleViewAsAdmin = () => {
-        switchSchoolContext(school.id);
         setActiveView({ view: 'dashboard' });
     };
 

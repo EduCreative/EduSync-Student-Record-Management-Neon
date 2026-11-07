@@ -37,24 +37,27 @@ export default async function handler(req: any, res: any) {
             schoolsData = await sql`SELECT id, name, address, logo_url FROM schools WHERE id = ${effectiveSchoolId}`;
         }
 
-        // 2. Fetch Classes, Subjects, Exams, Fee Heads, Events
+        // 2. Fetch Classes, Branches, Subjects, Exams, Fee Heads, Events
         let classesData: any[] = [];
+        let branchesData: any[] = [];
         let subjectsData: any[] = [];
         let examsData: any[] = [];
         let feeHeadsData: any[] = [];
         let eventsData: any[] = [];
 
         if (isOwner && !effectiveSchoolId) {
-            [classesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
-                sql`SELECT id, name, section, teacher_id, school_id, sort_order FROM classes ORDER BY sort_order ASC, name ASC`,
+            [classesData, branchesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
+                sql`SELECT id, name, section, teacher_id, school_id, branch_id, sort_order FROM classes ORDER BY sort_order ASC, name ASC`,
+                sql`SELECT id, name, address, school_id FROM branches ORDER BY name ASC`,
                 sql`SELECT id, name, school_id FROM subjects ORDER BY name ASC`,
                 sql`SELECT id, name, school_id FROM exams ORDER BY name ASC`,
                 sql`SELECT id, name, default_amount, school_id FROM fee_heads ORDER BY name ASC`,
                 sql`SELECT id, title, description, date, category, school_id FROM school_events ORDER BY date ASC`,
             ]);
         } else if (effectiveSchoolId) {
-            [classesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
-                sql`SELECT id, name, section, teacher_id, school_id, sort_order FROM classes WHERE school_id = ${effectiveSchoolId} ORDER BY sort_order ASC, name ASC`,
+            [classesData, branchesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
+                sql`SELECT id, name, section, teacher_id, school_id, branch_id, sort_order FROM classes WHERE school_id = ${effectiveSchoolId} ORDER BY sort_order ASC, name ASC`,
+                sql`SELECT id, name, address, school_id FROM branches WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
                 sql`SELECT id, name, school_id FROM subjects WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
                 sql`SELECT id, name, school_id FROM exams WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
                 sql`SELECT id, name, default_amount, school_id FROM fee_heads WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
@@ -271,6 +274,7 @@ export default async function handler(req: any, res: any) {
         // Transform results into camelCase and enforce proper numbers
         const transformedSchools = toCamelCase(schoolsData);
         const transformedClasses = toCamelCase(classesData);
+        const transformedBranches = toCamelCase(branchesData);
         const transformedSubjects = toCamelCase(subjectsData);
         const transformedExams = toCamelCase(examsData);
         const transformedEvents = toCamelCase(eventsData);
@@ -334,6 +338,7 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({
             schools: transformedSchools,
             classes: transformedClasses,
+            branches: transformedBranches,
             subjects: transformedSubjects,
             exams: transformedExams,
             feeHeads: transformedFeeHeads,
