@@ -44,7 +44,16 @@ const Avatar: FC<AvatarProps> = ({ user, student, className = 'h-10 w-10' }) => 
     return (
         <div className={`relative rounded-full flex items-center justify-center shrink-0 ${className}`}>
             {avatarUrl ? (
-                <img className="object-cover w-full h-full rounded-full" src={avatarUrl} alt={name} />
+                <img 
+                    className="object-cover w-full h-full rounded-full" 
+                    src={avatarUrl} 
+                    alt={name} 
+                    loading="lazy"
+                    onError={(e) => {
+                        // Fallback to hidden image so initials can show if photo cannot load
+                        (e.currentTarget as HTMLElement).style.display = 'none';
+                    }}
+                />
             ) : (
                 <div className={`w-full h-full rounded-full flex items-center justify-center text-white font-bold ${colorForName(name)}`}>
                     <span className="text-sm">{getInitials(name)}</span>

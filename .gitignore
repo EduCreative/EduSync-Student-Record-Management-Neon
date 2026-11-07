@@ -35,3 +35,4 @@ dist-ssr
 .vercel
 cookies.txt
 *.zip
+backups/

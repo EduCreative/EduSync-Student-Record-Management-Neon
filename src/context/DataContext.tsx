@@ -1,22 +1,13 @@
 
-import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { School, User, UserRole, Class, Student, Attendance, FeeChallan, Result, ActivityLog, FeeHead, SchoolEvent, Subject, Exam, StudentLedger, Branch } from '../types';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
-import { driveService } from '../utils/googleDriveService';
 import { toCamelCase } from '../utils/caseConverter';
 
 interface SyncProgress {
     percentage: number;
     status: string;
-}
-
-interface AutoBackupSettings {
-    enabled: boolean;
-    frequency: 'weekly' | 'monthly';
-    lastBackup: string | null;
-    lastBackupSize: string | null;
-    includePhotos: boolean;
 }
 
 interface DataContextType {
@@ -40,8 +31,6 @@ interface DataContextType {
     syncError: string | null;
     syncProgress: SyncProgress;
     operationProgress: SyncProgress;
-    autoBackupSettings: AutoBackupSettings;
-    updateAutoBackupSettings: (settings: Partial<AutoBackupSettings>) => void;
     fetchData: () => Promise<void>;
     getSchoolById: (schoolId: string) => School | undefined;
     getLedgerForStudent: (studentId: string) => StudentLedger | undefined;
@@ -83,9 +72,7 @@ interface DataContextType {
     bulkAddStudents: (students: Omit<Student, 'id' | 'status'>[]) => Promise<void>;
     bulkAddUsers: (users: (Omit<User, 'id'> & { password?: string })[]) => Promise<void>;
     bulkAddClasses: (classes: Omit<Class, 'id'>[]) => Promise<void>;
-    backupData: () => Promise<void>;
-    backupToDrive: (silent?: boolean) => Promise<void>;
-    restoreData: (backupFile: File) => Promise<void>;
+    downloadFullBackup: () => Promise<void>;
     promoteAllStudents: (mappings: Record<string, string | 'graduate'>, exemptedStudentIds: string[]) => Promise<void>;
     reactivateGraduatedStudents: (options?: { studentIds?: string[]; targetClassId?: string; restoreFromHistory?: boolean }) => Promise<number>;
     revertLastPromotion: () => Promise<boolean>;
@@ -117,17 +104,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [syncProgress, setSyncProgress] = useState<SyncProgress>({ percentage: 0, status: '' });
     const [operationProgress, setOperationProgress] = useState<SyncProgress>({ percentage: 0, status: '' });
     
-    const [autoBackupSettings, setAutoBackupSettings] = useState<AutoBackupSettings>(() => {
-        const saved = localStorage.getItem('edusync_autobackup');
-        return saved ? JSON.parse(saved) : { 
-            enabled: false, 
-            frequency: 'weekly', 
-            lastBackup: null, 
-            lastBackupSize: null,
-            includePhotos: true 
-        };
-    });
-
     const [schools, setSchools] = useState<School[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [classes, setClasses] = useState<Class[]>([]);
@@ -142,78 +118,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [logs, setLogs] = useState<ActivityLog[]>([]);
     const [feeHeads, setFeeHeads] = useState<FeeHead[]>([]);
     const [events, setEvents] = useState<SchoolEvent[]>([]);
-
-    const isBackingUpRef = useRef(false);
-
-    const updateAutoBackupSettings = useCallback((newSettings: Partial<AutoBackupSettings>) => {
-        setAutoBackupSettings(prev => {
-            const updated = { ...prev, ...newSettings };
-            localStorage.setItem('edusync_autobackup', JSON.stringify(updated));
-            return updated;
-        });
-    }, []);
-
-    const backupToDrive = useCallback(async (silent = false) => {
-        if (isBackingUpRef.current) return;
-        isBackingUpRef.current = true;
-
-        if (!silent) setOperationProgress({ percentage: 10, status: 'Preparing selective data backup...' });
-        
-        try {
-            // Conditionally strip photos to save memory if requested
-            const finalSchools = autoBackupSettings.includePhotos ? schools : schools.map(s => { const { logoUrl: _logo, ...rest } = s; return rest as School; });
-            const finalUsers = autoBackupSettings.includePhotos ? users : users.map(u => { const { avatarUrl: _avatar, ...rest } = u; return rest as User; });
-            const finalStudents = autoBackupSettings.includePhotos ? students : students.map(s => { const { avatarUrl: _avatar, ...rest } = s; return rest as Student; });
-
-            const payload = {
-                schools: finalSchools, 
-                users: finalUsers, 
-                classes, 
-                students: finalStudents, 
-                fees, 
-                attendance, 
-                results, 
-                logs, 
-                feeHeads, 
-                events, 
-                subjects, 
-                exams
-            };
-
-            const jsonString = JSON.stringify(payload, null, 2);
-            // Calculate size in MB
-            const sizeInMB = (new Blob([jsonString]).size / (1024 * 1024)).toFixed(2) + ' MB';
-            
-            const fileName = `edusync_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-            
-            if (!silent) setOperationProgress({ percentage: 40, status: `Handshaking with Google Drive... (${sizeInMB})` });
-            
-            await driveService.uploadFile(fileName, jsonString);
-            
-            updateAutoBackupSettings({ 
-                lastBackup: new Date().toISOString(),
-                lastBackupSize: sizeInMB
-            });
-            
-            if (!silent) {
-                setOperationProgress({ percentage: 100, status: 'Snapshot secured!' });
-                showToast('Success', 'School database successfully backed up to your cloud.', 'success');
-            }
-        } catch (err: any) {
-            console.error("Backup to drive failed:", err);
-            if (!silent) {
-                showToast('Cloud Error', err.message || 'Drive communication failed.', 'error');
-                setOperationProgress({ percentage: 0, status: '' });
-            } else if (err.message.includes('Identity') || err.message.includes('Token') || err.message.includes('expired')) {
-                showToast('Backup Authorization Needed', 'Automatic backup is due. Please visit Settings to authorize Google Drive.', 'info');
-            }
-        } finally {
-            isBackingUpRef.current = false;
-            if (!silent) {
-                setTimeout(() => setOperationProgress({ percentage: 0, status: '' }), 3000);
-            }
-        }
-    }, [schools, users, classes, students, fees, attendance, results, logs, feeHeads, events, subjects, exams, showToast, updateAutoBackupSettings, autoBackupSettings.includePhotos]);
 
     const fetchData = useCallback(async () => {
         if (!user) {
@@ -287,30 +191,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [user, activeSchoolId, isInitialLoad, schools, users, classes, fees, attendance, results, logs, feeHeads, events, subjects, exams]);
 
     useEffect(() => { fetchData(); }, [user, activeSchoolId]);
-
-    const lastCheckRef = useRef(0);
-    useEffect(() => {
-        if (!user || !autoBackupSettings.enabled) return;
-        if (loading || isInitialLoad) return;
-
-        const checkBackup = () => {
-            const now = Date.now();
-            if (now - lastCheckRef.current < 3600000) return;
-            lastCheckRef.current = now;
-
-            const last = autoBackupSettings.lastBackup ? new Date(autoBackupSettings.lastBackup) : new Date(0);
-            const diffDays = Math.floor((now - last.getTime()) / (1000 * 3600 * 24));
-            const threshold = autoBackupSettings.frequency === 'weekly' ? 7 : 30;
-
-            if (diffDays >= threshold) {
-                backupToDrive(true);
-            }
-        };
-
-        checkBackup();
-        const interval = setInterval(checkBackup, 3600000);
-        return () => clearInterval(interval);
-    }, [user, autoBackupSettings, loading, isInitialLoad, backupToDrive]);
 
     const apiWrite = useCallback(async (endpoint: string, payload: any): Promise<any> => {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -924,56 +804,103 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         showToast('Success', `Updated tuition fees for ${studentIds.length} students.`, 'success');
     };
 
-    const backupData = async () => {
-        const data = { 
-            schools, 
-            users, 
-            classes, 
-            branches,
-            students, 
-            fees, 
-            attendance, 
-            results, 
-            logs, 
-            feeHeads, 
-            events, 
-            subjects, 
-            exams 
-        };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `edusync_backup_${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-    };
+    const BACKUP_TABLES = [
+        'schools',
+        'branches',
+        'profiles',
+        'classes',
+        'subjects',
+        'exams',
+        'fee_heads',
+        'students',
+        'fee_challans',
+        'attendance',
+        'results',
+        'activity_logs',
+        'school_events'
+    ];
 
-    const restoreData = async (file: File) => {
-        if (!user) return;
-        const isOwnerGlobalView = user.role === UserRole.Owner && !activeSchoolId;
-        const effectiveSchoolId = user.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user.schoolId;
-
+    const downloadFullBackup = useCallback(async (): Promise<void> => {
+        setOperationProgress({ percentage: 5, status: 'Initializing full database backup stream...' });
         try {
-            const text = await file.text();
-            const rawData = JSON.parse(text);
-            
-            setOperationProgress({ percentage: 20, status: 'Restoring database in server atomic transaction...' });
-            await apiWrite('/api/write/restore', {
-                backupData: rawData,
-                targetSchoolId: isOwnerGlobalView ? null : effectiveSchoolId
-            });
+            const tablesData: Record<string, any[]> = {};
+            const countsData: Record<string, number> = {};
+            const totalTables = BACKUP_TABLES.length;
 
-            setOperationProgress({ percentage: 100, status: 'Reconstruction complete!' });
-            showToast('Success', 'Database restoration successfully completed!', 'success');
-            await fetchData();
-        } catch (error: any) {
-            console.error('Restore Crash:', error);
-            showToast('Restore Failed', error.message || 'The snapshot file is invalid.', 'error');
+            for (let tIdx = 0; tIdx < totalTables; tIdx++) {
+                const tableName = BACKUP_TABLES[tIdx];
+                const tableRows: any[] = [];
+                let cursor: string | null = null;
+                let hasMore = true;
+
+                const basePct = 5 + Math.round((tIdx / totalTables) * 85);
+                setOperationProgress({ 
+                    percentage: basePct, 
+                    status: `Streaming table "${tableName}" (${tIdx + 1}/${totalTables})...` 
+                });
+
+                while (hasMore) {
+                    const chunkUrl: string = cursor 
+                        ? `/api/backup?table=${encodeURIComponent(tableName)}&cursor=${encodeURIComponent(cursor)}`
+                        : `/api/backup?table=${encodeURIComponent(tableName)}`;
+                    
+                    const chunkRes: Response = await fetch(chunkUrl, { credentials: 'include' });
+                    if (!chunkRes.ok) {
+                        const err: any = await chunkRes.json().catch(() => ({ error: 'Backup chunk stream failed' }));
+                        throw new Error(err.error || `Failed to fetch backup for table ${tableName}`);
+                    }
+
+                    const chunkData: any = await chunkRes.json();
+                    if (Array.isArray(chunkData.rows)) {
+                        tableRows.push(...chunkData.rows);
+                    }
+
+                    cursor = chunkData.nextCursor;
+                    if (!cursor) {
+                        hasMore = false;
+                    }
+                }
+
+                tablesData[tableName] = tableRows;
+                countsData[tableName] = tableRows.length;
+            }
+
+            setOperationProgress({ percentage: 95, status: 'Packaging JSON backup archive...' });
+
+            const backupPayload = {
+                version: '3.38.0',
+                createdAt: new Date().toISOString(),
+                tables: tablesData,
+                counts: countsData
+            };
+
+            const jsonString = JSON.stringify(backupPayload, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+
+            const now = new Date();
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const timestampStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
+            a.href = url;
+            a.download = `edusync-${timestampStr}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            localStorage.setItem('edusync_last_backup_download', now.toISOString());
+            setOperationProgress({ percentage: 100, status: 'Backup downloaded successfully!' });
+            showToast('Success', 'Full database backup successfully downloaded to your device.', 'success');
+
+            setTimeout(() => setOperationProgress({ percentage: 0, status: '' }), 3000);
+        } catch (err: any) {
+            console.error('Download full backup failed:', err);
+            showToast('Backup Error', err.message || 'Failed to download database backup.', 'error');
             setOperationProgress({ percentage: 0, status: '' });
-        } finally {
-            setTimeout(() => setOperationProgress({ percentage: 0, status: '' }), 4000);
         }
-    };
+    }, [showToast]);
 
     const sendFeeReminders = async (challanIds: string[]) => {
         showToast('Success', `Broadcasted ${challanIds.length} reminders to parent dashboard.`, 'success');
@@ -984,9 +911,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const value: DataContextType = {
         schools, users, classes, branches, subjects, exams, students, attendance, fees, ledger, results, logs, feeHeads, events,
-        loading, isInitialLoad, lastSyncTime, syncError, syncProgress, operationProgress, 
-        autoBackupSettings, updateAutoBackupSettings,
-        fetchData, backupToDrive,
+        loading, isInitialLoad, lastSyncTime, syncError, syncProgress, operationProgress,
+        fetchData, downloadFullBackup,
         getSchoolById: (id) => schools.find(s => s.id === id),
         getLedgerForStudent,
         updateUser, deleteUser, addUserByAdmin, addStudent, updateStudent, deleteStudent,
@@ -994,7 +920,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         addExam, updateExam, deleteExam, setAttendance, recordFeePayment, updateFeePayment, cancelChallan,
         generateChallansForMonth, deleteChallansForMonth, addSchool, updateSchool, deleteSchool,
         addEvent, updateEvent, deleteEvent, bulkAddStudents, bulkAddUsers, bulkAddClasses,
-        backupData, restoreData, promoteAllStudents, reactivateGraduatedStudents, revertLastPromotion, increaseTuitionFees, sendFeeReminders, bulkUpdateClassOrder, addFeeHead, updateFeeHead, deleteFeeHead,
+        promoteAllStudents, reactivateGraduatedStudents, revertLastPromotion, increaseTuitionFees, sendFeeReminders, bulkUpdateClassOrder, addFeeHead, updateFeeHead, deleteFeeHead,
         issueLeavingCertificate, saveResults, addLog, loadAttendanceRange
     };
 

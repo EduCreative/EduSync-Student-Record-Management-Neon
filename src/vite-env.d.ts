@@ -6,8 +6,6 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;
   readonly VITE_SUPABASE_ANON_KEY: string;
-  // FIX: Added VITE_GOOGLE_CLIENT_ID to satisfy TypeScript checks in src/utils/googleDriveService.ts
-  readonly VITE_GOOGLE_CLIENT_ID: string;
 
   // Standard Vite environment variables
   readonly BASE_URL: string;

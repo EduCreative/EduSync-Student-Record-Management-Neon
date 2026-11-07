@@ -70,20 +70,29 @@ export default async function handler(req: any, res: any) {
         if (isOwner) {
             usersData = effectiveSchoolId
                 ? await sql`
-                    SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    SELECT id, school_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                     FROM profiles 
                     WHERE school_id = ${effectiveSchoolId} OR school_id IS NULL
                     ORDER BY name ASC
                   `
                 : await sql`
-                    SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    SELECT id, school_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                     FROM profiles 
                     ORDER BY name ASC
                   `;
         } else if (isAdmin || isAccountant) {
             // Admins & Accountants see users in their school except Owner
             usersData = await sql`
-                SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                SELECT id, school_id, name, email, role, status, 
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                       length(avatar_url) AS avatar_len, 
+                       child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                 FROM profiles 
                 WHERE (school_id = ${effectiveSchoolId} OR school_id IS NULL) AND role != 'Owner'
                 ORDER BY name ASC
@@ -91,7 +100,10 @@ export default async function handler(req: any, res: any) {
         } else if (isTeacher) {
             // Teachers only see colleagues in their school
             usersData = await sql`
-                SELECT id, school_id, name, email, role, status, avatar_url, last_login 
+                SELECT id, school_id, name, email, role, status, 
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                       length(avatar_url) AS avatar_len, 
+                       last_login 
                 FROM profiles 
                 WHERE school_id = ${effectiveSchoolId} AND role IN ('Admin', 'Accountant', 'Teacher')
                 ORDER BY name ASC
@@ -107,8 +119,29 @@ export default async function handler(req: any, res: any) {
 
         if (isOwner || isAdmin || isAccountant || isTeacher) {
             studentsData = effectiveSchoolId
-                ? await sql`SELECT * FROM students WHERE school_id = ${effectiveSchoolId} ORDER BY roll_number ASC, name ASC`
-                : await sql`SELECT * FROM students ORDER BY roll_number ASC, name ASC`;
+                ? await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    WHERE school_id = ${effectiveSchoolId} 
+                    ORDER BY roll_number ASC, name ASC
+                  `
+                : await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    ORDER BY roll_number ASC, name ASC
+                  `;
             
             // For teachers, omit sensitive father_cnic
             if (isTeacher) {
@@ -133,7 +166,18 @@ export default async function handler(req: any, res: any) {
             }
 
             if (childIds.length > 0) {
-                studentsData = await sql`SELECT * FROM students WHERE id = ANY(${childIds}) ORDER BY name ASC`;
+                studentsData = await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    WHERE id = ANY(${childIds}) 
+                    ORDER BY name ASC
+                `;
             } else {
                 studentsData = [];
             }
@@ -141,7 +185,18 @@ export default async function handler(req: any, res: any) {
 
         } else if (isStudent) {
             // Find student profile matching logged in userId
-            studentsData = await sql`SELECT * FROM students WHERE user_id = ${userId} LIMIT 1`;
+            studentsData = await sql`
+                SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                       father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                       secondary_contact_number, address, status, gender, date_of_leaving,
+                       reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                       fee_structure, admitted_class, caste, last_school_attended,
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                       length(avatar_url) AS avatar_len
+                FROM students 
+                WHERE user_id = ${userId} 
+                LIMIT 1
+            `;
             targetStudentIds = studentsData.map((s: any) => s.id);
         }
 
@@ -240,20 +295,21 @@ export default async function handler(req: any, res: any) {
             }
 
             // Attendance (A14: Default attendance to last 45 days, support ?attendanceFrom=&attendanceTo=)
+            // P17: Omit school_id as client never uses attendance.schoolId
             const attendanceFrom = req.query?.attendanceFrom;
             const attendanceTo = req.query?.attendanceTo;
 
             let attQuery;
             if (attendanceFrom === 'all') {
-                attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds})`;
+                attQuery = sql`SELECT id, student_id, date, status FROM attendance WHERE student_id = ANY(${targetStudentIds})`;
             } else if (attendanceFrom && attendanceTo) {
-                attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom} AND date <= ${attendanceTo}`;
+                attQuery = sql`SELECT id, student_id, date, status FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom} AND date <= ${attendanceTo}`;
             } else if (attendanceFrom) {
-                attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom}`;
+                attQuery = sql`SELECT id, student_id, date, status FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom}`;
             } else {
                 // Default: Last 45 days
                 const defaultAttendanceFrom = getKarachiDateOffset(-45);
-                attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${defaultAttendanceFrom}`;
+                attQuery = sql`SELECT id, student_id, date, status FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${defaultAttendanceFrom}`;
             }
 
             const resQuery = sql`SELECT id, student_id, exam, subject, marks, total_marks, school_id FROM results WHERE student_id = ANY(${targetStudentIds})`;
@@ -284,10 +340,14 @@ export default async function handler(req: any, res: any) {
             defaultAmount: Number(fh.defaultAmount || 0)
         }));
 
-        const transformedUsers = toCamelCase(usersData);
+        const transformedUsers = toCamelCase(usersData).map((u: any) => ({
+            ...u,
+            avatarUrl: u.hasAvatar ? `/api/photo?kind=user&id=${u.id}&v=${u.avatarLen || 0}` : null
+        }));
 
         const transformedStudents = toCamelCase(studentsData).map((s: any) => ({
             ...s,
+            avatarUrl: s.hasAvatar ? `/api/photo?kind=student&id=${s.id}&v=${s.avatarLen || 0}` : null,
             openingBalance: Number(s.openingBalance || 0),
             feeStructure: (s.feeStructure || []).map((item: any) => ({
                 ...item,
@@ -335,7 +395,7 @@ export default async function handler(req: any, res: any) {
             balance: Number(l.balance || 0),
         }));
 
-        return res.status(200).json({
+        const payload = {
             schools: transformedSchools,
             classes: transformedClasses,
             branches: transformedBranches,
@@ -350,7 +410,17 @@ export default async function handler(req: any, res: any) {
             results: transformedResults,
             logs: transformedLogs,
             ledger: transformedLedger
-        });
+        };
+
+        const jsonString = JSON.stringify(payload);
+        const payloadBytes = Buffer.byteLength(jsonString, 'utf8');
+        res.setHeader('X-Payload-Bytes', payloadBytes.toString());
+        if (payloadBytes > 3 * 1024 * 1024) {
+            console.warn(`[WARN] /api/data uncompressed payload exceeded 3 MB: ${(payloadBytes / (1024 * 1024)).toFixed(2)} MB (${payloadBytes} bytes)`);
+        }
+
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(200).send(jsonString);
 
     } catch (err: any) {
         console.error("Data read API error:", err);

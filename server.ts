@@ -1,4 +1,5 @@
 import express from 'express';
+import compression from 'compression';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -12,6 +13,9 @@ async function startServer() {
     // Port 3000 required by AI Studio runtime environment proxy
     const port = Number(process.env.PORT) || 3000;
     const isProd = process.env.NODE_ENV === 'production';
+
+    // Enable gzip compression for all responses
+    app.use(compression());
 
     // Parse JSON bodies (with adequate limit for bulk backup/import data)
     app.use(express.json({ limit: '50mb' }));

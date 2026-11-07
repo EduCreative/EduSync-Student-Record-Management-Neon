@@ -28,6 +28,9 @@ export default async function handler(req: any, res: any) {
 
             const effectiveSchoolId = session.role === 'Owner' && student.schoolId ? student.schoolId : session.schoolId;
             const id = crypto.randomUUID();
+            const avatarUrlToInsert = (student.avatarUrl && typeof student.avatarUrl === 'string' && student.avatarUrl.startsWith('data:'))
+                ? student.avatarUrl
+                : null;
 
             try {
                 await sql`
@@ -46,7 +49,7 @@ export default async function handler(req: any, res: any) {
                         ${student.religion || null}, ${student.caste || null}, 
                         ${student.lastSchoolAttended || null}, ${Number(student.openingBalance) || 0}, 
                         ${student.userId || null}, ${JSON.stringify(student.feeStructure || [])},
-                        ${student.avatarUrl || null}
+                        ${avatarUrlToInsert}
                     )
                 `;
             } catch (err: any) {
@@ -97,7 +100,12 @@ export default async function handler(req: any, res: any) {
                         address = ${student.address || null},
                         status = ${student.status || 'Active'},
                         gender = ${student.gender || 'Male'},
-                        avatar_url = ${student.avatarUrl || null},
+                        avatar_url = CASE 
+                            WHEN ${Boolean(student.avatarUrl && typeof student.avatarUrl === 'string' && student.avatarUrl.startsWith('/api/photo'))} THEN avatar_url
+                            WHEN ${Boolean(student.avatarUrl && typeof student.avatarUrl === 'string' && student.avatarUrl.startsWith('data:'))} THEN ${student.avatarUrl}
+                            WHEN ${student.avatarUrl === null || student.avatarUrl === ''} THEN NULL
+                            ELSE avatar_url
+                        END,
                         admitted_class = ${student.admittedClass || null},
                         gr_number = ${student.grNumber || null},
                         religion = ${student.religion || null},

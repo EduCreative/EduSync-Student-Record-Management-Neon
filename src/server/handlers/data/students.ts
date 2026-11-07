@@ -24,8 +24,29 @@ export default async function handler(req: any, res: any) {
 
         if (role === 'Owner' || role === 'Admin' || role === 'Accountant' || role === 'Teacher') {
             students = effectiveSchoolId
-                ? await sql`SELECT * FROM students WHERE school_id = ${effectiveSchoolId} ORDER BY roll_number ASC, name ASC`
-                : await sql`SELECT * FROM students ORDER BY roll_number ASC, name ASC`;
+                ? await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    WHERE school_id = ${effectiveSchoolId} 
+                    ORDER BY roll_number ASC, name ASC
+                  `
+                : await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    ORDER BY roll_number ASC, name ASC
+                  `;
 
             // Mask/omit sensitive father_cnic for teachers
             if (role === 'Teacher') {
@@ -45,14 +66,37 @@ export default async function handler(req: any, res: any) {
                 }
             }
             students = childIds.length > 0 
-                ? await sql`SELECT * FROM students WHERE id = ANY(${childIds}) ORDER BY name ASC`
+                ? await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    WHERE id = ANY(${childIds}) 
+                    ORDER BY name ASC
+                  `
                 : [];
         } else if (role === 'Student') {
-            students = await sql`SELECT * FROM students WHERE user_id = ${userId} LIMIT 1`;
+            students = await sql`
+                SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                       father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                       secondary_contact_number, address, status, gender, date_of_leaving,
+                       reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                       fee_structure, admitted_class, caste, last_school_attended,
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                       length(avatar_url) AS avatar_len
+                FROM students 
+                WHERE user_id = ${userId} 
+                LIMIT 1
+            `;
         }
 
         const transformed = toCamelCase(students).map((s: any) => ({
             ...s,
+            avatarUrl: s.hasAvatar ? `/api/photo?kind=student&id=${s.id}&v=${s.avatarLen || 0}` : null,
             openingBalance: Number(s.openingBalance || 0),
             feeStructure: (s.feeStructure || []).map((item: any) => ({
                 ...item,

@@ -27,19 +27,28 @@ export default async function handler(req: any, res: any) {
             const effectiveSchoolId = requestedSchoolId || null;
             users = effectiveSchoolId
                 ? await sql`
-                    SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    SELECT id, school_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                     FROM profiles 
                     WHERE school_id = ${effectiveSchoolId} OR school_id IS NULL
                     ORDER BY name ASC
                   `
                 : await sql`
-                    SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    SELECT id, school_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                     FROM profiles 
                     ORDER BY name ASC
                   `;
         } else if (role === 'Admin' || role === 'Accountant') {
             users = await sql`
-                SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                SELECT id, school_id, name, email, role, status, 
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                       length(avatar_url) AS avatar_len, 
+                       child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                 FROM profiles 
                 WHERE (school_id = ${schoolId} OR school_id IS NULL) AND role != 'Owner'
                 ORDER BY name ASC
@@ -47,14 +56,20 @@ export default async function handler(req: any, res: any) {
         } else if (role === 'Teacher') {
             // Teachers only see colleagues in their school
             users = await sql`
-                SELECT id, school_id, name, email, role, status, avatar_url, last_login 
+                SELECT id, school_id, name, email, role, status, 
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                       length(avatar_url) AS avatar_len, 
+                       last_login 
                 FROM profiles 
                 WHERE school_id = ${schoolId} AND role IN ('Admin', 'Accountant', 'Teacher')
                 ORDER BY name ASC
             `;
         }
 
-        const transformed = toCamelCase(users);
+        const transformed = toCamelCase(users).map((u: any) => ({
+            ...u,
+            avatarUrl: u.hasAvatar ? `/api/photo?kind=user&id=${u.id}&v=${u.avatarLen || 0}` : null
+        }));
         return res.status(200).json({ users: transformed });
     } catch (err: any) {
         console.error("Users read API error:", err);

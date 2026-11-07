@@ -43,11 +43,14 @@ export default async function handler(req: any, res: any) {
             const saltRounds = 10;
             const hashedPassword = await bcrypt.hash(password, saltRounds);
             const id = crypto.randomUUID();
+            const avatarUrlToInsert = (avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('data:'))
+                ? avatarUrl
+                : null;
 
             try {
                 await sql`
                     INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url)
-                    VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, 'Active', ${avatarUrl || null})
+                    VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, 'Active', ${avatarUrlToInsert})
                 `;
             } catch (err: any) {
                 if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('profiles_email_key')) {
@@ -92,7 +95,14 @@ export default async function handler(req: any, res: any) {
 
             await sql`
                 UPDATE profiles 
-                SET name = ${name}, avatar_url = ${avatarUrl || null}, status = ${status || 'Active'}
+                SET name = ${name}, 
+                    avatar_url = CASE 
+                        WHEN ${Boolean(avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('/api/photo'))} THEN avatar_url
+                        WHEN ${Boolean(avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('data:'))} THEN ${avatarUrl}
+                        WHEN ${avatarUrl === null || avatarUrl === ''} THEN NULL
+                        ELSE avatar_url
+                    END,
+                    status = ${status || 'Active'}
                 WHERE id = ${id}
             `;
 

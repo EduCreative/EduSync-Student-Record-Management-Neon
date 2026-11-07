@@ -1,7 +1,7 @@
 {
-  "version": "3.37.0",
-  "releaseDate": "2026-11-06",
+  "version": "3.38.0",
+  "releaseDate": "2026-11-07",
   "changelog": [
-    "Phase E (P14-P16): Single-school architecture, first-run setup script, and campus branches. Implemented interactive CLI setup script (npm run setup) with schema verification, bcrypt cost 12 hashing, initial tuition fee head, and schema_migrations tracking. Streamlined UI into single-school mode: Owner role is preserved with elevated full Admin access, school switcher and multi-school comparisons removed, and school mutations restricted to single-school updates. Added branches table and branch_id on classes, complete with server-side validation against orphaned class deletions, branch assignment in ClassFormModal, and branch filters in ClassManagementPage and StudentManagementPage."
+    "Phase F (P17-P21): Data size optimization, dedicated avatar streaming, and reliable database backup/restore. Added Express gzip compression middleware and uncompressed X-Payload-Bytes payload monitoring on /api/data with warning threshold. Extracted photo blobs from bulk /api/data payload into lazy-loaded /api/photo endpoint with role-based scoping and ETag caching. Added benchmark load testing CLI tool (npm run load-test) to measure throughput and response sizes against an isolated throwaway database. Implemented production-grade CLI backup (npm run backup) with keyset pagination and restore (npm run restore) with foreign key topological dependency sort and atomic transaction rollback. Added Owner-facing in-app 'Download Full Backup' stream and removed legacy Google Drive backup code."
   ]
 }

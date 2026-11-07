@@ -1,6 +1,36 @@
 
 # Changelog
 
+## [3.38.0] - 2026-11-07
+
+### Phase F: Data Size Optimization & Reliable Backups
+- **P17 (Express Gzip Compression & Payload Monitoring)**:
+  - Installed `compression` middleware in `server.ts` and `src/server/index.ts` mounted as the primary middleware, enabling transparent gzip compression for all JSON responses.
+  - In `src/server/handlers/data/index.ts`, omitted unused `school_id` column from attendance queries to reduce redundant payload bytes.
+  - Implemented `X-Payload-Bytes` HTTP response header on `GET /api/data` calculating uncompressed byte length, with automated `console.warn` logging whenever the uncompressed payload exceeds 3 MB.
+- **P18 (Dedicated /api/photo Endpoint & Avatar Decoupling)**:
+  - Created `src/server/handlers/photo.ts` and registered route `/api/photo` in `apiRouter.ts`.
+  - Implemented role-based access scoping for photos: staff access restricted to their own school's members; parents access only their children; students access only their own photos.
+  - Decodes stored data URL/base64 avatars to raw byte buffers, responds with exact MIME content type, `Cache-Control: private, max-age=86400`, and ETag caching with 304 Not Modified support.
+  - In `data/index.ts`, `data/students.ts`, and `data/users.ts`, removed base64 `avatar_url` from SELECT queries; selected boolean `has_avatar` and `avatar_len`, generating lightweight `/api/photo?kind=...&id=...&v=...` URLs to shrink the initial `/api/data` payload by over 95%.
+  - In `src/server/handlers/write/students.ts` and `src/server/handlers/write/users.ts`, protected avatar persistence: incoming values beginning with `/api/photo` are preserved unchanged, `data:` replaces the avatar, and empty/null removes it.
+  - Updated `Avatar.tsx` with `loading="lazy"` attribute and graceful fallback to initials on image error.
+- **P19 (Benchmark Load Test Script)**:
+  - Created `scripts/load-test.ts` runnable via `npm run load-test`.
+  - Implemented strict safety guard requiring `LOAD_TEST_OK=yes` and an empty `profiles` table to prevent execution against real data.
+  - Synthetically seeds 1 school, 1 Owner, 3 branches, 30 classes, 1,500 students with ~35 KB fake base64 avatars, fee heads, 18,000 fee challans (12 months per student with realistic payment histories), 90,000 attendance records (60 days), and 2,400 exam results via batched atomic transactions.
+  - Executes authenticated benchmark against `BASE_URL/api/data`, measuring response duration, raw JSON size, gzip compressed size, compression ratio, and detailed per-key payload size breakdown. Exits non-zero if raw size exceeds 4,000,000 bytes.
+- **P20 (Full CLI Backup & Restore with Topological Sort)**:
+  - Created `scripts/backup.ts` (`npm run backup`): dynamically introspects all tables from `information_schema` (excluding `login_attempts` and `schema_migrations`), dumping all rows into timestamped `backups/edusync-YYYYMMDD-HHmmss.json` with keyset pagination (500 rows per batch) to prevent memory spikes on large tables. Added `backups/` to `.gitignore`.
+  - Created `scripts/restore.ts` (`npm run restore -- <file>`): dynamically reads foreign key constraints from `information_schema`/`pg_catalog` and computes topological dependency insertion order (detecting cycles). Enforces safety refusal if target tables are non-empty unless `--wipe` is passed with typed `"RESTORE"` confirmation. Inserts all rows inside ONE atomic `sql.transaction` and verifies per-table row counts.
+  - Updated `src/server/handlers/write/restore.ts` to instruct users to run CLI restore: `Restore is done from the command line: npm run restore -- <file>`.
+  - Registered `"backup"` and `"restore"` scripts in `package.json`.
+- **P21 (In-App "Download Full Backup" & Google Drive Code Cleanup)**:
+  - Created `/api/backup` endpoint (`src/server/handlers/data/backup.ts`) restricted to Owner with table whitelist and keyset pagination up to 3 MB per chunk.
+  - Implemented `downloadFullBackup()` in `DataContext.tsx` that streams table records chunk by chunk via `/api/backup` without relying on in-memory state, tracks progress through `operationProgress`, packages standard backup JSON format, and triggers browser file download.
+  - Updated `SettingsPage.tsx` to replace Google Drive card with "Database Backup & Recovery" card featuring "Download Full Backup" button, `localStorage` timestamp tracking, and CLI restore instructions.
+  - Deleted obsolete `src/utils/googleDriveService.ts` and removed `VITE_GOOGLE_CLIENT_ID` from `.env.example` and `src/vite-env.d.ts`.
+
 ## [3.37.0] - 2026-11-06
 
 ### Phase E: Single-School Architecture & Branches

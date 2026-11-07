@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -8,17 +8,12 @@ import Modal from '../common/Modal';
 import { UserRole, Branch } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import ImageUpload from '../common/ImageUpload';
-import { driveService, DriveFile } from '../../utils/googleDriveService';
 import IncreaseTuitionFeeModal from './IncreaseTuitionFeeModal';
-
-const CloudIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>
-);
 
 const SettingsPage: React.FC = () => {
     const { toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, sidebarMode, setSidebarMode } = useTheme();
     const { user, effectiveRole, activeSchoolId } = useAuth();
-    const { schools, classes, branches, addBranch, updateBranch, deleteBranch, backupData, backupToDrive, restoreData, updateSchool, feeHeads, addFeeHead, updateFeeHead, autoBackupSettings, updateAutoBackupSettings } = useData();
+    const { schools, classes, branches, addBranch, updateBranch, deleteBranch, downloadFullBackup, updateSchool, feeHeads, addFeeHead, updateFeeHead } = useData();
     const { showToast } = useToast();
 
     // State for School Details
@@ -35,11 +30,10 @@ const SettingsPage: React.FC = () => {
     const [branchForm, setBranchForm] = useState({ name: '', address: '' });
     const [isBranchSaving, setIsBranchSaving] = useState(false);
 
-    // Cloud Backup State
-    const [isCloudBackingUp, setIsCloudBackingUp] = useState(false);
-    const [driveBackups, setDriveBackups] = useState<DriveFile[]>([]);
-    const [isFetchingCloud, setIsFetchingCloud] = useState(false);
-    const [showCloudPicker, setShowCloudPicker] = useState(false);
+    // Backup State
+    const [lastBackupDownloaded, setLastBackupDownloaded] = useState<string | null>(() => {
+        return localStorage.getItem('edusync_last_backup_download');
+    });
 
     // State for Tuition Fee Manager
     const [isTuitionFeeModalOpen, setIsTuitionFeeModalOpen] = useState(false);
@@ -56,14 +50,6 @@ const SettingsPage: React.FC = () => {
             setDefaultTuitionFee(tuitionFeeHead?.defaultAmount || 0);
         }
     }, [school, feeHeads, effectiveSchoolId]);
-    
-    const nextBackupDate = useMemo(() => {
-        if (!autoBackupSettings.lastBackup) return "Ready for first run";
-        const last = new Date(autoBackupSettings.lastBackup);
-        const days = autoBackupSettings.frequency === 'weekly' ? 7 : 30;
-        last.setDate(last.getDate() + days);
-        return last.toLocaleDateString();
-    }, [autoBackupSettings]);
 
     const handleSchoolUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -149,55 +135,13 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    const handleManualDriveBackup = async () => {
-        setIsCloudBackingUp(true);
-        await backupToDrive();
-        setIsCloudBackingUp(false);
-    };
-
-    const handleFetchCloudBackups = async () => {
-        setIsFetchingCloud(true);
-        try {
-            const files = await driveService.listBackups();
-            setDriveBackups(files);
-            setShowCloudPicker(true);
-        } catch (err: any) {
-            showToast('Cloud Error', err.message || 'Failed to access Drive.', 'error');
-        } finally {
-            setIsFetchingCloud(false);
-        }
-    };
-
-    const handleRestoreFromCloud = async (file: DriveFile) => {
-        if (!window.confirm(`Overhaul existing records with system state from ${file.name}?`)) return;
-        
-        setShowCloudPicker(false);
-        try {
-            const content = await driveService.downloadFile(file.id);
-            const blob = new Blob([content], { type: 'application/json' });
-            const virtualFile = new File([blob], file.name, { type: 'application/json' });
-            await restoreData(virtualFile);
-        } catch (err: any) {
-            showToast('Restore Failed', err.message || 'Error downloading file.', 'error');
-        }
+    const handleDownloadBackup = async () => {
+        await downloadFullBackup();
+        setLastBackupDownloaded(localStorage.getItem('edusync_last_backup_download'));
     };
 
     return (
         <>
-
-            <Modal isOpen={showCloudPicker} onClose={() => setShowCloudPicker(false)} title="Available Cloud Snapshots">
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
-                    {driveBackups.length > 0 ? driveBackups.map(file => (
-                        <div key={file.id} className="p-3 border rounded-lg hover:bg-secondary-50 dark:hover:bg-secondary-700/50 flex justify-between items-center group transition-colors">
-                            <div>
-                                <p className="text-sm font-bold text-secondary-900 dark:text-white">{file.name}</p>
-                                <p className="text-[10px] text-secondary-500 uppercase tracking-widest">{new Date(file.modifiedTime).toLocaleString()}</p>
-                            </div>
-                            <button onClick={() => handleRestoreFromCloud(file)} className="text-xs btn-primary py-1.5 px-4 shadow-none font-bold uppercase tracking-tighter">Reconstruct</button>
-                        </div>
-                    )) : <p className="text-center py-8 text-secondary-500 italic">No valid EduSync snapshots found in Drive.</p>}
-                </div>
-            </Modal>
 
             <Modal isOpen={isBranchModalOpen} onClose={() => setIsBranchModalOpen(false)} title={branchToEdit ? 'Edit Campus Branch' : 'Add Campus Branch'}>
                 <form onSubmit={handleSaveBranch} className="space-y-4">
@@ -238,104 +182,50 @@ const SettingsPage: React.FC = () => {
             <div className="max-w-4xl mx-auto space-y-8">
                 <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Settings</h1>
 
-                {/* WHATSAPP STYLE BACKUP SECTION - OWNER ONLY */}
+                {/* FULL DATABASE BACKUP SECTION - OWNER ONLY */}
                 {user?.role === UserRole.Owner && (
                     <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
                         <div className="flex items-start gap-4 mb-6">
                             <div className="p-3 bg-primary-100 dark:bg-primary-900/30 rounded-full">
-                                <CloudIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+                                <DownloadIcon className="w-8 h-8 text-primary-600 dark:text-primary-400" />
                             </div>
                             <div>
-                                <h2 className="text-xl font-bold text-secondary-900 dark:text-white leading-tight">Google Drive Backup</h2>
+                                <h2 className="text-xl font-bold text-secondary-900 dark:text-white leading-tight">Database Backup & Recovery</h2>
                                 <p className="text-sm text-secondary-500 mt-1 max-w-lg">
-                                    Backup institutional records to your private Google Drive vault. You can restore them when switching devices or reinstalling the app.
+                                    Export a complete, untruncated snapshot of all institutional tables and historical records into a standard JSON backup archive.
                                 </p>
                             </div>
                         </div>
 
-                    <div className="bg-secondary-50 dark:bg-secondary-900/40 rounded-xl p-5 mb-6 border dark:border-secondary-700">
-                        <h3 className="text-xs font-bold text-secondary-400 uppercase tracking-widest mb-3">Last Backup</h3>
-                        <div className="space-y-2">
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-sm font-medium text-secondary-600 dark:text-secondary-400">Timestamp:</span>
-                                <span className="text-sm font-bold text-secondary-900 dark:text-white">
-                                    {autoBackupSettings.lastBackup ? new Date(autoBackupSettings.lastBackup).toLocaleString() : 'Never'}
-                                </span>
+                        <div className="bg-secondary-50 dark:bg-secondary-900/40 rounded-xl p-5 mb-6 border dark:border-secondary-700">
+                            <h3 className="text-xs font-bold text-secondary-400 uppercase tracking-widest mb-3">Backup Status</h3>
+                            <div className="space-y-2">
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-sm font-medium text-secondary-600 dark:text-secondary-400">Last Downloaded:</span>
+                                    <span className="text-sm font-bold text-secondary-900 dark:text-white">
+                                        {lastBackupDownloaded ? new Date(lastBackupDownloaded).toLocaleString() : 'Never downloaded from this browser'}
+                                    </span>
+                                </div>
                             </div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-sm font-medium text-secondary-600 dark:text-secondary-400">File Size:</span>
-                                <span className="text-sm font-bold text-secondary-900 dark:text-white">
-                                    {autoBackupSettings.lastBackupSize || 'N/A'}
-                                </span>
+
+                            <div className="mt-6 flex flex-wrap gap-4">
+                                <button 
+                                    onClick={handleDownloadBackup} 
+                                    className="px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-lg shadow-primary-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <DownloadIcon className="w-5 h-5" />
+                                    Download Full Backup
+                                </button>
                             </div>
                         </div>
 
-                        <div className="mt-6 flex flex-wrap gap-4">
-                            <button 
-                                onClick={handleManualDriveBackup} 
-                                disabled={isCloudBackingUp}
-                                className="px-10 py-3 bg-[#25D366] hover:bg-[#20bd5b] text-white font-black rounded-lg shadow-lg shadow-green-500/20 transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
-                            >
-                                {isCloudBackingUp ? (
-                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                ) : 'BACKUP'}
-                            </button>
-                            <button 
-                                onClick={handleFetchCloudBackups} 
-                                disabled={isFetchingCloud}
-                                className="px-6 py-3 bg-secondary-200 dark:bg-secondary-700 hover:bg-secondary-300 dark:hover:bg-secondary-600 text-secondary-800 dark:text-secondary-100 font-bold rounded-lg transition-all active:scale-95 disabled:opacity-50"
-                            >
-                                {isFetchingCloud ? 'Searching...' : 'Restore from Drive'}
-                            </button>
+                        <div className="p-4 border-2 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
+                            <p className="text-sm font-bold text-amber-800 dark:text-amber-300">How to Restore</p>
+                            <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                                To restore, ask your administrator to run: <code className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 font-mono text-amber-900 dark:text-amber-200">npm run restore -- &lt;file&gt;</code>
+                            </p>
                         </div>
                     </div>
-
-                    <div className="space-y-6">
-                        <div className="flex items-center justify-between p-1">
-                            <div className="flex-1">
-                                <h4 className="font-bold text-secondary-800 dark:text-secondary-100">Include Photos</h4>
-                                <p className="text-xs text-secondary-500 mt-0.5">Toggle to include student photos and school logos. Disabling this saves significant Drive storage and speeds up backups.</p>
-                            </div>
-                            <button 
-                                onClick={() => updateAutoBackupSettings({ includePhotos: !autoBackupSettings.includePhotos })}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${autoBackupSettings.includePhotos ? 'bg-primary-600' : 'bg-secondary-300 dark:bg-secondary-600'}`}
-                            >
-                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoBackupSettings.includePhotos ? 'translate-x-6' : 'translate-x-1'}`} />
-                            </button>
-                        </div>
-
-                        <div className="flex items-center justify-between p-1 border-t dark:border-secondary-700 pt-6">
-                            <div className="flex-1">
-                                <h4 className="font-bold text-secondary-800 dark:text-secondary-100">Auto Backup to Google Drive</h4>
-                                <p className="text-xs text-secondary-500 mt-0.5">Automatically secure your institution records based on the rotation frequency below.</p>
-                            </div>
-                            <button 
-                                onClick={() => updateAutoBackupSettings({ enabled: !autoBackupSettings.enabled })}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${autoBackupSettings.enabled ? 'bg-primary-600 shadow-[0_0_8px_rgba(37,99,235,0.5)]' : 'bg-secondary-300 dark:bg-secondary-600'}`}
-                            >
-                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoBackupSettings.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                            </button>
-                        </div>
-
-                        <div className={`p-4 bg-secondary-50 dark:bg-secondary-900/50 rounded-lg border dark:border-secondary-700 transition-all ${!autoBackupSettings.enabled ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
-                            <label className="text-[10px] font-black text-primary-600 uppercase block mb-1.5">Backup Frequency</label>
-                            <select 
-                                value={autoBackupSettings.frequency}
-                                onChange={(e) => updateAutoBackupSettings({ frequency: e.target.value as any })}
-                                className="bg-transparent border-none text-sm font-bold text-secondary-900 dark:text-white focus:ring-0 w-full p-0 cursor-pointer"
-                            >
-                                <option value="weekly">Every Week</option>
-                                <option value="monthly">Every Month</option>
-                            </select>
-                            {autoBackupSettings.enabled && (
-                                <p className="text-[10px] text-secondary-500 mt-3 flex items-center gap-1.5">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-primary-500"></span>
-                                    Next scheduled run: <span className="font-bold text-primary-600">{nextBackupDate}</span>
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                </div>
                 )}
 
                 {/* INTERFACE & OTHER SETTINGS - Standard Style */}
@@ -466,25 +356,6 @@ const SettingsPage: React.FC = () => {
                     </div>
                 )}
 
-                {/* DATA SNAPSHOTS - OWNER ONLY */}
-                {user?.role === UserRole.Owner && (
-                    <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6 border-t-4 border-primary-500">
-                        <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Data Snapshots & Recovery</h2>
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="font-medium text-sm">Download Snapshot</p>
-                                    <p className="text-xs text-secondary-500">Export current school records to a JSON file</p>
-                                </div>
-                                <button onClick={backupData} className="btn-secondary text-xs shadow-none"><DownloadIcon className="w-3 h-3 mr-1" /> JSON Export</button>
-                            </div>
-                            <div className="p-4 border-2 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/20 rounded-lg">
-                                <p className="text-sm font-bold text-red-700 dark:text-red-400">Database Restore Disabled</p>
-                                <p className="text-xs text-red-600 dark:text-red-300 mt-1">Database restore is currently disabled. A safe CLI restore tool will be provided in SETUP.md before launch. Please do not attempt to restore via this page.</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         </>
     );

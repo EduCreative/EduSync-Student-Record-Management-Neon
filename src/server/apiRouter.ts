@@ -19,6 +19,8 @@ import classesWriteHandler from './handlers/write/classes';
 import usersWriteHandler from './handlers/write/users';
 import restoreWriteHandler from './handlers/write/restore';
 import notificationsHandler from './handlers/notifications/index';
+import photoHandler from './handlers/photo';
+import backupHandler from './handlers/data/backup';
 
 export const apiRouter = Router();
 
@@ -38,6 +40,8 @@ apiRouter.all('/data/students', (req, res) => studentsHandler(req, res));
 apiRouter.all('/data/fees', (req, res) => feesHandler(req, res));
 apiRouter.all('/data/users', (req, res) => usersHandler(req, res));
 apiRouter.all('/data/schools', (req, res) => schoolsHandler(req, res));
+apiRouter.all('/photo', (req, res) => photoHandler(req, res));
+apiRouter.all('/backup', (req, res) => backupHandler(req, res));
 
 apiRouter.all('/write/payments', (req, res) => paymentsWriteHandler(req, res));
 apiRouter.all('/write/challans', (req, res) => challansWriteHandler(req, res));
