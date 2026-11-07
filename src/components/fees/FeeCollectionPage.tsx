@@ -410,7 +410,8 @@ const FeeCollectionPage: React.FC = () => {
                 </div>
                 
                 <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md overflow-hidden">
-                    <div className="overflow-x-auto">
+                    {/* Desktop Table View */}
+                    <div className="overflow-x-auto hidden md:block">
                         <table className="w-full text-sm text-left">
                             <thead className="text-xs text-secondary-700 uppercase bg-secondary-50 dark:bg-secondary-700 dark:text-secondary-300">
                                 <tr>
@@ -497,12 +498,98 @@ const FeeCollectionPage: React.FC = () => {
                                 })}
                             </tbody>
                         </table>
-                         {filteredChallans.length === 0 && (
-                            <div className="p-8 text-center text-secondary-500 dark:text-secondary-400">
-                                No challans found matching the selected criteria.
-                            </div>
-                        )}
                     </div>
+
+                    {/* Mobile Card View */}
+                    <div className="block md:hidden p-2 space-y-2">
+                        {paginatedChallans.map(challan => {
+                            const student = studentMap.get(challan.studentId);
+                            if (!student) return null;
+
+                            const arrears = challan.previousBalance || 0;
+                            const currentDues = challan.totalAmount - arrears;
+                            const outstanding = challan.totalAmount - challan.discount - challan.paidAmount;
+                            const isOverdue = new Date(challan.dueDate) < new Date() && (challan.status === 'Unpaid' || challan.status === 'Partial');
+
+                            return (
+                                <div key={challan.id} className="p-3 bg-secondary-50 dark:bg-secondary-750/70 dark:bg-secondary-900/40 border border-secondary-200 dark:border-secondary-700 rounded-lg shadow-sm space-y-2">
+                                    {/* Top row: avatar, name, roll number, status badge */}
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <Avatar student={student} className="w-9 h-9 flex-shrink-0" />
+                                            <div className="min-w-0">
+                                                <div className="font-semibold text-secondary-900 dark:text-white truncate text-sm">{student.name}</div>
+                                                <div className="text-xs font-bold text-primary-700 dark:text-primary-400">ID: {student.rollNumber}</div>
+                                            </div>
+                                        </div>
+                                        <Badge color={getStatusColor(challan.status)}>{challan.status}</Badge>
+                                    </div>
+
+                                    {/* Second row: class, challan month (formatMonthDisplay), due date */}
+                                    <div className="flex items-center justify-between text-xs text-secondary-600 dark:text-secondary-400 pt-1 border-t border-secondary-200/60 dark:border-secondary-700/60">
+                                        <span className="font-medium">{classMap.get(student.classId) || 'Class N/A'}</span>
+                                        <span className="text-secondary-800 dark:text-secondary-200 font-semibold">{formatMonthDisplay(challan.month, challan.year)}</span>
+                                        <span className={isOverdue ? 'text-red-600 dark:text-red-400 font-semibold' : ''}>Due: {formatDate(challan.dueDate)}</span>
+                                    </div>
+
+                                    {/* Third row: two columns "Outstanding" and "Current Dues" */}
+                                    <div className="grid grid-cols-2 gap-2 p-2 bg-white dark:bg-secondary-800/80 rounded border border-secondary-100 dark:border-secondary-700/50 text-xs">
+                                        <div>
+                                            <span className="text-secondary-500 dark:text-secondary-400 block text-[11px]">Outstanding</span>
+                                            <span className={`font-bold text-sm ${outstanding > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                                Rs. {outstanding.toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-secondary-500 dark:text-secondary-400 block text-[11px]">Current Dues</span>
+                                            <span className="font-semibold text-secondary-800 dark:text-secondary-200 text-sm">
+                                                Rs. {currentDues.toLocaleString()}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Action row: same buttons and visibility rules */}
+                                    <div className="flex items-center justify-between pt-1 gap-2">
+                                        {canManage && (challan.status === 'Unpaid' || challan.status === 'Partial') ? (
+                                            <button 
+                                                onClick={() => setChallanToManage({ challan, student, mode: 'pay' })} 
+                                                className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                                            >
+                                                Record Payment
+                                            </button>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                {canManage && (challan.status === 'Paid' || challan.status === 'Partial') && (
+                                                    <button onClick={() => setChallanToManage({ challan, student, mode: 'edit' })} className="text-xs text-primary-600 hover:underline">Edit Payment</button>
+                                                )}
+                                                {canManage && challan.status !== 'Paid' && challan.status !== 'Cancelled' && (
+                                                    <button onClick={() => setChallanToCancel(challan)} className="text-xs text-red-600 hover:underline">Cancel</button>
+                                                )}
+                                            </div>
+                                        )}
+                                        <div className="flex items-center gap-2 text-xs ml-auto">
+                                            <button 
+                                                onClick={() => handlePrintSingleChallan(challan, student)} 
+                                                className="font-semibold text-primary-600 dark:text-primary-400 hover:underline"
+                                            >
+                                                Print
+                                            </button>
+                                            <span className="text-secondary-300 dark:text-secondary-600">|</span>
+                                            <button onClick={() => setViewHistoryStudent(student)} className="text-secondary-500 hover:text-primary-600 hover:underline">
+                                                View Fee History
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {filteredChallans.length === 0 && (
+                        <div className="p-8 text-center text-secondary-500 dark:text-secondary-400">
+                            No challans found matching the selected criteria.
+                        </div>
+                    )}
                      {totalPages > 0 && (
                         <div className="flex justify-between items-center p-4 border-t dark:border-secondary-700">
                             <span className="text-sm text-secondary-700 dark:text-secondary-400">

@@ -1,6 +1,31 @@
 
 # Changelog
 
+## [3.39.0] - 2026-11-07
+
+### Phase G: Mobile PWA & Responsiveness
+- **P22 (Installable PWA Manifest, Service Worker & Offline Banner)**:
+  - Created Web App Manifest `public/manifest.webmanifest` (`name: "EduSync"`, `short_name: "EduSync"`, `start_url: "/"`, `display: "standalone"`, `theme_color: "#1e40af"`, `background_color: "#ffffff"`, and 192x192 & 512x512 icons with both `any` and `maskable` purposes).
+  - Linked manifest in `index.html` along with `apple-touch-icon`, `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`, and `apple-mobile-web-app-title`.
+  - Implemented custom vanilla service worker `public/sw.js`:
+    - Caches only the core app shell; determines cache name dynamically as `'edusync-' + version` from `/version.json` (fetched with `cache: 'no-store'`; falls back to `'edusync-unknown'`).
+    - Cache-first strategy for `/assets/*`.
+    - Network-first strategy for navigation with `/index.html` offline fallback.
+    - Strictly never intercepts or caches `/api/*`, `/version.json`, or `/sw.js`.
+    - Uses `skipWaiting()` and `clients.claim()` and removes older cache revisions on activate.
+  - Registered service worker in `src/main.tsx` exclusively in production mode (`import.meta.env.PROD`).
+  - Integrated with `src/components/common/UpdateChecker.tsx`: triggers `registration.update()` when a new version is detected and prompts user to reload.
+  - Updated `vercel.json` with headers for `/sw.js` (`Cache-Control: no-cache`), correct `application/manifest+json` content type for `/manifest.webmanifest`, and excluded `/sw.js`, `/manifest.webmanifest`, `/icons/*`, and `/version.json` from the SPA rewrite rule.
+  - Added a visible offline banner in `src/components/layout/Layout.tsx` using existing `isOnline` from `SyncContext`: *"You are offline. Records cannot be saved until the connection returns."*
+- **P23 (Code Splitting & Notification Polling Throttle)**:
+  - Code-split application pages in `src/App.tsx` and `src/components/layout/Layout.tsx` using `React.lazy` and wrapped with `<Suspense>` small loading spinner fallbacks, while preserving static imports for `LoginPage`, `Layout`, and `Dashboard`.
+  - Configured `build.rollupOptions.output.manualChunks` in `vite.config.ts` to separate `'react-vendor'` (`react`, `react-dom`), `'lucide'` (`lucide-react`), `'qrcode'` (`qrcode.react`), and `'charts'` (`src/components/charts/`) into distinct bundles without adding new dependencies.
+  - In `src/context/NotificationContext.tsx`, throttled notification polling interval from 60 seconds to 5 minutes (300,000 ms), added visibility check to skip polling while `document.visibilityState === 'hidden'`, and attached `visibilitychange` listener to refresh notifications immediately when the tab becomes active.
+- **P24 (Mobile Cards for Fee Collection)**:
+  - In `src/components/fees/FeeCollectionPage.tsx`, wrapped the 9-column desktop table in `<div className="overflow-x-auto hidden md:block">`.
+  - Added `<div className="block md:hidden p-2 space-y-2">` mobile card view mapped from the same `paginatedChallans` array.
+  - Formatted mobile cards with top row (student avatar, name, roll number, status badge), second row (class name, formatted challan month, due date), third row (Outstanding balance and Current Dues in distinct stat boxes), and action row maintaining exact same actions and role permissions (Record Payment, Edit Payment, Cancel, Print, View Fee History).
+
 ## [3.38.0] - 2026-11-07
 
 ### Phase F: Data Size Optimization & Reliable Backups

@@ -39,9 +39,27 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     useEffect(() => {
         fetchNotifications();
         
-        // Polling as a fallback for realtime updates
-        const interval = setInterval(fetchNotifications, 60000); 
-        return () => clearInterval(interval);
+        // Polling every 5 minutes (300,000 ms), skipping while hidden
+        const interval = setInterval(() => {
+            if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+                return;
+            }
+            fetchNotifications();
+        }, 300000); 
+
+        // Refresh immediately when the tab becomes visible again
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchNotifications();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [fetchNotifications]);
     
     const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);

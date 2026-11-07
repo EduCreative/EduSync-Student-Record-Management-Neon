@@ -4,15 +4,22 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import LoginPage from './components/auth/LoginPage';
-import RegisterPage from './components/auth/RegisterPage';
 import Layout from './components/layout/Layout';
 import { ToastProvider } from './context/ToastContext';
 import { PrintProvider, usePrint } from './context/PrintContext';
 import PrintPreview from './components/common/PrintPreview';
-import RequestPasswordResetPage from './components/auth/RequestPasswordResetPage';
-import ResetPasswordPage from './components/auth/ResetPasswordPage';
 import { PWAInstallProvider } from './context/PWAInstallContext';
 import { SyncProvider } from './context/SyncContext';
+
+const RegisterPage = React.lazy(() => import('./components/auth/RegisterPage'));
+const RequestPasswordResetPage = React.lazy(() => import('./components/auth/RequestPasswordResetPage'));
+const ResetPasswordPage = React.lazy(() => import('./components/auth/ResetPasswordPage'));
+
+const AuthLoadingFallback: React.FC = () => (
+    <div className="min-h-screen flex items-center justify-center bg-secondary-50 dark:bg-secondary-900">
+        <div className="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin dark:border-primary-400 dark:border-t-transparent" />
+    </div>
+);
 import { NotificationProvider } from './context/NotificationContext';
 import { Analytics } from '@vercel/analytics/react';
 import { UpdateChecker } from './components/common/UpdateChecker';
@@ -39,7 +46,11 @@ const AppContent: React.FC = () => {
     }, [isPrinting, theme]);
 
     if (user && authEvent === 'PASSWORD_RECOVERY') {
-        return <ResetPasswordPage onResetSuccess={() => setAuthView('login')} />;
+        return (
+            <React.Suspense fallback={<AuthLoadingFallback />}>
+                <ResetPasswordPage onResetSuccess={() => setAuthView('login')} />
+            </React.Suspense>
+        );
     }
 
     if (!user) {
@@ -47,9 +58,17 @@ const AppContent: React.FC = () => {
             case 'login':
                 return <LoginPage onSwitchToRegister={() => setAuthView('register')} onForgotPassword={() => setAuthView('requestReset')} />;
             case 'register':
-                return <RegisterPage onSwitchToLogin={() => setAuthView('login')} />;
+                return (
+                    <React.Suspense fallback={<AuthLoadingFallback />}>
+                        <RegisterPage onSwitchToLogin={() => setAuthView('login')} />
+                    </React.Suspense>
+                );
             case 'requestReset':
-                return <RequestPasswordResetPage onSwitchToLogin={() => setAuthView('login')} />;
+                return (
+                    <React.Suspense fallback={<AuthLoadingFallback />}>
+                        <RequestPasswordResetPage onSwitchToLogin={() => setAuthView('login')} />
+                    </React.Suspense>
+                );
             default:
                  return <LoginPage onSwitchToRegister={() => setAuthView('register')} onForgotPassword={() => setAuthView('requestReset')} />;
         }

@@ -1,7 +1,7 @@
 {
-  "version": "3.38.0",
+  "version": "3.39.0",
   "releaseDate": "2026-11-07",
   "changelog": [
-    "Phase F (P17-P21): Data size optimization, dedicated avatar streaming, and reliable database backup/restore. Added Express gzip compression middleware and uncompressed X-Payload-Bytes payload monitoring on /api/data with warning threshold. Extracted photo blobs from bulk /api/data payload into lazy-loaded /api/photo endpoint with role-based scoping and ETag caching. Added benchmark load testing CLI tool (npm run load-test) to measure throughput and response sizes against an isolated throwaway database. Implemented production-grade CLI backup (npm run backup) with keyset pagination and restore (npm run restore) with foreign key topological dependency sort and atomic transaction rollback. Added Owner-facing in-app 'Download Full Backup' stream and removed legacy Google Drive backup code."
+    "Phase G (P22-P24): Mobile PWA & Responsiveness. Installed web manifest (/manifest.webmanifest) and service worker (/sw.js) caching core app shell with offline fallback, update checking, and visible offline banner. Added Vite manualChunks code splitting for react-vendor, lucide, qrcode, and charts, with React.lazy + Suspense across all application pages for fast mobile startup. Throttled notification polling to 5 minutes with document visibility pausing, and introduced responsive card view for fee collection on mobile screens."
   ]
 }

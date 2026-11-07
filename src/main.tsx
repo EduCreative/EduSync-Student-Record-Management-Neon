@@ -33,3 +33,17 @@ try {
   const errorElement = document.getElementById('root') || document.body;
   errorElement.innerHTML = `<div style="color: red; font-family: sans-serif; padding: 20px;"><h1>Application Failed to Start</h1><p>A critical error prevented the application from rendering. Please check the browser console for more details.</p><pre>${(error as Error).stack}</pre></div>`;
 }
+
+// Register Service Worker in production only
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((reg) => {
+        console.log('EduSync Service Worker registered with scope:', reg.scope);
+      })
+      .catch((err) => {
+        console.error('EduSync Service Worker registration failed:', err);
+      });
+  });
+}

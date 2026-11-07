@@ -27,6 +27,13 @@ export const UpdateChecker: React.FC = () => {
             setLatestVersion(data);
 
             if (data.version !== currentVersion) {
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistration().then((reg) => {
+                        if (reg) {
+                            reg.update().catch(() => {});
+                        }
+                    }).catch(() => {});
+                }
                 setShowBanner(true);
             }
         } catch (error) {
@@ -35,17 +42,14 @@ export const UpdateChecker: React.FC = () => {
     };
 
     const handleUpdate = () => {
-        // Force reload from server to bust browser cache
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then((registrations) => {
-                for (const registration of registrations) {
-                    registration.unregister();
+            navigator.serviceWorker.getRegistration().then((reg) => {
+                if (reg?.waiting) {
+                    reg.waiting.postMessage({ type: 'SKIP_WAITING' });
                 }
-            });
+            }).catch(() => {});
         }
-        setTimeout(() => {
-            window.location.reload();
-        }, 800);
+        window.location.reload();
     };
 
     if (!showBanner || !latestVersion) return null;
