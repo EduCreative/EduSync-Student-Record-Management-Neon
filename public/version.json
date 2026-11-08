@@ -1,7 +1,7 @@
 {
-  "version": "3.39.0",
-  "releaseDate": "2026-11-07",
+  "version": "3.40.0",
+  "releaseDate": "2026-11-08",
   "changelog": [
-    "Phase G (P22-P24): Mobile PWA & Responsiveness. Installed web manifest (/manifest.webmanifest) and service worker (/sw.js) caching core app shell with offline fallback, update checking, and visible offline banner. Added Vite manualChunks code splitting for react-vendor, lucide, qrcode, and charts, with React.lazy + Suspense across all application pages for fast mobile startup. Throttled notification polling to 5 minutes with document visibility pausing, and introduced responsive card view for fee collection on mobile screens."
+    "Phase H (P25-P28): Polish, Documentation & Versioning. Wired 'View Report Card' on student profile to pre-fill and launch ReportCardModal directly for the latest exam term with class selector locked. Added student reactivation workflow for 'Left' status records preserving attendance and fee history. Fixed promotion rollback snapshot reactive computation and version keying in StudentManagementPage. Added 30s synchronizer tick interval in Header SyncStatus to prevent frozen relative timestamps. Implemented automatic attendance UI rollback to current state when save operations fail. Rewrote README.md and UserManual.md to accurately document single-school architecture, campus branches, in-app backup, and mobile PWA capabilities."
   ]
 }

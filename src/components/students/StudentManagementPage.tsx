@@ -76,9 +76,8 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
         return students.filter(s => s.schoolId === effectiveSchoolId && s.status === 'Graduated');
     }, [students, effectiveSchoolId]);
 
-    const hasRollbackSnapshot = useMemo(() => {
-        return Boolean(localStorage.getItem('edusync_last_promotion_snapshot'));
-    }, [students]);
+    const [snapshotVersion, setSnapshotVersion] = useState(0);
+    const hasRollbackSnapshot = Boolean(localStorage.getItem('edusync_last_promotion_snapshot'));
 
     const classBranchMap = useMemo(() => new Map(classes.map(c => [c.id, c.branchId])), [classes]);
 
@@ -355,14 +354,23 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                 </div>
             </Modal>
             <GraduatedStudentsModal
+                key={snapshotVersion}
                 isOpen={isGraduatedModalOpen}
                 onClose={() => setIsGraduatedModalOpen(false)}
                 graduatedStudents={graduatedStudents}
                 classes={schoolClasses}
                 fees={fees}
                 results={results}
-                onReactivate={reactivateGraduatedStudents}
-                onRevertPromotion={revertLastPromotion}
+                onReactivate={async (options) => {
+                    const res = await reactivateGraduatedStudents(options);
+                    setSnapshotVersion(v => v + 1);
+                    return res;
+                }}
+                onRevertPromotion={async () => {
+                    const res = await revertLastPromotion();
+                    setSnapshotVersion(v => v + 1);
+                    return res;
+                }}
                 hasRollbackSnapshot={hasRollbackSnapshot}
             />
 

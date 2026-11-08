@@ -10,14 +10,16 @@ import { getClassLevel } from '../../utils/sorting';
 interface ReportCardModalProps {
     isOpen: boolean;
     onClose: () => void;
+    initialStudentId?: string;
+    initialStudentClassId?: string;
 }
 
-const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) => {
+const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose, initialStudentId, initialStudentClassId }) => {
     const { user, activeSchoolId } = useAuth();
     const { students, classes, results, getSchoolById } = useData();
     const { showPrintPreview } = usePrint();
     
-    const [classId, setClassId] = useState('');
+    const [classId, setClassId] = useState(initialStudentClassId || '');
     const [exam, setExam] = useState('');
     
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
@@ -26,22 +28,40 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
     const sortedClasses = useMemo(() => [...schoolClasses].sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name)), [schoolClasses]);
     const classMap = useMemo(() => new Map(classes.map(c => [c.id, `${c.name}${c.section ? ` - ${c.section}` : ''}`])), [classes]);
 
-    const examTypes = useMemo(() => [...new Set(results.map((r: Result) => r.exam))], [results]);
+    const examTypes = useMemo(() => [...new Set(results.map((r: Result) => r.exam))].sort(), [results]);
+
+    // When modal opens with initial props, preselect class and latest exam
+    React.useEffect(() => {
+        if (isOpen) {
+            if (initialStudentClassId) {
+                setClassId(initialStudentClassId);
+            }
+            if (initialStudentId && examTypes.length > 0) {
+                // Latest exam by sorting exam names and taking the last
+                setExam(examTypes[examTypes.length - 1]);
+            }
+        }
+    }, [isOpen, initialStudentClassId, initialStudentId, examTypes]);
 
     const reportData = useMemo(() => {
         if (!exam || !classId) return [];
 
-        const classStudents = students.filter((s: Student) => 
-            s.schoolId === effectiveSchoolId &&
-            (classId === 'all' || s.classId === classId) && 
-            s.status === 'Active'
-        );
+        let targetStudents: Student[] = [];
+        if (initialStudentId) {
+            targetStudents = students.filter((s: Student) => s.id === initialStudentId);
+        } else {
+            targetStudents = students.filter((s: Student) => 
+                s.schoolId === effectiveSchoolId &&
+                (classId === 'all' || s.classId === classId) && 
+                s.status === 'Active'
+            );
+        }
         
-        return classStudents.map(student => {
+        return targetStudents.map(student => {
             const studentResults = results.filter((r: Result) => r.studentId === student.id && r.exam === exam);
             return { student, results: studentResults };
         });
-    }, [students, results, classId, exam, effectiveSchoolId]);
+    }, [students, results, classId, exam, effectiveSchoolId, initialStudentId]);
 
     const handleGenerate = () => {
         if (!school) return;
@@ -64,17 +84,9 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Generate Student Report Cards">
+        <Modal isOpen={isOpen} onClose={onClose} title={initialStudentId ? "Student Report Card" : "Generate Student Report Cards"}>
             <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label htmlFor="class-select" className="input-label">Select Class</label>
-                        <select id="class-select" value={classId} onChange={e => setClassId(e.target.value)} className="input-field">
-                            <option value="">-- Choose a class --</option>
-                            <option value="all">All Classes</option>
-                            {sortedClasses.map(c => <option key={c.id} value={c.id}>{`${c.name}${c.section ? ` - ${c.section}` : ''}`}</option>)}
-                        </select>
-                    </div>
+                {initialStudentId ? (
                     <div>
                         <label htmlFor="exam-select" className="input-label">Select Exam</label>
                         <select id="exam-select" value={exam} onChange={e => setExam(e.target.value)} className="input-field">
@@ -82,7 +94,25 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose }) =>
                             {examTypes.map(e => <option key={e} value={e}>{e}</option>)}
                         </select>
                     </div>
-                </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="class-select" className="input-label">Select Class</label>
+                            <select id="class-select" value={classId} onChange={e => setClassId(e.target.value)} className="input-field">
+                                <option value="">-- Choose a class --</option>
+                                <option value="all">All Classes</option>
+                                {sortedClasses.map(c => <option key={c.id} value={c.id}>{`${c.name}${c.section ? ` - ${c.section}` : ''}`}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="exam-select" className="input-label">Select Exam</label>
+                            <select id="exam-select" value={exam} onChange={e => setExam(e.target.value)} className="input-field">
+                                <option value="">-- Choose an exam --</option>
+                                {examTypes.map(e => <option key={e} value={e}>{e}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                )}
                 <div className="p-4 bg-secondary-50 dark:bg-secondary-700 rounded-md text-center">
                     <p className="text-sm">Found data for <strong className="text-lg">{reportData.length}</strong> students for the selected criteria.</p>
                 </div>

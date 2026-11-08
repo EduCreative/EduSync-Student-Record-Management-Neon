@@ -110,7 +110,14 @@ const AttendanceMarker: React.FC = () => {
             await setAttendance(selectedDate, recordsToSave);
         } catch (error) {
             console.error("Failed to save attendance:", error);
-            showToast('Error', 'Could not save attendance. Please try again.', 'error');
+            showToast('Error', 'Could not save attendance. Changes have been reverted.', 'error');
+            const revertedRecords = new Map<string, AttendanceStatus>();
+            const recordsForDate = attendance.filter((a: Attendance) => a.date === selectedDate);
+            studentsInClass.forEach(student => {
+                const existingRecord = recordsForDate.find(a => a.studentId === student.id);
+                revertedRecords.set(student.id, existingRecord ? existingRecord.status : 'Present');
+            });
+            setAttendanceRecords(revertedRecords);
         } finally {
             setIsSaving(false);
         }

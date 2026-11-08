@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useData } from '../../context/DataContext';
+import { useToast } from '../../context/ToastContext';
 import { formatDate } from '../../constants';
 import Avatar from '../common/Avatar';
 import Badge from '../common/Badge';
@@ -11,6 +12,7 @@ import StudentAttendance from './StudentAttendance';
 import { useTheme } from '../../context/ThemeContext';
 import { FeeChallan } from '../../types';
 import FeePaymentModal from '../fees/FeePaymentModal';
+import ReportCardModal from '../reports/ReportCardModal';
 
 interface StudentProfilePageProps {
     studentId: string;
@@ -18,9 +20,11 @@ interface StudentProfilePageProps {
 }
 
 const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setActiveView }) => {
-    const { students, classes, getLedgerForStudent } = useData();
+    const { students, classes, getLedgerForStudent, updateStudent } = useData();
+    const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState('details');
     const [challanToEdit, setChallanToEdit] = useState<FeeChallan | null>(null);
+    const [isReportCardOpen, setIsReportCardOpen] = useState(false);
 
     const student = useMemo(() => students.find(s => s.id === studentId), [students, studentId]);
     const studentClass = useMemo(() => {
@@ -42,6 +46,13 @@ const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setA
             : 'border-transparent text-secondary-500 hover:text-secondary-700 hover:border-secondary-300 dark:text-secondary-400 dark:hover:text-secondary-300';
     };
 
+    const handleReactivateStudent = async () => {
+        if (window.confirm("Reactivate this student to Active status? Attendance and fee history are not affected.")) {
+            await updateStudent({ ...student, status: 'Active' });
+            showToast('Success', 'Student reactivated.', 'success');
+        }
+    };
+
     return (
         <>
             {challanToEdit && student && (
@@ -53,6 +64,12 @@ const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setA
                     editMode={true}
                 />
             )}
+            <ReportCardModal
+                isOpen={isReportCardOpen}
+                onClose={() => setIsReportCardOpen(false)}
+                initialStudentId={student.id}
+                initialStudentClassId={student.classId}
+            />
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <button onClick={() => setActiveView({ view: 'students' })} className="flex items-center text-sm font-medium text-secondary-600 hover:text-primary-600 dark:text-secondary-400">
@@ -74,8 +91,11 @@ const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setA
                                 <span className="font-bold text-primary-700 dark:text-primary-400 text-lg">ID: {student.rollNumber}</span>
                             </div>
                             <div className="mt-4 flex flex-wrap gap-4">
-                                <button className="btn-secondary" onClick={() => setActiveView({ view: 'reports'})}>View Report Card</button>
+                                <button className="btn-secondary" onClick={() => setIsReportCardOpen(true)}>View Report Card</button>
                                 <button className="btn-secondary" onClick={() => setActiveTab('feeHistory')}>View Fee History</button>
+                                {student.status === 'Left' && (
+                                    <button className="btn-secondary" onClick={handleReactivateStudent}>Reactivate Student</button>
+                                )}
                                 <button onClick={() => setActiveView({ view: 'leavingCertificate', payload: { studentId: student.id }})} className="btn-secondary">
                                     {student.status === 'Left' ? 'Reprint Leaving Certificate' : 'Issue Leaving Certificate'}
                                 </button>

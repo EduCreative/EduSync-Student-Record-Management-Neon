@@ -1,6 +1,26 @@
 
 # Changelog
 
+## [3.40.0] - 2026-11-08
+
+### Phase H: Polish, Documentation & Versioning
+- **P25 (Direct Report Card Modal Launch from Student Profiles)**:
+  - Enhanced `ReportCardModal.tsx` with optional `initialStudentId` and `initialStudentClassId` props.
+  - When invoked from a student profile, automatically pre-selects the student's class, pre-selects the latest examination term (sorting exam names and selecting the last), hides the Class selection dropdown while keeping the Exam dropdown interactive, and targets only that student's report card.
+  - Preserved existing full-class report card batch generation from `ReportsPage.tsx`.
+  - In `StudentProfilePage.tsx`, updated the "View Report Card" button to directly launch `ReportCardModal` with pre-filled student and class identifiers.
+- **P26 (Reactivate Student Workflow for 'Left' Status)**:
+  - In `StudentProfilePage.tsx`, added a "Reactivate Student" button (`btn-secondary`) visible only when `student.status === 'Left'`.
+  - On click, prompts a confirmation modal: *"Reactivate this student to Active status? Attendance and fee history are not affected."*
+  - Upon confirmation, invokes `updateStudent({ ...student, status: 'Active' })` and triggers a success toast notification, seamlessly restoring the student to active rosters with all historical fee ledgers and attendance records fully preserved.
+- **P27 (Four Small Fixes)**:
+  - In `StudentManagementPage.tsx`, converted `hasRollbackSnapshot` from a stale `useMemo` to a reactive computed boolean `Boolean(localStorage.getItem('edusync_last_promotion_snapshot'))`. Added `snapshotVersion` state bumped after every await of `reactivateGraduatedStudents` and `revertLastPromotion`, passing it as the `key` to `GraduatedStudentsModal` to force clean component re-renders.
+  - In `Header.tsx`, updated `SyncStatus` with a `forceTick` state and a 30,000 ms `setInterval` effect to prevent the relative "Synced: Xs ago" timestamp indicator from freezing.
+  - In `AttendancePage.tsx`, updated `handleSaveAttendance` error handling to automatically rebuild the attendance map from current state for `selectedDate` and reset the record buttons if a save fails, updating the error toast to *"Could not save attendance. Changes have been reverted."*
+- **P28 (Documentation Refresh & Cleanup)**:
+  - Completely rewrote `README.md` as an accurate, concise guide under 120 lines covering single-school architecture with branches, tech stack, environment variables (`DATABASE_URL`, `SESSION_SECRET`), CLI commands (`dev`, `build`, `setup`, `migrate`, `backup`, `restore`, `load-test`), and directory structure, eliminating legacy multi-school and Google Drive sections.
+  - Rewrote `UserManual.md` to document single-school operations, branch setups, user roles, the in-app "Download Full Backup" tool, and mobile PWA functionality.
+
 ## [3.39.0] - 2026-11-07
 
 ### Phase G: Mobile PWA & Responsiveness

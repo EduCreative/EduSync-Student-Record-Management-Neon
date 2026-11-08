@@ -36,6 +36,14 @@ const timeAgo = (date: Date | null): string => {
 const SyncStatus: React.FC = () => {
     const { loading, isInitialLoad, lastSyncTime, schools, syncError, syncProgress } = useData();
     const { isOnline } = useSync();
+    const [, forceTick] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            forceTick(t => t + 1);
+        }, 30000);
+        return () => clearInterval(interval);
+    }, []);
 
     const isSyncing = loading && !isInitialLoad;
 
