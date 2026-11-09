@@ -81,8 +81,8 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ onSwitchToLogin }) => {
         } else if (!isValidEmail(email)) {
             newErrors.email = 'Email address is invalid.';
         }
-        if (password.length < 6) {
-            newErrors.password = 'Password must be at least 6 characters long.';
+        if (password.length < 8) {
+            newErrors.password = 'Password must be at least 8 characters long.';
         }
         if (password !== confirmPassword) {
             newErrors.confirmPassword = 'Passwords do not match.';

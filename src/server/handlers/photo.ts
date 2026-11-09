@@ -96,6 +96,7 @@ export default async function handler(req: any, res: any) {
             return res.status(404).json({ error: 'No avatar found' });
         }
 
+        const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
         let mimeType = 'image/jpeg';
         let buffer: Buffer;
 
@@ -107,7 +108,10 @@ export default async function handler(req: any, res: any) {
             const meta = rawAvatar.slice(0, commaIndex);
             const mimeMatch = meta.match(/data:([^;]+)/);
             if (mimeMatch && mimeMatch[1]) {
-                mimeType = mimeMatch[1];
+                mimeType = mimeMatch[1].toLowerCase().trim();
+            }
+            if (!ALLOWED_MIMES.includes(mimeType)) {
+                return res.status(415).json({ error: 'Unsupported media type: Avatars must be JPEG, PNG, or WebP.' });
             }
             const base64Data = rawAvatar.slice(commaIndex + 1);
             buffer = Buffer.from(base64Data, 'base64');
@@ -126,6 +130,8 @@ export default async function handler(req: any, res: any) {
         res.setHeader('Content-Length', buffer.length.toString());
         res.setHeader('Cache-Control', 'private, max-age=86400');
         res.setHeader('ETag', etag);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Security-Policy', "default-src 'none'");
 
         return res.status(200).send(buffer);
 

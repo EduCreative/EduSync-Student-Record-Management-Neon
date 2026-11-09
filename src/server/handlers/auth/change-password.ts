@@ -15,8 +15,8 @@ export default async function handler(req: any, res: any) {
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
         const { currentPassword, newPassword, targetUserId } = body;
 
-        if (!newPassword || newPassword.length < 6) {
-            return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+        if (!newPassword || newPassword.length < 8) {
+            return res.status(400).json({ error: 'New password must be at least 8 characters long.' });
         }
 
         const userIdToUpdate = (targetUserId && targetUserId !== session.userId) 

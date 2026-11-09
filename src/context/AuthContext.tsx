@@ -38,22 +38,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const data = await res.json();
                     if (data?.user && isMounted) {
                         setUser(data.user);
-                        localStorage.setItem('edusync_user', JSON.stringify(data.user));
                         setActiveSchoolId(data.user.schoolId || null);
                         return;
                     }
                 }
 
-                // If server returns 401/403 or invalid, clear local cache
+                // If server returns 401/403 or invalid, clear local user state
                 if (isMounted) {
                     setUser(null);
-                    localStorage.removeItem('edusync_user');
                 }
             } catch (error) {
                 console.warn("Auth server verification failed:", error);
                 if (isMounted) {
                     setUser(null);
-                    localStorage.removeItem('edusync_user');
                 }
             } finally {
                 if (isMounted) {
@@ -109,7 +106,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (data.user) {
                 setUser(data.user);
-                localStorage.setItem('edusync_user', JSON.stringify(data.user));
                 setActiveSchoolId(data.user.schoolId || null);
             }
 
@@ -136,7 +132,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         setUser(null);
         setActiveSchoolId(null);
-        localStorage.removeItem('edusync_user');
         window.location.reload();
     };
 

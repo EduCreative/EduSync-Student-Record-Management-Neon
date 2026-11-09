@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
+import { useNotification } from '../../context/NotificationContext';
 import { UserRole } from '../../types';
 import Avatar from '../common/Avatar';
 import { formatDate } from '../../constants';
@@ -9,7 +10,8 @@ import { useToast } from '../../context/ToastContext';
 
 const FeeRemindersPage: React.FC = () => {
     const { user, activeSchoolId } = useAuth();
-    const { students, fees, classes, sendFeeReminders, getLedgerForStudent } = useData();
+    const { students, fees, classes, users, getLedgerForStudent } = useData();
+    const { sendAnnouncement } = useNotification();
     const { showToast } = useToast();
     const [isSending, setIsSending] = useState(false);
 
@@ -67,13 +69,51 @@ const FeeRemindersPage: React.FC = () => {
         if (selectedChallanIds.size === 0) return;
         setIsSending(true);
         try {
-            // The backend for this is removed as the notifications table doesn't exist.
-            // We simulate the action for the user.
-            await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
-            sendFeeReminders(Array.from(selectedChallanIds));
-            setSelectedChallanIds(new Set()); // Clear selection after sending
-        } catch (e) {
-            showToast("Error", "Could not send reminders.", "error");
+            // Find unique recipient parent and student user IDs for selected challans
+            const recipientUserIds = new Set<string>();
+            const selectedChallansList = fees.filter(f => selectedChallanIds.has(f.id));
+
+            for (const challan of selectedChallansList) {
+                const student = studentMap.get(challan.studentId);
+                if (!student) continue;
+
+                // 1. If student has an active user account
+                if (student.userId) {
+                    recipientUserIds.add(student.userId);
+                }
+
+                // 2. Find any parent users linked to this student
+                for (const u of users) {
+                    if (u.role === UserRole.Parent && Array.isArray(u.childStudentIds) && u.childStudentIds.includes(student.id)) {
+                        recipientUserIds.add(u.id);
+                    }
+                }
+            }
+
+            const recipientList = Array.from(recipientUserIds);
+            if (recipientList.length === 0) {
+                showToast(
+                    "Notice", 
+                    `Selected ${selectedChallanIds.size} challan(s), but none of the students currently have registered parent or student accounts linked.`,
+                    "info"
+                );
+                setSelectedChallanIds(new Set());
+                return;
+            }
+
+            const title = "Fee Payment Reminder";
+            const message = `Reminder: Fee challan payment is outstanding for your registered student(s). Please review and settle the fee at your earliest convenience.`;
+            await sendAnnouncement(recipientList, title, message, '/fees');
+
+            showToast(
+                "Success", 
+                `Dispatched fee reminders to ${recipientList.length} linked account(s) across ${selectedChallanIds.size} challan(s).`,
+                "success"
+            );
+            setSelectedChallanIds(new Set());
+        } catch (e: any) {
+            console.error("Fee reminders dispatch error:", e);
+            showToast("Error", e?.message || "Could not dispatch fee reminders.", "error");
         } finally {
             setIsSending(false);
         }

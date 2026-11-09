@@ -56,20 +56,7 @@ export default async function handler(req: any, res: any) {
 
         const user = users[0];
 
-        // Status checks
-        if (user.status === 'Pending Approval' || user.status === 'Pending') {
-            return res.status(403).json({ error: 'Your account is pending approval by administration.' });
-        }
-
-        if (user.status === 'Suspended' || user.status === 'Inactive') {
-            return res.status(403).json({ error: 'Your account is inactive or suspended. Please contact administration.' });
-        }
-
-        if (user.status !== 'Active') {
-            return res.status(403).json({ error: 'Your account is not active. Please contact administration.' });
-        }
-
-        // Strict bcrypt password verification
+        // Strict bcrypt password verification first (prevents account status enumeration)
         const storedPassword = user.password || '';
         const isBcrypt = storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2y$');
         let isMatch = false;
@@ -84,6 +71,19 @@ export default async function handler(req: any, res: any) {
                 await sql`DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL '1 day'`;
             } catch {}
             return res.status(401).json({ error: 'Invalid email or password.' });
+        }
+
+        // Status checks only after password is authenticated
+        if (user.status === 'Pending Approval' || user.status === 'Pending') {
+            return res.status(403).json({ error: 'Your account is pending approval by administration.' });
+        }
+
+        if (user.status === 'Suspended' || user.status === 'Inactive') {
+            return res.status(403).json({ error: 'Your account is inactive or suspended. Please contact administration.' });
+        }
+
+        if (user.status !== 'Active') {
+            return res.status(403).json({ error: 'Your account is not active. Please contact administration.' });
         }
 
         // Successful login: delete failed attempts for this email

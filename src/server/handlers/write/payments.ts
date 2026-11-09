@@ -208,6 +208,14 @@ export default async function handler(req: any, res: any) {
                 recomputedPaidAmount += itemAmt;
             }
 
+            if (recomputedPaidAmount > 0 && historyToSave.length === 0) {
+                return res.status(400).json({ error: 'paymentHistory cannot be empty when a non-zero amount is being recorded.' });
+            }
+
+            if (recomputedPaidAmount === 0 && Number(challan.paid_amount) > 0) {
+                return res.status(400).json({ error: 'Cannot reduce a paid challan to zero by clearing payment history. Use cancel-challan or contact an administrator.' });
+            }
+
             const todayStr = getTodayKarachi();
             const validatedPaidDate = (paidDate && paidDate > todayStr) ? todayStr : (paidDate || todayStr);
 

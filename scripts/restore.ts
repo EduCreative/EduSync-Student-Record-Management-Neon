@@ -84,7 +84,8 @@ async function runRestore() {
     const nonEmptyTables: string[] = [];
     for (const tbl of tablesInBackup) {
         try {
-            const countRes = await sql`SELECT count(*)::int as count FROM ${sql(tbl)}`;
+            const quotedTbl = `"${tbl.replace(/"/g, '""')}"`;
+            const countRes = await sql(`SELECT count(*)::int as count FROM ${quotedTbl}`);
             const c = Number(countRes[0]?.count || 0);
             if (c > 0) {
                 nonEmptyTables.push(`${tbl} (${c} rows)`);
@@ -194,8 +195,8 @@ async function runRestore() {
     // 3. If wiping, truncate in reverse topological order (or CASCADE)
     if (allowWipe && nonEmptyTables.length > 0) {
         console.log('\nWiping existing records...');
-        const wipeTablesSql = sortedOrder.join(', ');
-        await sql`TRUNCATE TABLE ${sql(sortedOrder)} CASCADE`;
+        const quotedTables = sortedOrder.map(t => `"${t.replace(/"/g, '""')}"`).join(', ');
+        await sql(`TRUNCATE TABLE ${quotedTables} CASCADE`);
         console.log('✓ Target tables truncated.');
     }
 
@@ -222,6 +223,7 @@ async function runRestore() {
         if (rows.length === 0) continue;
 
         const tableColTypes = colTypeMap[tableName] || {};
+        const quotedTable = `"${tableName.replace(/"/g, '""')}"`;
 
         for (const row of rows) {
             const columns = Object.keys(row).filter(c => tableColTypes[c] !== undefined);
@@ -237,10 +239,13 @@ async function runRestore() {
                 return val;
             });
 
-            allQueries.push(sql`
-                INSERT INTO ${sql(tableName)} (${sql(columns)})
-                VALUES (${sql(values)})
-            `);
+            const quotedCols = columns.map(c => `"${c.replace(/"/g, '""')}"`).join(', ');
+            const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
+
+            allQueries.push(sql(
+                `INSERT INTO ${quotedTable} (${quotedCols}) VALUES (${placeholders})`,
+                values
+            ));
         }
     }
 
@@ -265,7 +270,8 @@ async function runRestore() {
     let hasMismatch = false;
     for (const tableName of sortedOrder) {
         const expectedCount = (backupPayload.tables[tableName] || []).length;
-        const countRes = await sql`SELECT count(*)::int as count FROM ${sql(tableName)}`;
+        const quotedTable = `"${tableName.replace(/"/g, '""')}"`;
+        const countRes = await sql(`SELECT count(*)::int as count FROM ${quotedTable}`);
         const actualCount = Number(countRes[0]?.count || 0);
 
         const status = actualCount === expectedCount ? 'OK' : 'MISMATCH';

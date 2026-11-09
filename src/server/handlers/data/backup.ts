@@ -40,24 +40,45 @@ export default async function handler(req: any, res: any) {
         const sql = getDb();
         const CHUNK_QUERY_LIMIT = 500;
         let queryRows: any[] = [];
+        const trimmedCursor = (cursor && typeof cursor === 'string' && cursor.trim() !== '') ? cursor.trim() : null;
 
-        if (cursor && typeof cursor === 'string' && cursor.trim() !== '') {
-            const trimmedCursor = cursor.trim();
+        if (trimmedCursor) {
             if (!/^[0-9a-fA-F-]{36}$/.test(trimmedCursor)) {
                 return res.status(400).json({ error: 'Invalid cursor format (expected UUID).' });
             }
-            queryRows = await sql`
-                SELECT * FROM ${sql(table)}
-                WHERE id > ${trimmedCursor}::uuid
-                ORDER BY id ASC
-                LIMIT ${CHUNK_QUERY_LIMIT}
-            `;
+            switch (table) {
+                case 'schools': queryRows = await sql`SELECT * FROM schools WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'branches': queryRows = await sql`SELECT * FROM branches WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'profiles': queryRows = await sql`SELECT * FROM profiles WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'classes': queryRows = await sql`SELECT * FROM classes WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'subjects': queryRows = await sql`SELECT * FROM subjects WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'exams': queryRows = await sql`SELECT * FROM exams WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'fee_heads': queryRows = await sql`SELECT * FROM fee_heads WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'students': queryRows = await sql`SELECT * FROM students WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'fee_challans': queryRows = await sql`SELECT * FROM fee_challans WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'attendance': queryRows = await sql`SELECT * FROM attendance WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'results': queryRows = await sql`SELECT * FROM results WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'activity_logs': queryRows = await sql`SELECT * FROM activity_logs WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'school_events': queryRows = await sql`SELECT * FROM school_events WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                default: queryRows = [];
+            }
         } else {
-            queryRows = await sql`
-                SELECT * FROM ${sql(table)}
-                ORDER BY id ASC
-                LIMIT ${CHUNK_QUERY_LIMIT}
-            `;
+            switch (table) {
+                case 'schools': queryRows = await sql`SELECT * FROM schools ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'branches': queryRows = await sql`SELECT * FROM branches ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'profiles': queryRows = await sql`SELECT * FROM profiles ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'classes': queryRows = await sql`SELECT * FROM classes ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'subjects': queryRows = await sql`SELECT * FROM subjects ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'exams': queryRows = await sql`SELECT * FROM exams ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'fee_heads': queryRows = await sql`SELECT * FROM fee_heads ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'students': queryRows = await sql`SELECT * FROM students ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'fee_challans': queryRows = await sql`SELECT * FROM fee_challans ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'attendance': queryRows = await sql`SELECT * FROM attendance ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'results': queryRows = await sql`SELECT * FROM results ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'activity_logs': queryRows = await sql`SELECT * FROM activity_logs ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'school_events': queryRows = await sql`SELECT * FROM school_events ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                default: queryRows = [];
+            }
         }
 
         // Keyset pagination chunking with safe ~3 MB ceiling

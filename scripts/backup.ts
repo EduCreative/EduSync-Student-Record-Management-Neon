@@ -27,7 +27,7 @@ async function runBackup() {
     const sql = neon(databaseUrl);
 
     // Read current package version
-    let appVersion = '3.38.0';
+    let appVersion = '3.41.0';
     try {
         const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'));
         if (pkg.version) appVersion = pkg.version;
@@ -73,30 +73,28 @@ async function runBackup() {
         `;
         const hasIdCol = colCheck.length > 0;
 
+        const quotedTable = `"${tableName.replace(/"/g, '""')}"`;
+
         while (hasMore) {
             let batch: any[] = [];
             if (hasIdCol) {
                 if (lastId) {
-                    batch = await sql`
-                        SELECT * FROM ${sql(tableName)}
-                        WHERE id > ${lastId}::uuid
-                        ORDER BY id ASC
-                        LIMIT ${BATCH_LIMIT}
-                    `;
+                    batch = await sql(
+                        `SELECT * FROM ${quotedTable} WHERE id > $1::uuid ORDER BY id ASC LIMIT $2`,
+                        [lastId, BATCH_LIMIT]
+                    );
                 } else {
-                    batch = await sql`
-                        SELECT * FROM ${sql(tableName)}
-                        ORDER BY id ASC
-                        LIMIT ${BATCH_LIMIT}
-                    `;
+                    batch = await sql(
+                        `SELECT * FROM ${quotedTable} ORDER BY id ASC LIMIT $1`,
+                        [BATCH_LIMIT]
+                    );
                 }
             } else {
                 // Fallback for tables without id column
-                batch = await sql`
-                    SELECT * FROM ${sql(tableName)}
-                    OFFSET ${rows.length}
-                    LIMIT ${BATCH_LIMIT}
-                `;
+                batch = await sql(
+                    `SELECT * FROM ${quotedTable} OFFSET $1 LIMIT $2`,
+                    [rows.length, BATCH_LIMIT]
+                );
             }
 
             if (batch.length > 0) {

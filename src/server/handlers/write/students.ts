@@ -1,4 +1,4 @@
-import { verifySession, isAuthorized, writeServerAuditLog } from './_helpers';
+import { verifySession, isAuthorized, writeServerAuditLog, validateAvatarDataUrl } from './_helpers';
 import { getTodayKarachi } from '../../../utils/dates';
 import crypto from 'crypto';
 
@@ -24,6 +24,13 @@ export default async function handler(req: any, res: any) {
             const { student } = body;
             if (!student || !student.name || !student.rollNumber) {
                 return res.status(400).json({ error: 'Student name and roll number are required.' });
+            }
+
+            if (student.avatarUrl) {
+                const avatarCheck = validateAvatarDataUrl(student.avatarUrl);
+                if (!avatarCheck.valid) {
+                    return res.status(400).json({ error: avatarCheck.error });
+                }
             }
 
             const effectiveSchoolId = session.role === 'Owner' && student.schoolId ? student.schoolId : session.schoolId;
@@ -83,6 +90,13 @@ export default async function handler(req: any, res: any) {
             const existing = existingRows[0];
             if (session.role !== 'Owner' && session.schoolId && existing.school_id !== session.schoolId) {
                 return res.status(403).json({ error: 'Unauthorized: Student belongs to another school.' });
+            }
+
+            if (student.avatarUrl) {
+                const avatarCheck = validateAvatarDataUrl(student.avatarUrl);
+                if (!avatarCheck.valid) {
+                    return res.status(400).json({ error: avatarCheck.error });
+                }
             }
 
             try {

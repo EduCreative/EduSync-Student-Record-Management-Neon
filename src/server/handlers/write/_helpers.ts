@@ -75,3 +75,33 @@ export async function writeServerAuditLog(
         console.warn('Failed to record server audit log:', err);
     }
 }
+
+export const ALLOWED_AVATAR_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_AVATAR_PAYLOAD_CHARS = Math.ceil((500 * 1024 * 4) / 3) + 100; // ~500 KB binary in base64
+
+export function validateAvatarDataUrl(dataUrl: any): { valid: boolean; error?: string } {
+    if (!dataUrl || typeof dataUrl !== 'string' || dataUrl.trim() === '') {
+        return { valid: true };
+    }
+    const trimmed = dataUrl.trim();
+    if (trimmed.startsWith('/api/photo')) {
+        return { valid: true };
+    }
+    if (!trimmed.startsWith('data:')) {
+        return { valid: false, error: 'Avatar must be a valid image data URL.' };
+    }
+    if (trimmed.length > MAX_AVATAR_PAYLOAD_CHARS) {
+        return { valid: false, error: 'Avatar image payload exceeds 500 KB limit.' };
+    }
+    const commaIndex = trimmed.indexOf(',');
+    if (commaIndex === -1) {
+        return { valid: false, error: 'Malformed avatar data URL.' };
+    }
+    const meta = trimmed.slice(0, commaIndex);
+    const mimeMatch = meta.match(/data:([^;]+)/);
+    const mime = mimeMatch ? mimeMatch[1].toLowerCase().trim() : '';
+    if (!ALLOWED_AVATAR_MIMES.includes(mime)) {
+        return { valid: false, error: 'Avatar must be a JPEG, PNG, or WebP image.' };
+    }
+    return { valid: true };
+}

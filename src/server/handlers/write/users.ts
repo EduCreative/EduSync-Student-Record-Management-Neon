@@ -1,4 +1,4 @@
-import { verifySession, isAuthorized, writeServerAuditLog, requireSameSchool } from './_helpers';
+import { verifySession, isAuthorized, writeServerAuditLog, requireSameSchool, validateAvatarDataUrl } from './_helpers';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
@@ -25,6 +25,17 @@ export default async function handler(req: any, res: any) {
             const { name, email, password, role, schoolId, avatarUrl } = body;
             if (!name || !email || !password || !role) {
                 return res.status(400).json({ error: 'Name, email, password, and role are required.' });
+            }
+
+            if (password.length < 8) {
+                return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+            }
+
+            if (avatarUrl) {
+                const avatarCheck = validateAvatarDataUrl(avatarUrl);
+                if (!avatarCheck.valid) {
+                    return res.status(400).json({ error: avatarCheck.error });
+                }
             }
 
             if (session.role === 'Admin') {
@@ -91,6 +102,13 @@ export default async function handler(req: any, res: any) {
 
             if (!requireSameSchool(session, targetUser.school_id)) {
                 return res.status(403).json({ error: 'Access denied: Cannot update user from another school.' });
+            }
+
+            if (avatarUrl) {
+                const avatarCheck = validateAvatarDataUrl(avatarUrl);
+                if (!avatarCheck.valid) {
+                    return res.status(400).json({ error: avatarCheck.error });
+                }
             }
 
             await sql`
@@ -183,6 +201,16 @@ export default async function handler(req: any, res: any) {
                 const u = users[i];
                 if (!u.name || !u.email || !u.password || !u.role) {
                     return res.status(400).json({ error: `Name, email, password, and role are required for all users (row ${i + 1} is missing required fields).` });
+                }
+                if (typeof u.password !== 'string' || u.password.length < 8) {
+                    return res.status(400).json({ error: `Password for user '${u.email}' (row ${i + 1}) must be at least 8 characters long.` });
+                }
+                const avUrl = u.avatarUrl || u.avatar_url;
+                if (avUrl) {
+                    const avatarCheck = validateAvatarDataUrl(avUrl);
+                    if (!avatarCheck.valid) {
+                        return res.status(400).json({ error: `User '${u.email}' (row ${i + 1}): ${avatarCheck.error}` });
+                    }
                 }
                 if (session.role === 'Admin') {
                     if (!['Accountant', 'Teacher', 'Parent', 'Student'].includes(u.role)) {

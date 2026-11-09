@@ -1,7 +1,30 @@
 
 # Changelog
 
-## [3.40.0] - 2026-11-08
+## [3.41.0] - 2026-11-09
+
+### Final Audit Security & Driver Fixes (F1 - F7)
+- **F1 (Database Backup & Restore Driver Corrections)**:
+  - Fixed Neon driver SQL identifier parameterization in `scripts/backup.ts`, `scripts/restore.ts`, and `src/server/handlers/data/backup.ts`.
+  - Replaced broken `${sql(tableName)}` parameterization with compile-safe allowlist dispatch in the serverless `/api/backup` route and double-quoted identifiers with parameterized values in CLI scripts.
+- **F2 (Avatar Stored XSS Mitigation & MIME / Size Guards)**:
+  - Enforced server-side image MIME type validation (`image/jpeg`, `image/png`, `image/webp`) and a 500 KB payload ceiling in `src/server/handlers/write/students.ts` and `src/server/handlers/write/users.ts`.
+  - In `src/server/handlers/photo.ts`, validated decoded MIME against the allowlist, rejected non-image types with HTTP 415, and attached `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'`.
+- **F3 (Migration Runner Comment Parsing)**:
+  - In `scripts/migrate.ts`, stripped SQL comments cleanly before splitting statements so statements with leading comments are preserved and executed without dropping tables.
+- **F4 (Login Information Leak Mitigation & Password Length Standards)**:
+  - In `src/server/handlers/auth/login.ts`, reordered authentication to verify bcrypt password hashes before evaluating account status (`Pending Approval`, `Suspended`), eliminating user status enumeration.
+  - Elevated minimum password length requirement from 6 to 8 characters across `register.ts`, `change-password.ts`, `write/users.ts`, `RegisterPage.tsx`, and `ResetPasswordPage.tsx`.
+- **F6 (Payment History Data Loss Protection)**:
+  - In `src/server/handlers/write/payments.ts` (`update-payment` action), added server-side guards preventing payment history from being submitted empty when a non-zero amount is recorded or reducing an already-paid challan to zero by clearing history.
+- **F7 (Real Notifications for Fee Deadline Reminders)**:
+  - Connected `FeeRemindersPage.tsx` to the real `/api/notifications` broadcast system via `sendAnnouncement`, linking parent and student accounts to fee reminders with direct `/fees` route navigation.
+- **O6 (Auth Storage Security Hygiene)**:
+  - Removed redundant `localStorage.setItem('edusync_user')` and `localStorage.removeItem('edusync_user')` calls in `AuthContext.tsx`.
+- **F5a & F5b (Repository Cleanup & Lockfile Hygiene)**:
+  - Deleted leftover temporary pasted prompt assets from `public/assets/aistudio/` and added the pattern to `.gitignore`.
+  - Removed root `bun.lock` file to maintain a clean npm-only build environment.
+
 
 ### Phase H: Polish, Documentation & Versioning
 - **P25 (Direct Report Card Modal Launch from Student Profiles)**:

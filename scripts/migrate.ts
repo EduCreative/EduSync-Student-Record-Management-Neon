@@ -48,11 +48,21 @@ async function runMigrations() {
             process.exit(1);
         }
 
+        // Strip comments cleanly before splitting into statements
+        const cleanContent = content
+            .replace(/\/\*[\s\S]*?\*\//g, '') // remove multi-line comments
+            .split('\n')
+            .map(line => {
+                const commentIdx = line.indexOf('--');
+                return commentIdx !== -1 ? line.slice(0, commentIdx) : line;
+            })
+            .join('\n');
+
         // Split statements by semicolon at the end of lines
-        const statements = content
+        const statements = cleanContent
             .split(/;\s*$/m)
             .map(s => s.trim())
-            .filter(s => s.length > 0 && !s.startsWith('--'));
+            .filter(s => s.length > 0);
 
         try {
             console.log(`Applying migration ${file}...`);
