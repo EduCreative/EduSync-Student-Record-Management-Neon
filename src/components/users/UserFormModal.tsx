@@ -114,6 +114,11 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
     const [disabledLinks, setDisabledLinks] = useState<Record<string, boolean>>({});
     const [permissionsOverrides, setPermissionsOverrides] = useState<Partial<Record<Permission, boolean>>>({});
     const [errors, setErrors] = useState<{ name?: string; email?: string; role?: string; schoolId?: string; password?: string; confirmPassword?: string; }>({});
+    
+    // Direct admin reset state
+    const [adminNewPassword, setAdminNewPassword] = useState('');
+    const [showAdminResetField, setShowAdminResetField] = useState(false);
+    const [adminResetSuccess, setAdminResetSuccess] = useState<string | null>(null);
 
     const isOwnerGlobalView = currentUser?.role === UserRole.Owner && !activeSchoolId;
     const effectiveSchoolId = currentUser?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : currentUser?.schoolId;
@@ -154,6 +159,9 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
             }
             setPassword('');
             setConfirmPassword('');
+            setAdminNewPassword('');
+            setShowAdminResetField(false);
+            setAdminResetSuccess(null);
             setErrors({});
         }
     }, [userToEdit, isOpen, currentUser, schools, defaultRole, effectiveSchoolId]);
@@ -174,8 +182,8 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
         }
         
         if (!userToEdit) {
-            if (password.length < 6) {
-                newErrors.password = 'Password must be at least 6 characters long.';
+            if (password.length < 8) {
+                newErrors.password = 'Password must be at least 8 characters long.';
             } else if (password !== confirmPassword) {
                 newErrors.confirmPassword = 'Passwords do not match.';
             }
@@ -212,15 +220,45 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
         }));
     };
 
-    const handleSendResetEmail = async () => {
+    const handleGenerateTempPassword = () => {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+        let pass = '';
+        for (let i = 0; i < 10; i++) {
+            pass += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        setAdminNewPassword(pass);
+        setAdminResetSuccess(null);
+    };
+
+    const handleAdminResetPassword = async () => {
         if (!userToEdit) return;
-    
+        if (!adminNewPassword || adminNewPassword.length < 8) {
+            showToast('Error', 'Temporary password must be at least 8 characters long.', 'error');
+            return;
+        }
+
         setIsSendingReset(true);
+        setAdminResetSuccess(null);
         try {
-            // Simplified reset email logic as custom Neon Auth doesn't have an automated emailer yet
-            showToast('Info', `Feature coming soon. Please manually reset the password for ${userToEdit.email}.`, 'info');
+            const res = await fetch('/api/auth/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    newPassword: adminNewPassword,
+                    targetUserId: userToEdit.id
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Failed to reset password.');
+            }
+
+            showToast('Success', `Password reset successfully for ${userToEdit.name}.`, 'success');
+            setAdminResetSuccess(adminNewPassword);
         } catch (e: any) {
-            showToast('Error', e.message || 'An unexpected error occurred.', 'error');
+            showToast('Error', e.message || 'Failed to reset password.', 'error');
         } finally {
             setIsSendingReset(false);
         }
@@ -446,22 +484,88 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                     </button>
                 </div>
 
-                {userToEdit && (currentUser?.role === UserRole.Owner || currentUser?.role === UserRole.Admin) && (
-                    <div className="border-t dark:border-secondary-700 pt-4 mt-4">
-                        <h3 className="input-label font-semibold">Reset Password</h3>
-                        <p className="text-sm text-secondary-500 dark:text-secondary-400 mb-2">
-                            Notify user of password reset instructions.
-                        </p>
-                        <div className="flex items-center space-x-2">
-                            <button
-                                type="button"
-                                onClick={handleSendResetEmail}
-                                className="btn-secondary"
-                                disabled={isSendingReset}
-                            >
-                                {isSendingReset ? 'Processing...' : 'Reset Password'}
-                            </button>
+                {userToEdit && (
+                    ((currentUser?.role === UserRole.Owner && userToEdit.role !== UserRole.Owner) ||
+                     (currentUser?.role === UserRole.Admin && ['Accountant', 'Teacher', 'Parent', 'Student'].includes(userToEdit.role)) ||
+                     (userToEdit.id === currentUser?.id))
+                ) && (
+                    <div className="border-t dark:border-secondary-700 pt-4 mt-4 bg-secondary-50/60 dark:bg-secondary-800/50 p-4 rounded-lg">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="input-label font-semibold text-secondary-900 dark:text-white">Direct Password Reset</h3>
+                                <p className="text-xs text-secondary-500 dark:text-secondary-400">
+                                    Set a temporary password directly for {userToEdit.name}.
+                                </p>
+                            </div>
+                            {!showAdminResetField && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowAdminResetField(true);
+                                        if (!adminNewPassword) handleGenerateTempPassword();
+                                    }}
+                                    className="btn-secondary text-xs"
+                                >
+                                    Reset Password
+                                </button>
+                            )}
                         </div>
+
+                        {showAdminResetField && (
+                            <div className="mt-3 space-y-3">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={adminNewPassword}
+                                        onChange={(e) => {
+                                            setAdminNewPassword(e.target.value);
+                                            setAdminResetSuccess(null);
+                                        }}
+                                        placeholder="Temporary password (min 8 chars)"
+                                        className="input-field text-sm font-mono flex-1"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleGenerateTempPassword}
+                                            className="px-3 py-2 bg-secondary-200 dark:bg-secondary-700 hover:bg-secondary-300 dark:hover:bg-secondary-600 text-xs rounded-md font-medium text-secondary-700 dark:text-secondary-200 transition-colors whitespace-nowrap"
+                                            title="Generate secure temporary password"
+                                        >
+                                            Generate
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleAdminResetPassword}
+                                            disabled={isSendingReset || adminNewPassword.length < 8}
+                                            className="btn-primary text-xs whitespace-nowrap"
+                                        >
+                                            {isSendingReset ? 'Saving...' : 'Apply Reset'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {adminResetSuccess && (
+                                    <div className="p-3 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-md text-sm text-green-800 dark:text-green-300 flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                            <span>Password updated:</span>
+                                            <span className="font-mono font-bold bg-green-100 dark:bg-green-900/60 px-2 py-0.5 rounded text-xs select-all">
+                                                {adminResetSuccess}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(adminResetSuccess);
+                                                showToast('Copied', 'Temporary password copied to clipboard.', 'success');
+                                            }}
+                                            className="text-xs underline hover:no-underline font-semibold"
+                                        >
+                                            Copy
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
             </form>

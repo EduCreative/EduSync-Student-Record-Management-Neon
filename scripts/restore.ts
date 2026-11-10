@@ -80,7 +80,8 @@ async function runRestore() {
     const tablesInBackup = Object.keys(backupPayload.tables);
     console.log(`Backup version: ${backupPayload.version || 'unknown'}, tables: ${tablesInBackup.length}`);
 
-    const client = new Client({ connectionString: databaseUrl, ssl: { rejectUnauthorized: true } });
+    const sslRejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0';
+    const client = new Client({ connectionString: databaseUrl, ssl: { rejectUnauthorized: sslRejectUnauthorized } });
     await client.connect();
 
     try {

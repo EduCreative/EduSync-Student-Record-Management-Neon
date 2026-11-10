@@ -512,7 +512,7 @@ const FeeCollectionPage: React.FC = () => {
                             const isOverdue = new Date(challan.dueDate) < new Date() && (challan.status === 'Unpaid' || challan.status === 'Partial');
 
                             return (
-                                <div key={challan.id} className="p-3 bg-secondary-50 dark:bg-secondary-750/70 dark:bg-secondary-900/40 border border-secondary-200 dark:border-secondary-700 rounded-lg shadow-sm space-y-2">
+                                <div key={challan.id} className="p-3 bg-secondary-50 dark:bg-secondary-800/60 border border-secondary-200 dark:border-secondary-700 rounded-lg shadow-sm space-y-2">
                                     {/* Top row: avatar, name, roll number, status badge */}
                                     <div className="flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-2 min-w-0">

@@ -26,7 +26,8 @@ async function runBackup() {
         process.exit(1);
     }
 
-    const client = new Client({ connectionString: databaseUrl, ssl: { rejectUnauthorized: true } });
+    const sslRejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0';
+    const client = new Client({ connectionString: databaseUrl, ssl: { rejectUnauthorized: sslRejectUnauthorized } });
     await client.connect();
 
     // Read current package version

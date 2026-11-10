@@ -17,8 +17,8 @@ const UserProfilePage: React.FC<UserProfilePageProps> = () => {
     const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl);
     const [isProfileSaving, setIsProfileSaving] = useState(false);
     
-    const [password, setPassword] = useState({ new: '', confirm: '' });
-    const [passwordErrors, setPasswordErrors] = useState<{ new?: string; confirm?: string }>({});
+    const [password, setPassword] = useState({ current: '', new: '', confirm: '' });
+    const [passwordErrors, setPasswordErrors] = useState<{ current?: string; new?: string; confirm?: string }>({});
     const [isPasswordSaving, setIsPasswordSaving] = useState(false);
     
     // Reset form state if user context changes
@@ -53,9 +53,14 @@ const UserProfilePage: React.FC<UserProfilePageProps> = () => {
     const handlePasswordChange = async (e: React.FormEvent) => {
         e.preventDefault();
         setPasswordErrors({});
+
+        if (!password.current) {
+            setPasswordErrors(p => ({...p, current: 'Current password is required.'}));
+            return;
+        }
         
-        if (password.new.length < 6) {
-            setPasswordErrors(p => ({...p, new: 'Password must be at least 6 characters.'}));
+        if (password.new.length < 8) {
+            setPasswordErrors(p => ({...p, new: 'Password must be at least 8 characters.'}));
             return;
         }
 
@@ -66,10 +71,10 @@ const UserProfilePage: React.FC<UserProfilePageProps> = () => {
         
         setIsPasswordSaving(true);
         try {
-            const { success, error } = await updateUserPassword(password.new);
+            const { success, error } = await updateUserPassword(password.new, password.current);
             if (success) {
                 showToast('Success', 'Password changed successfully!', 'success');
-                setPassword({ new: '', confirm: '' });
+                setPassword({ current: '', new: '', confirm: '' });
             } else {
                 showToast('Error', error || 'Failed to change password.', 'error');
             }
@@ -134,13 +139,18 @@ const UserProfilePage: React.FC<UserProfilePageProps> = () => {
                 <h2 className="text-xl font-semibold border-b pb-3 dark:border-secondary-700 mb-6">Change Password</h2>
                 <div className="space-y-4 max-w-md">
                     <div>
-                        <label className="input-label" htmlFor="new-password">New Password</label>
-                        <input id="new-password" type="password" value={password.new} onChange={e => setPassword(p => ({...p, new: e.target.value}))} className="input-field" />
+                        <label className="input-label" htmlFor="current-password">Current Password</label>
+                        <input id="current-password" type="password" value={password.current} onChange={e => setPassword(p => ({...p, current: e.target.value}))} className="input-field" placeholder="Enter your current password" />
+                        {passwordErrors.current && <p className="text-red-500 text-xs mt-1">{passwordErrors.current}</p>}
+                    </div>
+                    <div>
+                        <label className="input-label" htmlFor="new-password">New Password (min 8 characters)</label>
+                        <input id="new-password" type="password" value={password.new} onChange={e => setPassword(p => ({...p, new: e.target.value}))} className="input-field" placeholder="Enter new password" />
                         {passwordErrors.new && <p className="text-red-500 text-xs mt-1">{passwordErrors.new}</p>}
                     </div>
                     <div>
                         <label className="input-label" htmlFor="confirm-password">Confirm New Password</label>
-                        <input id="confirm-password" type="password" value={password.confirm} onChange={e => setPassword(p => ({...p, confirm: e.target.value}))} className="input-field" />
+                        <input id="confirm-password" type="password" value={password.confirm} onChange={e => setPassword(p => ({...p, confirm: e.target.value}))} className="input-field" placeholder="Confirm new password" />
                         {passwordErrors.confirm && <p className="text-red-500 text-xs mt-1">{passwordErrors.confirm}</p>}
                     </div>
                 </div>

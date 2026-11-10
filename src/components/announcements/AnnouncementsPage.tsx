@@ -5,6 +5,7 @@ import { useData } from '../../context/DataContext';
 import { useNotification } from '../../context/NotificationContext';
 import { useToast } from '../../context/ToastContext';
 import { UserRole } from '../../types';
+import { Permission } from '../../permissions';
 import Badge from '../common/Badge';
 import { formatDateTime } from '../../constants';
 
@@ -24,7 +25,7 @@ const AnnouncementsPage: React.FC = () => {
     const [targetClassId, setTargetClassId] = useState<string>('All');
     const [isSending, setIsSending] = useState(false);
 
-    const canSend = hasPermission('CAN_SEND_ANNOUNCEMENTS' as any);
+    const canSend = hasPermission(Permission.CAN_SEND_ANNOUNCEMENTS);
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
 
     const schoolClasses = useMemo(() => classes.filter(c => c.schoolId === effectiveSchoolId), [classes, effectiveSchoolId]);

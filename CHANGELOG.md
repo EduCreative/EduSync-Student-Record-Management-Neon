@@ -3,6 +3,19 @@
 
 ## [3.43.0] - 2026-11-10
 
+### Password Security & User Management Fixes
+- **Self-Service Password Change Restored (Bug A Fix)**:
+  - Added the required `Current Password` input field to `src/components/users/UserProfilePage.tsx` and wired it into `updateUserPassword(password.new, password.current)`. Users can now successfully update their own passwords without encountering 400 validation failures.
+- **Password Minimum Length Enforcement (Bug B Fix)**:
+  - Aligned client-side form validation across `UserFormModal.tsx` and `UserProfilePage.tsx` to strictly require at least 8 characters, matching server-side validation rules.
+- **Admin Direct Password Reset (Bug C Fix)**:
+  - Replaced the placeholder toast in `src/components/users/UserFormModal.tsx` with a fully functional direct password reset panel for Owners and Admins.
+  - Allows generating random secure passwords or entering custom temporary passwords, submits directly to `/api/auth/change-password`, and provides a one-click copy button for quick verbal/written sharing.
+- **Operational & Code Quality Polish**:
+  - Made CLI script SSL validation flexible in `scripts/backup.ts` and `scripts/restore.ts` via `DB_SSL_REJECT_UNAUTHORIZED` / `NODE_TLS_REJECT_UNAUTHORIZED`.
+  - Replaced string cast with typesafe `Permission.CAN_SEND_ANNOUNCEMENTS` enum in `AnnouncementsPage.tsx`.
+  - Fixed invalid Tailwind color class in `FeeCollectionPage.tsx`.
+
 ### Student Fee Structure Persistence (P0 Blocker Fix)
 - **Server-Side Fee Structure Route**:
   - Implemented authorized `action === 'update-fee-structure'` in `src/server/handlers/write/students.ts` for Owner, Admin, and Accountant roles.
