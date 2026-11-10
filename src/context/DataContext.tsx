@@ -868,7 +868,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setOperationProgress({ percentage: 95, status: 'Packaging JSON backup archive...' });
 
             const backupPayload = {
-                version: '3.41.0',
+                version: '3.42.0',
                 createdAt: new Date().toISOString(),
                 tables: tablesData,
                 counts: countsData

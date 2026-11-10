@@ -27,7 +27,7 @@ async function runBackup() {
     const sql = neon(databaseUrl);
 
     // Read current package version
-    let appVersion = '3.41.0';
+    let appVersion = '3.42.0';
     try {
         const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'));
         if (pkg.version) appVersion = pkg.version;

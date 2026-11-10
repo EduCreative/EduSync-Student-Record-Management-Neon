@@ -9,6 +9,8 @@ import { UserRole, Branch } from '../../types';
 import { useToast } from '../../context/ToastContext';
 import ImageUpload from '../common/ImageUpload';
 import IncreaseTuitionFeeModal from './IncreaseTuitionFeeModal';
+import RestoreModal from './RestoreModal';
+import { UploadCloud } from 'lucide-react';
 
 const SettingsPage: React.FC = () => {
     const { toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, sidebarMode, setSidebarMode } = useTheme();
@@ -34,6 +36,7 @@ const SettingsPage: React.FC = () => {
     const [lastBackupDownloaded, setLastBackupDownloaded] = useState<string | null>(() => {
         return localStorage.getItem('edusync_last_backup_download');
     });
+    const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
 
     // State for Tuition Fee Manager
     const [isTuitionFeeModalOpen, setIsTuitionFeeModalOpen] = useState(false);
@@ -178,11 +181,18 @@ const SettingsPage: React.FC = () => {
             </Modal>
 
             <IncreaseTuitionFeeModal isOpen={isTuitionFeeModalOpen} onClose={() => setIsTuitionFeeModalOpen(false)} />
+            <RestoreModal 
+                isOpen={isRestoreModalOpen} 
+                onClose={() => setIsRestoreModalOpen(false)} 
+                onRestoreSuccess={() => {
+                    showToast('Success', 'Database restored and verified. Refreshing application...', 'success');
+                }} 
+            />
 
             <div className="max-w-4xl mx-auto space-y-8">
                 <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Settings</h1>
 
-                {/* FULL DATABASE BACKUP SECTION - OWNER ONLY */}
+                {/* FULL DATABASE BACKUP & RESTORE SECTION - OWNER ONLY */}
                 {user?.role === UserRole.Owner && (
                     <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
                         <div className="flex items-start gap-4 mb-6">
@@ -192,7 +202,7 @@ const SettingsPage: React.FC = () => {
                             <div>
                                 <h2 className="text-xl font-bold text-secondary-900 dark:text-white leading-tight">Database Backup & Recovery</h2>
                                 <p className="text-sm text-secondary-500 mt-1 max-w-lg">
-                                    Export a complete, untruncated snapshot of all institutional tables and historical records into a standard JSON backup archive.
+                                    Export a complete, untruncated snapshot of all institutional tables and historical records into a standard JSON backup archive, or safely restore from an existing backup file.
                                 </p>
                             </div>
                         </div>
@@ -211,18 +221,25 @@ const SettingsPage: React.FC = () => {
                             <div className="mt-6 flex flex-wrap gap-4">
                                 <button 
                                     onClick={handleDownloadBackup} 
-                                    className="px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-lg shadow-primary-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                    className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-lg shadow-lg shadow-primary-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
                                 >
                                     <DownloadIcon className="w-5 h-5" />
                                     Download Full Backup
                                 </button>
+                                <button 
+                                    onClick={() => setIsRestoreModalOpen(true)} 
+                                    className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-lg shadow-emerald-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <UploadCloud className="w-5 h-5" />
+                                    Restore From Backup
+                                </button>
                             </div>
                         </div>
 
-                        <div className="p-4 border-2 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
-                            <p className="text-sm font-bold text-amber-800 dark:text-amber-300">How to Restore</p>
-                            <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                                To restore, ask your administrator to run: <code className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 font-mono text-amber-900 dark:text-amber-200">npm run restore -- &lt;file&gt;</code>
+                        <div className="p-4 border-2 border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg">
+                            <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">Browser &amp; CLI Disaster Recovery Options</p>
+                            <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">
+                                Click <strong>Restore From Backup</strong> to audit, stage, and restore records directly in your browser with password authorization and checksum validation. Alternatively, CLI restore is available: <code className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/50 font-mono text-emerald-900 dark:text-emerald-200">npm run restore -- &lt;file&gt;</code>
                             </p>
                         </div>
                     </div>

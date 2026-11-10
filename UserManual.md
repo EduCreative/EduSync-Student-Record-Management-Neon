@@ -91,12 +91,26 @@ Institutional Owners can export complete database backups at any time:
 3. Click **Download Full Backup**.
 4. The system streams records from all database tables and downloads a structured, timestamped JSON archive.
 
-### 6.2 CLI Restore
-To restore data into a clean database, administrators run the command line tool:
+### 6.2 Browser-Based "Restore From Backup" (One-Click Disaster Recovery)
+Institutional Owners can restore database archives directly from the browser without technical CLI knowledge:
+1. In **Settings > Database Backup & Recovery**, click **Restore From Backup**.
+2. Select your `edusync-*.json` backup archive.
+3. The system runs an instant pre-flight integrity check and presents a complete **Data Audit Summary Card** showing:
+   - Archive creation date and software version.
+   - School name, campus address, and branches.
+   - Total students (active, graduated, left).
+   - Date ranges for fee challans and attendance logs.
+   - Total database records verified.
+4. Enter your **Owner Account Password** and type **RESTORE** to authorize.
+5. The system safely streams records into an isolated staging area in small batches (bypassing serverless payload limits).
+6. Once 100% of rows are verified, an atomic transaction swaps staging into live tables, ensuring zero corruption or partial data risks.
+
+### 6.3 Command-Line CLI Restore
+For headless or server environments, administrators can also run the CLI restore tool:
 ```bash
 npm run restore -- backups/edusync-YYYYMMDD-HHmmss.json
 ```
-The restore script verifies foreign key topological dependency order and executes inside an atomic database transaction.
+The script verifies topological foreign-key dependencies, prompts for confirmation if data exists, and commits inside an atomic transaction.
 
 ---
 

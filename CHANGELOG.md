@@ -1,7 +1,23 @@
 
 # Changelog
 
-## [3.41.0] - 2026-11-09
+## [3.42.0] - 2026-11-09
+
+### Browser-Based Disaster Recovery (One-Click Restore)
+- **Pre-Flight Integrity Verification**:
+  - Implemented client-side JSON archive parsing and structural verification, ensuring table presence and row-count consistency before uploading.
+- **Visual Data Audit Card**:
+  - Displays backup creation timestamp, software version, target institution name, campus address, branch counts, student breakdowns (active, graduated, left), date ranges for fee challans and attendance logs, and verified row count totals.
+- **Two-Tier Owner Security Guard**:
+  - Requires the Institutional Owner to enter their account password (verified via bcrypt on the backend) and type `RESTORE` to authorize execution.
+- **Staged Streaming Protocol**:
+  - Bypasses Vercel's 4.5 MB serverless request ceiling by streaming records table-by-table in chunked batches into isolated staging tables (`staging_*`).
+  - Guarantees zero live database corruption: active records remain 100% untouched until all chunks are uploaded and verified.
+- **Atomic Swap & Receipt**:
+  - Executes single-transaction table truncation and topological population from staging, clearing staging tables and issuing a 100% verified completion receipt.
+- **Settings UI Integration**:
+  - Added "Restore From Backup" button in **Settings > Database Backup & Recovery** for Owner accounts with complete light/dark mode and responsive layout support.
+
 
 ### Final Audit Security & Driver Fixes (F1 - F7)
 - **F1 (Database Backup & Restore Driver Corrections)**:
