@@ -1,6 +1,21 @@
 
 # Changelog
 
+## [3.44.0] - 2026-11-10
+
+### High-Resolution PWA Brand Icons & Mobile Polish
+- **Branded Application Icons**:
+  - Replaced placeholder solid blue squares with custom, high-resolution EduSync brand iconography featuring the golden academic book and glowing cyan neon graduation cap on a deep royal blue background.
+- **Cross-Platform Device Support**:
+  - Generated full asset suite across all standard resolutions:
+    - `public/icons/icon-512.png` (512x512) and `public/icons/icon-192.png` (192x192) for desktop launchers, splash screens, and Android app drawers (`purpose: "any"`).
+    - `public/icons/icon-maskable-512.png` and `public/icons/icon-maskable-192.png` with safe-zone margins for Android adaptive rounded/squircle icons (`purpose: "maskable"`).
+    - `public/apple-touch-icon.png` (180x180) for iOS Safari home screen installation.
+    - Multi-resolution favicons (`favicon-32x32.png`, `favicon-16x16.png`, and `favicon.png`).
+- **Web App Manifest & Service Worker Cache Refresh**:
+  - Upgraded `manifest.webmanifest` with separate `any` and `maskable` icon specifications, app `id`, `scope`, and descriptive metadata.
+  - Added all icon assets and the manifest to `public/sw.js` precache list and bumped version to trigger automatic cache renewal on existing installed devices.
+
 ## [3.43.0] - 2026-11-10
 
 ### Password Security & User Management Fixes

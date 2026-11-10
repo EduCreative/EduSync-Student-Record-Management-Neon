@@ -1,10 +1,9 @@
 {
-  "version": "3.43.0",
+  "version": "3.44.0",
   "releaseDate": "2026-11-10",
   "changelog": [
-    "Student Fee Structure Persistence: Implemented dedicated server-side endpoint and DataContext method allowing Accountants, Admins, and Owners to persist customized per-student fee heads and amounts.",
-    "Postgres Driver & Large School Scaling (F6): Upgraded CLI backup and restore scripts to use node-postgres (pg) with SSL and 200-row transactional multi-row batch inserts, eliminating Neon serverless HTTP single-query payload limits.",
-    "Security & Load-Test Fixes (F7): Added server-side MIME and base64 format validation for school logo updates, fixed missing class_id in load-test exam result inserts, and unified backup table coverage including notifications.",
-    "Mobile Attendance Polish: Added sticky bottom save bar for mobile attendance marking."
+    "High-Resolution PWA Brand Icon Assets: Replaced placeholder blue squares with custom-designed, high-resolution EduSync brand icons featuring the golden academic book and cyan neon glowing graduation cap.",
+    "Comprehensive PWA Compliance: Generated 512x512 and 192x192 launcher icons, dedicated 15% safe-padded maskable icons for Android adaptive launchers, 180x180 Apple touch icons, and multi-size favicons.",
+    "Service Worker & Manifest Synchronization: Updated Web App Manifest with proper display, ID, scope, and separate 'any' and 'maskable' purpose entries, and precached all new icon assets in sw.js."
   ]
 }

@@ -22,7 +22,17 @@ self.addEventListener('install', (event) => {
       const cacheName = await resolveCacheName();
       const cache = await caches.open(cacheName);
       try {
-        await cache.addAll(['/', '/index.html', '/favicon.svg']);
+        await cache.addAll([
+          '/',
+          '/index.html',
+          '/favicon.svg',
+          '/apple-touch-icon.png',
+          '/icons/icon-192.png',
+          '/icons/icon-512.png',
+          '/icons/icon-maskable-192.png',
+          '/icons/icon-maskable-512.png',
+          '/manifest.webmanifest'
+        ]);
       } catch (err) {
         console.warn('Failed to pre-cache some shell assets during install:', err);
       }
