@@ -250,8 +250,8 @@ async function main() {
         for (const ex of examNames) {
             for (const sub of subjectNames) {
                 resultBatch.push(sql`
-                    INSERT INTO results (id, student_id, exam, subject, marks, total_marks, school_id)
-                    VALUES (${crypto.randomUUID()}, ${sId}, ${ex}, ${sub}, 85, 100, ${schoolId})
+                    INSERT INTO results (id, student_id, class_id, exam, subject, marks, total_marks, school_id)
+                    VALUES (${crypto.randomUUID()}, ${sId}, ${classIds[0]}, ${ex}, ${sub}, 85, 100, ${schoolId})
                 `);
                 if (resultBatch.length >= 500) {
                     await sql.transaction(resultBatch);

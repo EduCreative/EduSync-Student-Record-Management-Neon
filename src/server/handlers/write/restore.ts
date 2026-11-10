@@ -16,7 +16,8 @@ const RESTORE_TABLE_ORDER = [
     'attendance',
     'results',
     'activity_logs',
-    'school_events'
+    'school_events',
+    'notifications'
 ] as const;
 
 export default async function handler(req: any, res: any) {

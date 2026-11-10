@@ -39,6 +39,7 @@ interface DataContextType {
     addUserByAdmin: (userData: (Omit<User, 'id'> & { password?: string })) => Promise<void>;
     addStudent: (studentData: Omit<Student, 'id' | 'status'>) => Promise<void>;
     updateStudent: (updatedStudent: Student) => Promise<void>;
+    updateFeeStructure: (studentId: string, feeStructure: { feeHeadId: string; amount: number }[]) => Promise<void>;
     deleteStudent: (studentId: string) => Promise<void>;
     addClass: (classData: Omit<Class, 'id'>) => Promise<void>;
     updateClass: (updatedClass: Class) => Promise<void>;
@@ -262,6 +263,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const updateStudent = async (student: Student) => {
         await apiWrite('/api/write/students', { action: 'update-student', student });
+        await fetchData();
+    };
+
+    const updateFeeStructure = async (studentId: string, feeStructure: { feeHeadId: string; amount: number }[]) => {
+        await apiWrite('/api/write/students', { action: 'update-fee-structure', studentId, feeStructure });
         await fetchData();
     };
 
@@ -817,7 +823,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         'attendance',
         'results',
         'activity_logs',
-        'school_events'
+        'school_events',
+        'notifications'
     ];
 
     const downloadFullBackup = useCallback(async (): Promise<void> => {
@@ -868,7 +875,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setOperationProgress({ percentage: 95, status: 'Packaging JSON backup archive...' });
 
             const backupPayload = {
-                version: '3.42.0',
+                version: '3.43.0',
                 createdAt: new Date().toISOString(),
                 tables: tablesData,
                 counts: countsData
@@ -915,7 +922,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         fetchData, downloadFullBackup,
         getSchoolById: (id) => schools.find(s => s.id === id),
         getLedgerForStudent,
-        updateUser, deleteUser, addUserByAdmin, addStudent, updateStudent, deleteStudent,
+        updateUser, deleteUser, addUserByAdmin, addStudent, updateStudent, updateFeeStructure, deleteStudent,
         addClass, updateClass, deleteClass, addBranch, updateBranch, deleteBranch, addSubject, updateSubject, deleteSubject,
         addExam, updateExam, deleteExam, setAttendance, recordFeePayment, updateFeePayment, cancelChallan,
         generateChallansForMonth, deleteChallansForMonth, addSchool, updateSchool, deleteSchool,

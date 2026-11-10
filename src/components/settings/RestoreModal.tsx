@@ -61,7 +61,8 @@ const RESTORE_TABLE_ORDER = [
     'attendance',
     'results',
     'activity_logs',
-    'school_events'
+    'school_events',
+    'notifications'
 ] as const;
 
 export const RestoreModal: React.FC<RestoreModalProps> = ({ isOpen, onClose, onRestoreSuccess }) => {

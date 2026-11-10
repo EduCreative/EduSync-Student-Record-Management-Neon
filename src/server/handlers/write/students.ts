@@ -12,13 +12,17 @@ export default async function handler(req: any, res: any) {
     if (!auth) return;
     const { session, sql } = auth;
 
-    if (!isAuthorized(session, ['Owner', 'Admin'])) {
-        return res.status(403).json({ error: 'Access denied: Only Admins and Owners can modify student records.' });
+    if (!isAuthorized(session, ['Owner', 'Admin', 'Accountant'])) {
+        return res.status(403).json({ error: 'Access denied: Insufficient permissions to modify student records.' });
     }
 
     try {
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
         const { action } = body;
+
+        if (action !== 'update-fee-structure' && !isAuthorized(session, ['Owner', 'Admin'])) {
+            return res.status(403).json({ error: 'Access denied: Only Admins and Owners can modify student profile records.' });
+        }
 
         if (action === 'add-student') {
             const { student } = body;
@@ -426,6 +430,44 @@ export default async function handler(req: any, res: any) {
             );
 
             return res.status(200).json({ success: true, count: revertedCount });
+
+        } else if (action === 'update-fee-structure') {
+            const { studentId, feeStructure } = body;
+            if (!studentId || !Array.isArray(feeStructure)) {
+                return res.status(400).json({ error: 'studentId and feeStructure array are required.' });
+            }
+
+            for (const item of feeStructure) {
+                if (!item.feeHeadId || typeof item.amount !== 'number' || item.amount < 0) {
+                    return res.status(400).json({ error: 'Invalid fee structure item: feeHeadId and valid amount are required.' });
+                }
+            }
+
+            const existingRows = await sql`SELECT id, school_id, name, roll_number FROM students WHERE id = ${studentId}`;
+            if (existingRows.length === 0) {
+                return res.status(404).json({ error: 'Student not found.' });
+            }
+
+            const existing = existingRows[0];
+            if (session.role !== 'Owner' && session.schoolId && existing.school_id !== session.schoolId) {
+                return res.status(403).json({ error: 'Unauthorized: Student belongs to another school.' });
+            }
+
+            await sql`
+                UPDATE students 
+                SET fee_structure = ${JSON.stringify(feeStructure)}::jsonb 
+                WHERE id = ${studentId}
+            `;
+
+            await writeServerAuditLog(
+                sql,
+                session,
+                'Update Fee Structure',
+                `Updated fee structure for ${existing.name} (Roll #${existing.roll_number})`,
+                existing.school_id
+            );
+
+            return res.status(200).json({ success: true });
 
         } else {
             return res.status(400).json({ error: `Unknown action: ${action}` });

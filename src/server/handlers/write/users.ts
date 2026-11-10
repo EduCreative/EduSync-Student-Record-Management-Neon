@@ -274,6 +274,13 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'School ID is required.' });
             }
 
+            if (logoUrl) {
+                const logoCheck = validateAvatarDataUrl(logoUrl);
+                if (!logoCheck.valid) {
+                    return res.status(400).json({ error: logoCheck.error });
+                }
+            }
+
             const schools = await sql`SELECT id FROM schools WHERE id = ${id} LIMIT 1`;
             if (!schools || schools.length === 0) {
                 return res.status(404).json({ error: 'School not found.' });

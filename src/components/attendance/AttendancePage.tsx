@@ -281,11 +281,11 @@ const AttendanceMarker: React.FC = () => {
                     </div>
                 )}
 
-                <div className="flex justify-end pt-4">
+                <div className="sticky bottom-0 z-20 -mx-4 -mb-4 sm:mx-0 sm:mb-0 p-4 bg-white/95 dark:bg-secondary-800/95 backdrop-blur-md border-t border-secondary-200 dark:border-secondary-700 shadow-lg sm:shadow-none sm:border-0 sm:bg-transparent sm:dark:bg-transparent sm:p-0 flex justify-end pt-4">
                     <button 
                         onClick={handleSaveAttendance} 
                         disabled={isSaving} 
-                        className="btn-primary w-full sm:w-auto"
+                        className="btn-primary w-full sm:w-auto shadow-md"
                     >
                         {isSaving ? 'Saving...' : 'Save Attendance'}
                     </button>

@@ -5,11 +5,14 @@
  *   npm run restore -- <path-to-backup.json>
  *   npm run restore -- <path-to-backup.json> --wipe
  * 
+ * Uses standard node-postgres (pg) client with SSL for multi-statement atomic transactions.
  * Computes topological insertion order using foreign-key constraints from information_schema/pg_catalog.
- * All writes execute in ONE atomic transaction (sql.transaction); if any insert fails, nothing is committed.
+ * Inserts are batched into multi-row parameterized statements (up to 200 rows per query) inside
+ * a single BEGIN ... COMMIT block. If any insert fails, ROLLBACK is executed immediately.
  */
 
-import { neon } from '@neondatabase/serverless';
+import pg from 'pg';
+const { Client } = pg;
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
@@ -77,214 +80,257 @@ async function runRestore() {
     const tablesInBackup = Object.keys(backupPayload.tables);
     console.log(`Backup version: ${backupPayload.version || 'unknown'}, tables: ${tablesInBackup.length}`);
 
-    const sql = neon(databaseUrl);
+    const client = new Client({ connectionString: databaseUrl, ssl: { rejectUnauthorized: true } });
+    await client.connect();
 
-    // 1. Check whether target tables are empty
-    console.log('\nChecking target database state...');
-    const nonEmptyTables: string[] = [];
-    for (const tbl of tablesInBackup) {
-        try {
-            const quotedTbl = `"${tbl.replace(/"/g, '""')}"`;
-            const countRes = await sql(`SELECT count(*)::int as count FROM ${quotedTbl}`);
-            const c = Number(countRes[0]?.count || 0);
-            if (c > 0) {
-                nonEmptyTables.push(`${tbl} (${c} rows)`);
+    try {
+        // 1. Check whether target tables are empty
+        console.log('\nChecking target database state...');
+        const nonEmptyTables: string[] = [];
+        for (const tbl of tablesInBackup) {
+            try {
+                const quotedTbl = `"${tbl.replace(/"/g, '""')}"`;
+                const countRes = await client.query(`SELECT count(*)::int as count FROM ${quotedTbl}`);
+                const c = Number(countRes.rows[0]?.count || 0);
+                if (c > 0) {
+                    nonEmptyTables.push(`${tbl} (${c} rows)`);
+                }
+            } catch (e: any) {
+                // Table might not exist yet if schema wasn't loaded
+                console.error(`Error accessing table "${tbl}":`, e?.message || e);
             }
-        } catch (e: any) {
-            // Table might not exist yet if schema wasn't loaded
-            console.error(`Error accessing table "${tbl}":`, e?.message || e);
         }
-    }
 
-    if (nonEmptyTables.length > 0) {
-        if (!allowWipe) {
-            console.error('\nRESTORE REFUSAL: Target database tables are not empty:');
-            for (const t of nonEmptyTables) {
-                console.error(`  - ${t}`);
+        if (nonEmptyTables.length > 0) {
+            if (!allowWipe) {
+                console.error('\nRESTORE REFUSAL: Target database tables are not empty:');
+                for (const t of nonEmptyTables) {
+                    console.error(`  - ${t}`);
+                }
+                console.error('\nTo overwrite existing data, run with --wipe:');
+                console.error(`npm run restore -- ${filePath} --wipe`);
+                process.exit(1);
+            } else {
+                console.warn('\nWARNING: Target tables contain existing data and will be WIPED:');
+                for (const t of nonEmptyTables) {
+                    console.warn(`  - ${t}`);
+                }
+                const confirm = await askConfirmation('\nType "RESTORE" to permanently wipe existing data and proceed: ');
+                if (confirm !== 'RESTORE') {
+                    console.log('Confirmation cancelled. Restore aborted.');
+                    process.exit(0);
+                }
             }
-            console.error('\nTo overwrite existing data, run with --wipe:');
-            console.error(`npm run restore -- ${filePath} --wipe`);
+        }
+
+        // 2. Discover Foreign Keys from information_schema
+        console.log('\nAnalyzing table dependency graph (Foreign Keys)...');
+        const fkRes = await client.query(`
+            SELECT
+                tc.table_name AS child_table,
+                ccu.table_name AS parent_table
+            FROM information_schema.table_constraints AS tc
+            JOIN information_schema.key_column_usage AS kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage AS ccu
+                ON ccu.constraint_name = tc.constraint_name
+                AND ccu.table_schema = tc.table_schema
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+                AND tc.table_schema = 'public'
+        `);
+
+        // Map dependencies: parent -> set of children, and child -> set of parents
+        const parentsOf: Record<string, Set<string>> = {};
+        const childrenOf: Record<string, Set<string>> = {};
+
+        for (const tbl of tablesInBackup) {
+            parentsOf[tbl] = new Set();
+            childrenOf[tbl] = new Set();
+        }
+
+        for (const r of fkRes.rows) {
+            const child = r.child_table as string;
+            const parent = r.parent_table as string;
+            // Ignore self-references or tables not in backup
+            if (child === parent) continue;
+            if (tablesInBackup.includes(child) && tablesInBackup.includes(parent)) {
+                parentsOf[child].add(parent);
+                childrenOf[parent].add(child);
+            }
+        }
+
+        // Topological Sort (Kahn's Algorithm)
+        const sortedOrder: string[] = [];
+        const inDegree: Record<string, number> = {};
+        const queue: string[] = [];
+
+        for (const tbl of tablesInBackup) {
+            inDegree[tbl] = parentsOf[tbl].size;
+            if (inDegree[tbl] === 0) {
+                queue.push(tbl);
+            }
+        }
+
+        while (queue.length > 0) {
+            const current = queue.shift()!;
+            sortedOrder.push(current);
+
+            for (const child of childrenOf[current]) {
+                inDegree[child]--;
+                if (inDegree[child] === 0) {
+                    queue.push(child);
+                }
+            }
+        }
+
+        if (sortedOrder.length < tablesInBackup.length) {
+            const cyclicTables = tablesInBackup.filter(t => !sortedOrder.includes(t));
+            console.error('CRITICAL ERROR: Cyclic foreign key dependency detected among tables:');
+            console.error(cyclicTables.join(', '));
+            process.exit(1);
+        }
+
+        console.log('Computed topological insertion order:');
+        sortedOrder.forEach((tbl, idx) => {
+            console.log(`  ${idx + 1}. ${tbl}`);
+        });
+
+        // 3. Inspect column types for proper jsonb / array formatting
+        const colTypesRes = await client.query(`
+            SELECT table_name, column_name, data_type, udt_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+        `);
+        const colTypeMap: Record<string, Record<string, { dataType: string; udtName: string }>> = {};
+        for (const r of colTypesRes.rows) {
+            if (!colTypeMap[r.table_name]) colTypeMap[r.table_name] = {};
+            colTypeMap[r.table_name][r.column_name] = { dataType: r.data_type, udtName: r.udt_name };
+        }
+
+        // 4. Begin Transaction
+        console.log('\nBeginning database transaction...');
+        await client.query('BEGIN');
+
+        try {
+            // If wiping, truncate in reverse topological order (or CASCADE)
+            if (allowWipe && nonEmptyTables.length > 0) {
+                console.log('Wiping existing records...');
+                const quotedTables = sortedOrder.map(t => `"${t.replace(/"/g, '""')}"`).join(', ');
+                await client.query(`TRUNCATE TABLE ${quotedTables} CASCADE`);
+                console.log('✓ Target tables truncated.');
+            }
+
+            // 5. Insert rows in multi-row parameterized statements (up to 200 rows per batch)
+            const BATCH_SIZE = 200;
+            const startTime = Date.now();
+
+            for (const tableName of sortedOrder) {
+                const rows: any[] = backupPayload.tables[tableName] || [];
+                process.stdout.write(`Restoring table "${tableName}" (${rows.length} rows)... `);
+                if (rows.length === 0) {
+                    console.log('✓ 0 rows');
+                    continue;
+                }
+
+                const tableColMeta = colTypeMap[tableName] || {};
+                const columnSet = new Set<string>();
+                for (const r of rows) {
+                    for (const k of Object.keys(r)) {
+                        if (tableColMeta[k]) {
+                            columnSet.add(k);
+                        }
+                    }
+                }
+                const columns = Array.from(columnSet);
+                if (columns.length === 0) {
+                    console.log('✓ skipped (no matching columns)');
+                    continue;
+                }
+
+                const quotedTable = `"${tableName.replace(/"/g, '""')}"`;
+                const quotedCols = columns.map(c => `"${c.replace(/"/g, '""')}"`).join(', ');
+
+                for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+                    const chunk = rows.slice(i, i + BATCH_SIZE);
+                    const valueClauses: string[] = [];
+                    const params: any[] = [];
+                    let paramIdx = 1;
+
+                    for (const row of chunk) {
+                        const rowPlaceholders: string[] = [];
+                        for (const col of columns) {
+                            rowPlaceholders.push(`$${paramIdx++}`);
+                            const rawVal = row[col];
+                            if (rawVal === null || rawVal === undefined) {
+                                params.push(null);
+                                continue;
+                            }
+
+                            const colMeta = tableColMeta[col];
+                            const dType = colMeta?.dataType || '';
+                            const udt = colMeta?.udtName || '';
+
+                            if (dType === 'jsonb' || dType === 'json') {
+                                params.push(typeof rawVal === 'string' ? rawVal : JSON.stringify(rawVal));
+                            } else if (dType === 'ARRAY' || udt.startsWith('_')) {
+                                if (Array.isArray(rawVal)) {
+                                    params.push(rawVal);
+                                } else if (typeof rawVal === 'string' && rawVal.startsWith('{') && rawVal.endsWith('}')) {
+                                    const cleaned = rawVal.slice(1, -1);
+                                    params.push(cleaned ? cleaned.split(',') : []);
+                                } else {
+                                    params.push(rawVal);
+                                }
+                            } else {
+                                params.push(rawVal);
+                            }
+                        }
+                        valueClauses.push(`(${rowPlaceholders.join(', ')})`);
+                    }
+
+                    const insertSql = `INSERT INTO ${quotedTable} (${quotedCols}) VALUES ${valueClauses.join(', ')}`;
+                    await client.query(insertSql, params);
+                }
+
+                console.log('✓ OK');
+            }
+
+            await client.query('COMMIT');
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+            console.log(`\n✓ All tables committed successfully in ${elapsed}s.`);
+
+        } catch (txErr: any) {
+            await client.query('ROLLBACK');
+            console.error('\nTRANSACTION FAILED: Database rolled back. Nothing was written.');
+            console.error('Error details:', txErr?.message || txErr);
+            process.exit(1);
+        }
+
+        // 6. Verify per-table row counts
+        console.log('\n================ RESTORE VERIFICATION ================');
+        let hasMismatch = false;
+        for (const tableName of sortedOrder) {
+            const expectedCount = (backupPayload.tables[tableName] || []).length;
+            const quotedTable = `"${tableName.replace(/"/g, '""')}"`;
+            const countRes = await client.query(`SELECT count(*)::int as count FROM ${quotedTable}`);
+            const actualCount = Number(countRes.rows[0]?.count || 0);
+
+            const status = actualCount === expectedCount ? 'OK' : 'MISMATCH';
+            if (status === 'MISMATCH') hasMismatch = true;
+            console.log(`  - ${tableName.padEnd(20)}: File = ${expectedCount}, DB = ${actualCount} [${status}]`);
+        }
+        console.log('======================================================\n');
+
+        if (hasMismatch) {
+            console.error('Warning: One or more table row counts mismatched.');
             process.exit(1);
         } else {
-            console.warn('\nWARNING: Target tables contain existing data and will be WIPED:');
-            for (const t of nonEmptyTables) {
-                console.warn(`  - ${t}`);
-            }
-            const confirm = await askConfirmation('\nType "RESTORE" to permanently wipe existing data and proceed: ');
-            if (confirm !== 'RESTORE') {
-                console.log('Confirmation cancelled. Restore aborted.');
-                process.exit(0);
-            }
+            console.log('Restore completed successfully with 100% count verification.');
         }
-    }
 
-    // 2. Discover Foreign Keys from information_schema
-    console.log('\nAnalyzing table dependency graph (Foreign Keys)...');
-    const fkRows = await sql`
-        SELECT
-            tc.table_name AS child_table,
-            ccu.table_name AS parent_table
-        FROM information_schema.table_constraints AS tc
-        JOIN information_schema.key_column_usage AS kcu
-            ON tc.constraint_name = kcu.constraint_name
-            AND tc.table_schema = kcu.table_schema
-        JOIN information_schema.constraint_column_usage AS ccu
-            ON ccu.constraint_name = tc.constraint_name
-            AND ccu.table_schema = tc.table_schema
-        WHERE tc.constraint_type = 'FOREIGN KEY'
-            AND tc.table_schema = 'public'
-    `;
-
-    // Map dependencies: parent -> set of children, and child -> set of parents
-    // Table U must be inserted before Table V if Table V has a foreign key referencing Table U
-    const parentsOf: Record<string, Set<string>> = {};
-    const childrenOf: Record<string, Set<string>> = {};
-
-    for (const tbl of tablesInBackup) {
-        parentsOf[tbl] = new Set();
-        childrenOf[tbl] = new Set();
-    }
-
-    for (const r of fkRows) {
-        const child = r.child_table as string;
-        const parent = r.parent_table as string;
-        // Ignore self-references or tables not in backup
-        if (child === parent) continue;
-        if (tablesInBackup.includes(child) && tablesInBackup.includes(parent)) {
-            parentsOf[child].add(parent);
-            childrenOf[parent].add(child);
-        }
-    }
-
-    // Topological Sort (Kahn's Algorithm)
-    const sortedOrder: string[] = [];
-    const inDegree: Record<string, number> = {};
-    const queue: string[] = [];
-
-    for (const tbl of tablesInBackup) {
-        inDegree[tbl] = parentsOf[tbl].size;
-        if (inDegree[tbl] === 0) {
-            queue.push(tbl);
-        }
-    }
-
-    while (queue.length > 0) {
-        const current = queue.shift()!;
-        sortedOrder.push(current);
-
-        for (const child of childrenOf[current]) {
-            inDegree[child]--;
-            if (inDegree[child] === 0) {
-                queue.push(child);
-            }
-        }
-    }
-
-    if (sortedOrder.length < tablesInBackup.length) {
-        const cyclicTables = tablesInBackup.filter(t => !sortedOrder.includes(t));
-        console.error('CRITICAL ERROR: Cyclic foreign key dependency detected among tables:');
-        console.error(cyclicTables.join(', '));
-        process.exit(1);
-    }
-
-    console.log('Computed topological insertion order:');
-    sortedOrder.forEach((tbl, idx) => {
-        console.log(`  ${idx + 1}. ${tbl}`);
-    });
-
-    // 3. If wiping, truncate in reverse topological order (or CASCADE)
-    if (allowWipe && nonEmptyTables.length > 0) {
-        console.log('\nWiping existing records...');
-        const quotedTables = sortedOrder.map(t => `"${t.replace(/"/g, '""')}"`).join(', ');
-        await sql(`TRUNCATE TABLE ${quotedTables} CASCADE`);
-        console.log('✓ Target tables truncated.');
-    }
-
-    // 4. Inspect column types for proper jsonb / array formatting
-    const colTypesRes = await sql`
-        SELECT table_name, column_name, data_type
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-    `;
-    const colTypeMap: Record<string, Record<string, string>> = {};
-    for (const r of colTypesRes) {
-        if (!colTypeMap[r.table_name]) colTypeMap[r.table_name] = {};
-        colTypeMap[r.table_name][r.column_name] = r.data_type;
-    }
-
-    // 5. Build all insert statements
-    console.log('\nPreparing transactional insertion batch...');
-    const allQueries: any[] = [];
-    let totalRowsToInsert = 0;
-
-    for (const tableName of sortedOrder) {
-        const rows = backupPayload.tables[tableName] || [];
-        totalRowsToInsert += rows.length;
-        if (rows.length === 0) continue;
-
-        const tableColTypes = colTypeMap[tableName] || {};
-        const quotedTable = `"${tableName.replace(/"/g, '""')}"`;
-
-        for (const row of rows) {
-            const columns = Object.keys(row).filter(c => tableColTypes[c] !== undefined);
-            if (columns.length === 0) continue;
-
-            const values = columns.map(c => {
-                const val = row[c];
-                if (val === null || val === undefined) return null;
-                const dType = tableColTypes[c];
-                if (dType === 'jsonb' || dType === 'json') {
-                    return typeof val === 'string' ? val : JSON.stringify(val);
-                }
-                return val;
-            });
-
-            const quotedCols = columns.map(c => `"${c.replace(/"/g, '""')}"`).join(', ');
-            const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
-
-            allQueries.push(sql(
-                `INSERT INTO ${quotedTable} (${quotedCols}) VALUES (${placeholders})`,
-                values
-            ));
-        }
-    }
-
-    console.log(`Executing ${allQueries.length} row inserts in ONE atomic transaction...`);
-    const startTime = Date.now();
-    try {
-        // Execute inside single transaction
-        if (allQueries.length > 0) {
-            // Neon transaction accepts array of queries
-            await sql.transaction(allQueries);
-        }
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`✓ All rows committed successfully in ${elapsed}s.`);
-    } catch (txErr: any) {
-        console.error('\nTRANSACTION FAILED: Database rolled back. Nothing was written.');
-        console.error('Error details:', txErr?.message || txErr);
-        process.exit(1);
-    }
-
-    // 6. Verify per-table row counts
-    console.log('\n================ RESTORE VERIFICATION ================');
-    let hasMismatch = false;
-    for (const tableName of sortedOrder) {
-        const expectedCount = (backupPayload.tables[tableName] || []).length;
-        const quotedTable = `"${tableName.replace(/"/g, '""')}"`;
-        const countRes = await sql(`SELECT count(*)::int as count FROM ${quotedTable}`);
-        const actualCount = Number(countRes[0]?.count || 0);
-
-        const status = actualCount === expectedCount ? 'OK' : 'MISMATCH';
-        if (status === 'MISMATCH') hasMismatch = true;
-        console.log(`  - ${tableName.padEnd(20)}: File = ${expectedCount}, DB = ${actualCount} [${status}]`);
-    }
-    console.log('======================================================\n');
-
-    if (hasMismatch) {
-        console.error('Warning: One or more table row counts mismatched.');
-        process.exit(1);
-    } else {
-        console.log('Restore completed successfully with 100% count verification.');
+    } finally {
+        await client.end();
     }
 }
 

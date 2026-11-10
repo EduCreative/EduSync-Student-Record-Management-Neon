@@ -1,6 +1,36 @@
 
 # Changelog
 
+## [3.43.0] - 2026-11-10
+
+### Student Fee Structure Persistence (P0 Blocker Fix)
+- **Server-Side Fee Structure Route**:
+  - Implemented authorized `action === 'update-fee-structure'` in `src/server/handlers/write/students.ts` for Owner, Admin, and Accountant roles.
+  - Persists customized student fee heads (`fee_structure JSONB`) with audit logging, resolving the issue where custom fee structures were silently dropped after F4.5 removed `fee_structure` from generic student profile updates.
+- **Client & Context Wiring**:
+  - Exposed `updateFeeStructure(studentId, feeStructure)` in `DataContext.tsx`.
+  - Wired `StudentFeeStructure.tsx` save handler to invoke `updateFeeStructure`, updating the database and state immediately.
+
+### Postgres Driver & Large School Scaling (F6)
+- **Node-Postgres Connection (`pg`)**:
+  - Upgraded CLI `scripts/backup.ts` and `scripts/restore.ts` from Neon HTTP driver to `pg` (`node-postgres`) using standard connection strings and TLS (`ssl: { rejectUnauthorized: true }`).
+- **Batched Transactional Multi-Row Inserts**:
+  - In `scripts/restore.ts`, batched rows into multi-row parameterized `INSERT INTO ... VALUES (...), (...)` statements of up to 200 rows per query executed inside a single `BEGIN ... COMMIT` transaction.
+  - Guarantees instant rollback on any constraint violation and bypasses Neon serverless single-query HTTP payload limits (enabling smooth restores for 1,500+ student campuses with 89+ MB datasets).
+  - Maintained complete foreign-key topological sorting, safety checks against non-empty databases (`--wipe` with typed confirmation), and per-table count verification.
+
+### Security, Audit & Script Fixes (F7)
+- **School Logo MIME & Base64 Validation**:
+  - Enforced `validateAvatarDataUrl` on `logoUrl` during institution profile updates (`update-school` action in `src/server/handlers/write/users.ts`), rejecting invalid data URLs or non-image types with HTTP 400.
+- **Load-Test Script Constraint Fix**:
+  - Added NOT NULL column `class_id` (`classIds[0]`) to examination results `INSERT INTO results` in `scripts/load-test.ts`, allowing large-scale test seed generation to complete cleanly.
+- **Unified Backup Table Whitelist**:
+  - Added `'notifications'` to `ALLOWED_TABLES` in `/api/backup`, `src/context/DataContext.tsx`, and `RestoreModal.tsx` so in-app backup and browser restore cover all tables identical to CLI tools.
+
+### Mobile Usability Polish
+- **Attendance Sticky Save Bar**:
+  - Implemented responsive sticky bottom bar in `src/components/attendance/AttendancePage.tsx` with light/dark backdrop blur and elevated shadow, keeping the save button readily accessible without scrolling on mobile devices.
+
 ## [3.42.0] - 2026-11-09
 
 ### Browser-Based Disaster Recovery (One-Click Restore)

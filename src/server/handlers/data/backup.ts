@@ -13,7 +13,8 @@ const ALLOWED_TABLES = [
     'attendance',
     'results',
     'activity_logs',
-    'school_events'
+    'school_events',
+    'notifications'
 ] as const;
 
 export default async function handler(req: any, res: any) {
@@ -60,6 +61,7 @@ export default async function handler(req: any, res: any) {
                 case 'results': queryRows = await sql`SELECT * FROM results WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
                 case 'activity_logs': queryRows = await sql`SELECT * FROM activity_logs WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
                 case 'school_events': queryRows = await sql`SELECT * FROM school_events WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'notifications': queryRows = await sql`SELECT * FROM notifications WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
                 default: queryRows = [];
             }
         } else {
@@ -77,6 +79,7 @@ export default async function handler(req: any, res: any) {
                 case 'results': queryRows = await sql`SELECT * FROM results ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
                 case 'activity_logs': queryRows = await sql`SELECT * FROM activity_logs ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
                 case 'school_events': queryRows = await sql`SELECT * FROM school_events ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
+                case 'notifications': queryRows = await sql`SELECT * FROM notifications ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`; break;
                 default: queryRows = [];
             }
         }

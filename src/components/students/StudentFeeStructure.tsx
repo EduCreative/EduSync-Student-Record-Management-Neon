@@ -10,7 +10,7 @@ interface StudentFeeStructureProps {
 }
 
 const StudentFeeStructure: React.FC<StudentFeeStructureProps> = ({ student }) => {
-    const { feeHeads, updateStudent } = useData();
+    const { feeHeads, updateFeeStructure } = useData();
     const { hasPermission } = useAuth();
     const { showToast } = useToast();
     
@@ -22,8 +22,8 @@ const StudentFeeStructure: React.FC<StudentFeeStructureProps> = ({ student }) =>
         setStructure(student.feeStructure || []);
     }, [student.feeStructure]);
 
-    // FIX: Corrected permission check from CAN_MANAGE_STUDENTS to CAN_EDIT_STUDENTS.
-    const canManage = hasPermission(Permission.CAN_EDIT_STUDENTS);
+    // Permissions: Admins, Owners, and Accountants can manage student fee structures
+    const canManage = hasPermission(Permission.CAN_EDIT_STUDENTS) || hasPermission(Permission.CAN_MANAGE_FEES);
 
     const assignedFeeHeadIds = useMemo(() => new Set(structure.map(item => item.feeHeadId)), [structure]);
 
@@ -51,7 +51,7 @@ const StudentFeeStructure: React.FC<StudentFeeStructureProps> = ({ student }) =>
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            await updateStudent({ ...student, feeStructure: structure });
+            await updateFeeStructure(student.id, structure);
             showToast('Success', "Student's fee structure updated successfully.", 'success');
         } catch (error) {
             showToast('Error', "Failed to update fee structure.", 'error');
