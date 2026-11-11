@@ -150,9 +150,9 @@ var require_ms = __commonJS({
   }
 });
 
-// node_modules/debug/src/common.js
+// node_modules/body-parser/node_modules/debug/src/common.js
 var require_common = __commonJS({
-  "node_modules/debug/src/common.js"(exports2, module2) {
+  "node_modules/body-parser/node_modules/debug/src/common.js"(exports2, module2) {
     function setup(env) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
@@ -327,9 +327,9 @@ var require_common = __commonJS({
   }
 });
 
-// node_modules/debug/src/browser.js
+// node_modules/body-parser/node_modules/debug/src/browser.js
 var require_browser = __commonJS({
-  "node_modules/debug/src/browser.js"(exports2, module2) {
+  "node_modules/body-parser/node_modules/debug/src/browser.js"(exports2, module2) {
     exports2.formatArgs = formatArgs;
     exports2.save = save;
     exports2.load = load;
@@ -497,9 +497,9 @@ var require_browser = __commonJS({
   }
 });
 
-// node_modules/debug/src/node.js
+// node_modules/body-parser/node_modules/debug/src/node.js
 var require_node = __commonJS({
-  "node_modules/debug/src/node.js"(exports2, module2) {
+  "node_modules/body-parser/node_modules/debug/src/node.js"(exports2, module2) {
     var tty = require("tty");
     var util = require("util");
     exports2.init = init;
@@ -671,9 +671,9 @@ var require_node = __commonJS({
   }
 });
 
-// node_modules/debug/src/index.js
+// node_modules/body-parser/node_modules/debug/src/index.js
 var require_src = __commonJS({
-  "node_modules/debug/src/index.js"(exports2, module2) {
+  "node_modules/body-parser/node_modules/debug/src/index.js"(exports2, module2) {
     if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
       module2.exports = require_browser();
     } else {
@@ -18721,6 +18721,538 @@ var require_merge_descriptors = __commonJS({
   }
 });
 
+// node_modules/finalhandler/node_modules/debug/src/common.js
+var require_common2 = __commonJS({
+  "node_modules/finalhandler/node_modules/debug/src/common.js"(exports2, module2) {
+    function setup(env) {
+      createDebug.debug = createDebug;
+      createDebug.default = createDebug;
+      createDebug.coerce = coerce;
+      createDebug.disable = disable;
+      createDebug.enable = enable;
+      createDebug.enabled = enabled;
+      createDebug.humanize = require_ms();
+      createDebug.destroy = destroy;
+      Object.keys(env).forEach((key) => {
+        createDebug[key] = env[key];
+      });
+      createDebug.names = [];
+      createDebug.skips = [];
+      createDebug.formatters = {};
+      function selectColor(namespace) {
+        let hash2 = 0;
+        for (let i = 0; i < namespace.length; i++) {
+          hash2 = (hash2 << 5) - hash2 + namespace.charCodeAt(i);
+          hash2 |= 0;
+        }
+        return createDebug.colors[Math.abs(hash2) % createDebug.colors.length];
+      }
+      createDebug.selectColor = selectColor;
+      function createDebug(namespace) {
+        let prevTime;
+        let enableOverride = null;
+        let namespacesCache;
+        let enabledCache;
+        function debug(...args) {
+          if (!debug.enabled) {
+            return;
+          }
+          const self = debug;
+          const curr = Number(/* @__PURE__ */ new Date());
+          const ms2 = curr - (prevTime || curr);
+          self.diff = ms2;
+          self.prev = prevTime;
+          self.curr = curr;
+          prevTime = curr;
+          args[0] = createDebug.coerce(args[0]);
+          if (typeof args[0] !== "string") {
+            args.unshift("%O");
+          }
+          let index = 0;
+          args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
+            if (match === "%%") {
+              return "%";
+            }
+            index++;
+            const formatter = createDebug.formatters[format];
+            if (typeof formatter === "function") {
+              const val = args[index];
+              match = formatter.call(self, val);
+              args.splice(index, 1);
+              index--;
+            }
+            return match;
+          });
+          createDebug.formatArgs.call(self, args);
+          const logFn = self.log || createDebug.log;
+          logFn.apply(self, args);
+        }
+        debug.namespace = namespace;
+        debug.useColors = createDebug.useColors();
+        debug.color = createDebug.selectColor(namespace);
+        debug.extend = extend;
+        debug.destroy = createDebug.destroy;
+        Object.defineProperty(debug, "enabled", {
+          enumerable: true,
+          configurable: false,
+          get: () => {
+            if (enableOverride !== null) {
+              return enableOverride;
+            }
+            if (namespacesCache !== createDebug.namespaces) {
+              namespacesCache = createDebug.namespaces;
+              enabledCache = createDebug.enabled(namespace);
+            }
+            return enabledCache;
+          },
+          set: (v2) => {
+            enableOverride = v2;
+          }
+        });
+        if (typeof createDebug.init === "function") {
+          createDebug.init(debug);
+        }
+        return debug;
+      }
+      function extend(namespace, delimiter) {
+        const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
+        newDebug.log = this.log;
+        return newDebug;
+      }
+      function enable(namespaces) {
+        createDebug.save(namespaces);
+        createDebug.namespaces = namespaces;
+        createDebug.names = [];
+        createDebug.skips = [];
+        const split = (typeof namespaces === "string" ? namespaces : "").trim().replace(/\s+/g, ",").split(",").filter(Boolean);
+        for (const ns2 of split) {
+          if (ns2[0] === "-") {
+            createDebug.skips.push(ns2.slice(1));
+          } else {
+            createDebug.names.push(ns2);
+          }
+        }
+      }
+      function matchesTemplate(search, template) {
+        let searchIndex = 0;
+        let templateIndex = 0;
+        let starIndex = -1;
+        let matchIndex = 0;
+        while (searchIndex < search.length) {
+          if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === "*")) {
+            if (template[templateIndex] === "*") {
+              starIndex = templateIndex;
+              matchIndex = searchIndex;
+              templateIndex++;
+            } else {
+              searchIndex++;
+              templateIndex++;
+            }
+          } else if (starIndex !== -1) {
+            templateIndex = starIndex + 1;
+            matchIndex++;
+            searchIndex = matchIndex;
+          } else {
+            return false;
+          }
+        }
+        while (templateIndex < template.length && template[templateIndex] === "*") {
+          templateIndex++;
+        }
+        return templateIndex === template.length;
+      }
+      function disable() {
+        const namespaces = [
+          ...createDebug.names,
+          ...createDebug.skips.map((namespace) => "-" + namespace)
+        ].join(",");
+        createDebug.enable("");
+        return namespaces;
+      }
+      function enabled(name) {
+        for (const skip of createDebug.skips) {
+          if (matchesTemplate(name, skip)) {
+            return false;
+          }
+        }
+        for (const ns2 of createDebug.names) {
+          if (matchesTemplate(name, ns2)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function coerce(val) {
+        if (val instanceof Error) {
+          return val.stack || val.message;
+        }
+        return val;
+      }
+      function destroy() {
+        console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+      }
+      createDebug.enable(createDebug.load());
+      return createDebug;
+    }
+    module2.exports = setup;
+  }
+});
+
+// node_modules/finalhandler/node_modules/debug/src/browser.js
+var require_browser2 = __commonJS({
+  "node_modules/finalhandler/node_modules/debug/src/browser.js"(exports2, module2) {
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.storage = localstorage();
+    exports2.destroy = /* @__PURE__ */ (() => {
+      let warned = false;
+      return () => {
+        if (!warned) {
+          warned = true;
+          console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+        }
+      };
+    })();
+    exports2.colors = [
+      "#0000CC",
+      "#0000FF",
+      "#0033CC",
+      "#0033FF",
+      "#0066CC",
+      "#0066FF",
+      "#0099CC",
+      "#0099FF",
+      "#00CC00",
+      "#00CC33",
+      "#00CC66",
+      "#00CC99",
+      "#00CCCC",
+      "#00CCFF",
+      "#3300CC",
+      "#3300FF",
+      "#3333CC",
+      "#3333FF",
+      "#3366CC",
+      "#3366FF",
+      "#3399CC",
+      "#3399FF",
+      "#33CC00",
+      "#33CC33",
+      "#33CC66",
+      "#33CC99",
+      "#33CCCC",
+      "#33CCFF",
+      "#6600CC",
+      "#6600FF",
+      "#6633CC",
+      "#6633FF",
+      "#66CC00",
+      "#66CC33",
+      "#9900CC",
+      "#9900FF",
+      "#9933CC",
+      "#9933FF",
+      "#99CC00",
+      "#99CC33",
+      "#CC0000",
+      "#CC0033",
+      "#CC0066",
+      "#CC0099",
+      "#CC00CC",
+      "#CC00FF",
+      "#CC3300",
+      "#CC3333",
+      "#CC3366",
+      "#CC3399",
+      "#CC33CC",
+      "#CC33FF",
+      "#CC6600",
+      "#CC6633",
+      "#CC9900",
+      "#CC9933",
+      "#CCCC00",
+      "#CCCC33",
+      "#FF0000",
+      "#FF0033",
+      "#FF0066",
+      "#FF0099",
+      "#FF00CC",
+      "#FF00FF",
+      "#FF3300",
+      "#FF3333",
+      "#FF3366",
+      "#FF3399",
+      "#FF33CC",
+      "#FF33FF",
+      "#FF6600",
+      "#FF6633",
+      "#FF9900",
+      "#FF9933",
+      "#FFCC00",
+      "#FFCC33"
+    ];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
+        return true;
+      }
+      if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+        return false;
+      }
+      let m2;
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // Is firebug? http://stackoverflow.com/a/398120/376773
+      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // Is firefox >= v31?
+      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+      typeof navigator !== "undefined" && navigator.userAgent && (m2 = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m2[1], 10) >= 31 || // Double check webkit in userAgent just in case we are in a worker
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    function formatArgs(args) {
+      args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module2.exports.humanize(this.diff);
+      if (!this.useColors) {
+        return;
+      }
+      const c = "color: " + this.color;
+      args.splice(1, 0, c, "color: inherit");
+      let index = 0;
+      let lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, (match) => {
+        if (match === "%%") {
+          return;
+        }
+        index++;
+        if (match === "%c") {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c);
+    }
+    exports2.log = console.debug || console.log || (() => {
+    });
+    function save(namespaces) {
+      try {
+        if (namespaces) {
+          exports2.storage.setItem("debug", namespaces);
+        } else {
+          exports2.storage.removeItem("debug");
+        }
+      } catch (error) {
+      }
+    }
+    function load() {
+      let r;
+      try {
+        r = exports2.storage.getItem("debug") || exports2.storage.getItem("DEBUG");
+      } catch (error) {
+      }
+      if (!r && typeof process !== "undefined" && "env" in process) {
+        r = process.env.DEBUG;
+      }
+      return r;
+    }
+    function localstorage() {
+      try {
+        return localStorage;
+      } catch (error) {
+      }
+    }
+    module2.exports = require_common2()(exports2);
+    var { formatters } = module2.exports;
+    formatters.j = function(v2) {
+      try {
+        return JSON.stringify(v2);
+      } catch (error) {
+        return "[UnexpectedJSONParseError]: " + error.message;
+      }
+    };
+  }
+});
+
+// node_modules/finalhandler/node_modules/debug/src/node.js
+var require_node2 = __commonJS({
+  "node_modules/finalhandler/node_modules/debug/src/node.js"(exports2, module2) {
+    var tty = require("tty");
+    var util = require("util");
+    exports2.init = init;
+    exports2.log = log;
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.destroy = util.deprecate(
+      () => {
+      },
+      "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`."
+    );
+    exports2.colors = [6, 2, 3, 4, 5, 1];
+    try {
+      const supportsColor = require("supports-color");
+      if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+        exports2.colors = [
+          20,
+          21,
+          26,
+          27,
+          32,
+          33,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          56,
+          57,
+          62,
+          63,
+          68,
+          69,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          92,
+          93,
+          98,
+          99,
+          112,
+          113,
+          128,
+          129,
+          134,
+          135,
+          148,
+          149,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          178,
+          179,
+          184,
+          185,
+          196,
+          197,
+          198,
+          199,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          214,
+          215,
+          220,
+          221
+        ];
+      }
+    } catch (error) {
+    }
+    exports2.inspectOpts = Object.keys(process.env).filter((key) => {
+      return /^debug_/i.test(key);
+    }).reduce((obj, key) => {
+      const prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, (_2, k) => {
+        return k.toUpperCase();
+      });
+      let val = process.env[key];
+      if (/^(yes|on|true|enabled)$/i.test(val)) {
+        val = true;
+      } else if (/^(no|off|false|disabled)$/i.test(val)) {
+        val = false;
+      } else if (val === "null") {
+        val = null;
+      } else {
+        val = Number(val);
+      }
+      obj[prop] = val;
+      return obj;
+    }, {});
+    function useColors() {
+      return "colors" in exports2.inspectOpts ? Boolean(exports2.inspectOpts.colors) : tty.isatty(process.stderr.fd);
+    }
+    function formatArgs(args) {
+      const { namespace: name, useColors: useColors2 } = this;
+      if (useColors2) {
+        const c = this.color;
+        const colorCode = "\x1B[3" + (c < 8 ? c : "8;5;" + c);
+        const prefix = `  ${colorCode};1m${name} \x1B[0m`;
+        args[0] = prefix + args[0].split("\n").join("\n" + prefix);
+        args.push(colorCode + "m+" + module2.exports.humanize(this.diff) + "\x1B[0m");
+      } else {
+        args[0] = getDate() + name + " " + args[0];
+      }
+    }
+    function getDate() {
+      if (exports2.inspectOpts.hideDate) {
+        return "";
+      }
+      return (/* @__PURE__ */ new Date()).toISOString() + " ";
+    }
+    function log(...args) {
+      return process.stderr.write(util.formatWithOptions(exports2.inspectOpts, ...args) + "\n");
+    }
+    function save(namespaces) {
+      if (namespaces) {
+        process.env.DEBUG = namespaces;
+      } else {
+        delete process.env.DEBUG;
+      }
+    }
+    function load() {
+      return process.env.DEBUG;
+    }
+    function init(debug) {
+      debug.inspectOpts = {};
+      const keys = Object.keys(exports2.inspectOpts);
+      for (let i = 0; i < keys.length; i++) {
+        debug.inspectOpts[keys[i]] = exports2.inspectOpts[keys[i]];
+      }
+    }
+    module2.exports = require_common2()(exports2);
+    var { formatters } = module2.exports;
+    formatters.o = function(v2) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v2, this.inspectOpts).split("\n").map((str) => str.trim()).join(" ");
+    };
+    formatters.O = function(v2) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v2, this.inspectOpts);
+    };
+  }
+});
+
+// node_modules/finalhandler/node_modules/debug/src/index.js
+var require_src2 = __commonJS({
+  "node_modules/finalhandler/node_modules/debug/src/index.js"(exports2, module2) {
+    if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
+      module2.exports = require_browser2();
+    } else {
+      module2.exports = require_node2();
+    }
+  }
+});
+
 // node_modules/encodeurl/index.js
 var require_encodeurl = __commonJS({
   "node_modules/encodeurl/index.js"(exports2, module2) {
@@ -18871,7 +19403,7 @@ var require_parseurl = __commonJS({
 var require_finalhandler = __commonJS({
   "node_modules/finalhandler/index.js"(exports2, module2) {
     "use strict";
-    var debug = require_src()("finalhandler");
+    var debug = require_src2()("finalhandler");
     var encodeUrl = require_encodeurl();
     var escapeHtml = require_escape_html();
     var onFinished = require_on_finished();
@@ -18994,11 +19526,543 @@ var require_finalhandler = __commonJS({
   }
 });
 
+// node_modules/express/node_modules/debug/src/common.js
+var require_common3 = __commonJS({
+  "node_modules/express/node_modules/debug/src/common.js"(exports2, module2) {
+    function setup(env) {
+      createDebug.debug = createDebug;
+      createDebug.default = createDebug;
+      createDebug.coerce = coerce;
+      createDebug.disable = disable;
+      createDebug.enable = enable;
+      createDebug.enabled = enabled;
+      createDebug.humanize = require_ms();
+      createDebug.destroy = destroy;
+      Object.keys(env).forEach((key) => {
+        createDebug[key] = env[key];
+      });
+      createDebug.names = [];
+      createDebug.skips = [];
+      createDebug.formatters = {};
+      function selectColor(namespace) {
+        let hash2 = 0;
+        for (let i = 0; i < namespace.length; i++) {
+          hash2 = (hash2 << 5) - hash2 + namespace.charCodeAt(i);
+          hash2 |= 0;
+        }
+        return createDebug.colors[Math.abs(hash2) % createDebug.colors.length];
+      }
+      createDebug.selectColor = selectColor;
+      function createDebug(namespace) {
+        let prevTime;
+        let enableOverride = null;
+        let namespacesCache;
+        let enabledCache;
+        function debug(...args) {
+          if (!debug.enabled) {
+            return;
+          }
+          const self = debug;
+          const curr = Number(/* @__PURE__ */ new Date());
+          const ms2 = curr - (prevTime || curr);
+          self.diff = ms2;
+          self.prev = prevTime;
+          self.curr = curr;
+          prevTime = curr;
+          args[0] = createDebug.coerce(args[0]);
+          if (typeof args[0] !== "string") {
+            args.unshift("%O");
+          }
+          let index = 0;
+          args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
+            if (match === "%%") {
+              return "%";
+            }
+            index++;
+            const formatter = createDebug.formatters[format];
+            if (typeof formatter === "function") {
+              const val = args[index];
+              match = formatter.call(self, val);
+              args.splice(index, 1);
+              index--;
+            }
+            return match;
+          });
+          createDebug.formatArgs.call(self, args);
+          const logFn = self.log || createDebug.log;
+          logFn.apply(self, args);
+        }
+        debug.namespace = namespace;
+        debug.useColors = createDebug.useColors();
+        debug.color = createDebug.selectColor(namespace);
+        debug.extend = extend;
+        debug.destroy = createDebug.destroy;
+        Object.defineProperty(debug, "enabled", {
+          enumerable: true,
+          configurable: false,
+          get: () => {
+            if (enableOverride !== null) {
+              return enableOverride;
+            }
+            if (namespacesCache !== createDebug.namespaces) {
+              namespacesCache = createDebug.namespaces;
+              enabledCache = createDebug.enabled(namespace);
+            }
+            return enabledCache;
+          },
+          set: (v2) => {
+            enableOverride = v2;
+          }
+        });
+        if (typeof createDebug.init === "function") {
+          createDebug.init(debug);
+        }
+        return debug;
+      }
+      function extend(namespace, delimiter) {
+        const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
+        newDebug.log = this.log;
+        return newDebug;
+      }
+      function enable(namespaces) {
+        createDebug.save(namespaces);
+        createDebug.namespaces = namespaces;
+        createDebug.names = [];
+        createDebug.skips = [];
+        const split = (typeof namespaces === "string" ? namespaces : "").trim().replace(/\s+/g, ",").split(",").filter(Boolean);
+        for (const ns2 of split) {
+          if (ns2[0] === "-") {
+            createDebug.skips.push(ns2.slice(1));
+          } else {
+            createDebug.names.push(ns2);
+          }
+        }
+      }
+      function matchesTemplate(search, template) {
+        let searchIndex = 0;
+        let templateIndex = 0;
+        let starIndex = -1;
+        let matchIndex = 0;
+        while (searchIndex < search.length) {
+          if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === "*")) {
+            if (template[templateIndex] === "*") {
+              starIndex = templateIndex;
+              matchIndex = searchIndex;
+              templateIndex++;
+            } else {
+              searchIndex++;
+              templateIndex++;
+            }
+          } else if (starIndex !== -1) {
+            templateIndex = starIndex + 1;
+            matchIndex++;
+            searchIndex = matchIndex;
+          } else {
+            return false;
+          }
+        }
+        while (templateIndex < template.length && template[templateIndex] === "*") {
+          templateIndex++;
+        }
+        return templateIndex === template.length;
+      }
+      function disable() {
+        const namespaces = [
+          ...createDebug.names,
+          ...createDebug.skips.map((namespace) => "-" + namespace)
+        ].join(",");
+        createDebug.enable("");
+        return namespaces;
+      }
+      function enabled(name) {
+        for (const skip of createDebug.skips) {
+          if (matchesTemplate(name, skip)) {
+            return false;
+          }
+        }
+        for (const ns2 of createDebug.names) {
+          if (matchesTemplate(name, ns2)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function coerce(val) {
+        if (val instanceof Error) {
+          return val.stack || val.message;
+        }
+        return val;
+      }
+      function destroy() {
+        console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+      }
+      createDebug.enable(createDebug.load());
+      return createDebug;
+    }
+    module2.exports = setup;
+  }
+});
+
+// node_modules/express/node_modules/debug/src/browser.js
+var require_browser3 = __commonJS({
+  "node_modules/express/node_modules/debug/src/browser.js"(exports2, module2) {
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.storage = localstorage();
+    exports2.destroy = /* @__PURE__ */ (() => {
+      let warned = false;
+      return () => {
+        if (!warned) {
+          warned = true;
+          console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+        }
+      };
+    })();
+    exports2.colors = [
+      "#0000CC",
+      "#0000FF",
+      "#0033CC",
+      "#0033FF",
+      "#0066CC",
+      "#0066FF",
+      "#0099CC",
+      "#0099FF",
+      "#00CC00",
+      "#00CC33",
+      "#00CC66",
+      "#00CC99",
+      "#00CCCC",
+      "#00CCFF",
+      "#3300CC",
+      "#3300FF",
+      "#3333CC",
+      "#3333FF",
+      "#3366CC",
+      "#3366FF",
+      "#3399CC",
+      "#3399FF",
+      "#33CC00",
+      "#33CC33",
+      "#33CC66",
+      "#33CC99",
+      "#33CCCC",
+      "#33CCFF",
+      "#6600CC",
+      "#6600FF",
+      "#6633CC",
+      "#6633FF",
+      "#66CC00",
+      "#66CC33",
+      "#9900CC",
+      "#9900FF",
+      "#9933CC",
+      "#9933FF",
+      "#99CC00",
+      "#99CC33",
+      "#CC0000",
+      "#CC0033",
+      "#CC0066",
+      "#CC0099",
+      "#CC00CC",
+      "#CC00FF",
+      "#CC3300",
+      "#CC3333",
+      "#CC3366",
+      "#CC3399",
+      "#CC33CC",
+      "#CC33FF",
+      "#CC6600",
+      "#CC6633",
+      "#CC9900",
+      "#CC9933",
+      "#CCCC00",
+      "#CCCC33",
+      "#FF0000",
+      "#FF0033",
+      "#FF0066",
+      "#FF0099",
+      "#FF00CC",
+      "#FF00FF",
+      "#FF3300",
+      "#FF3333",
+      "#FF3366",
+      "#FF3399",
+      "#FF33CC",
+      "#FF33FF",
+      "#FF6600",
+      "#FF6633",
+      "#FF9900",
+      "#FF9933",
+      "#FFCC00",
+      "#FFCC33"
+    ];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
+        return true;
+      }
+      if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+        return false;
+      }
+      let m2;
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // Is firebug? http://stackoverflow.com/a/398120/376773
+      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // Is firefox >= v31?
+      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+      typeof navigator !== "undefined" && navigator.userAgent && (m2 = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m2[1], 10) >= 31 || // Double check webkit in userAgent just in case we are in a worker
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    function formatArgs(args) {
+      args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module2.exports.humanize(this.diff);
+      if (!this.useColors) {
+        return;
+      }
+      const c = "color: " + this.color;
+      args.splice(1, 0, c, "color: inherit");
+      let index = 0;
+      let lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, (match) => {
+        if (match === "%%") {
+          return;
+        }
+        index++;
+        if (match === "%c") {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c);
+    }
+    exports2.log = console.debug || console.log || (() => {
+    });
+    function save(namespaces) {
+      try {
+        if (namespaces) {
+          exports2.storage.setItem("debug", namespaces);
+        } else {
+          exports2.storage.removeItem("debug");
+        }
+      } catch (error) {
+      }
+    }
+    function load() {
+      let r;
+      try {
+        r = exports2.storage.getItem("debug") || exports2.storage.getItem("DEBUG");
+      } catch (error) {
+      }
+      if (!r && typeof process !== "undefined" && "env" in process) {
+        r = process.env.DEBUG;
+      }
+      return r;
+    }
+    function localstorage() {
+      try {
+        return localStorage;
+      } catch (error) {
+      }
+    }
+    module2.exports = require_common3()(exports2);
+    var { formatters } = module2.exports;
+    formatters.j = function(v2) {
+      try {
+        return JSON.stringify(v2);
+      } catch (error) {
+        return "[UnexpectedJSONParseError]: " + error.message;
+      }
+    };
+  }
+});
+
+// node_modules/express/node_modules/debug/src/node.js
+var require_node3 = __commonJS({
+  "node_modules/express/node_modules/debug/src/node.js"(exports2, module2) {
+    var tty = require("tty");
+    var util = require("util");
+    exports2.init = init;
+    exports2.log = log;
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.destroy = util.deprecate(
+      () => {
+      },
+      "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`."
+    );
+    exports2.colors = [6, 2, 3, 4, 5, 1];
+    try {
+      const supportsColor = require("supports-color");
+      if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+        exports2.colors = [
+          20,
+          21,
+          26,
+          27,
+          32,
+          33,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          56,
+          57,
+          62,
+          63,
+          68,
+          69,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          92,
+          93,
+          98,
+          99,
+          112,
+          113,
+          128,
+          129,
+          134,
+          135,
+          148,
+          149,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          178,
+          179,
+          184,
+          185,
+          196,
+          197,
+          198,
+          199,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          214,
+          215,
+          220,
+          221
+        ];
+      }
+    } catch (error) {
+    }
+    exports2.inspectOpts = Object.keys(process.env).filter((key) => {
+      return /^debug_/i.test(key);
+    }).reduce((obj, key) => {
+      const prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, (_2, k) => {
+        return k.toUpperCase();
+      });
+      let val = process.env[key];
+      if (/^(yes|on|true|enabled)$/i.test(val)) {
+        val = true;
+      } else if (/^(no|off|false|disabled)$/i.test(val)) {
+        val = false;
+      } else if (val === "null") {
+        val = null;
+      } else {
+        val = Number(val);
+      }
+      obj[prop] = val;
+      return obj;
+    }, {});
+    function useColors() {
+      return "colors" in exports2.inspectOpts ? Boolean(exports2.inspectOpts.colors) : tty.isatty(process.stderr.fd);
+    }
+    function formatArgs(args) {
+      const { namespace: name, useColors: useColors2 } = this;
+      if (useColors2) {
+        const c = this.color;
+        const colorCode = "\x1B[3" + (c < 8 ? c : "8;5;" + c);
+        const prefix = `  ${colorCode};1m${name} \x1B[0m`;
+        args[0] = prefix + args[0].split("\n").join("\n" + prefix);
+        args.push(colorCode + "m+" + module2.exports.humanize(this.diff) + "\x1B[0m");
+      } else {
+        args[0] = getDate() + name + " " + args[0];
+      }
+    }
+    function getDate() {
+      if (exports2.inspectOpts.hideDate) {
+        return "";
+      }
+      return (/* @__PURE__ */ new Date()).toISOString() + " ";
+    }
+    function log(...args) {
+      return process.stderr.write(util.formatWithOptions(exports2.inspectOpts, ...args) + "\n");
+    }
+    function save(namespaces) {
+      if (namespaces) {
+        process.env.DEBUG = namespaces;
+      } else {
+        delete process.env.DEBUG;
+      }
+    }
+    function load() {
+      return process.env.DEBUG;
+    }
+    function init(debug) {
+      debug.inspectOpts = {};
+      const keys = Object.keys(exports2.inspectOpts);
+      for (let i = 0; i < keys.length; i++) {
+        debug.inspectOpts[keys[i]] = exports2.inspectOpts[keys[i]];
+      }
+    }
+    module2.exports = require_common3()(exports2);
+    var { formatters } = module2.exports;
+    formatters.o = function(v2) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v2, this.inspectOpts).split("\n").map((str) => str.trim()).join(" ");
+    };
+    formatters.O = function(v2) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v2, this.inspectOpts);
+    };
+  }
+});
+
+// node_modules/express/node_modules/debug/src/index.js
+var require_src3 = __commonJS({
+  "node_modules/express/node_modules/debug/src/index.js"(exports2, module2) {
+    if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
+      module2.exports = require_browser3();
+    } else {
+      module2.exports = require_node3();
+    }
+  }
+});
+
 // node_modules/express/lib/view.js
 var require_view = __commonJS({
   "node_modules/express/lib/view.js"(exports2, module2) {
     "use strict";
-    var debug = require_src()("express:view");
+    var debug = require_src3()("express:view");
     var path = require("node:path");
     var fs = require("node:fs");
     var dirname = path.dirname;
@@ -20555,13 +21619,545 @@ var require_dist2 = __commonJS({
   }
 });
 
+// node_modules/router/node_modules/debug/src/common.js
+var require_common4 = __commonJS({
+  "node_modules/router/node_modules/debug/src/common.js"(exports2, module2) {
+    function setup(env) {
+      createDebug.debug = createDebug;
+      createDebug.default = createDebug;
+      createDebug.coerce = coerce;
+      createDebug.disable = disable;
+      createDebug.enable = enable;
+      createDebug.enabled = enabled;
+      createDebug.humanize = require_ms();
+      createDebug.destroy = destroy;
+      Object.keys(env).forEach((key) => {
+        createDebug[key] = env[key];
+      });
+      createDebug.names = [];
+      createDebug.skips = [];
+      createDebug.formatters = {};
+      function selectColor(namespace) {
+        let hash2 = 0;
+        for (let i = 0; i < namespace.length; i++) {
+          hash2 = (hash2 << 5) - hash2 + namespace.charCodeAt(i);
+          hash2 |= 0;
+        }
+        return createDebug.colors[Math.abs(hash2) % createDebug.colors.length];
+      }
+      createDebug.selectColor = selectColor;
+      function createDebug(namespace) {
+        let prevTime;
+        let enableOverride = null;
+        let namespacesCache;
+        let enabledCache;
+        function debug(...args) {
+          if (!debug.enabled) {
+            return;
+          }
+          const self = debug;
+          const curr = Number(/* @__PURE__ */ new Date());
+          const ms2 = curr - (prevTime || curr);
+          self.diff = ms2;
+          self.prev = prevTime;
+          self.curr = curr;
+          prevTime = curr;
+          args[0] = createDebug.coerce(args[0]);
+          if (typeof args[0] !== "string") {
+            args.unshift("%O");
+          }
+          let index = 0;
+          args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
+            if (match === "%%") {
+              return "%";
+            }
+            index++;
+            const formatter = createDebug.formatters[format];
+            if (typeof formatter === "function") {
+              const val = args[index];
+              match = formatter.call(self, val);
+              args.splice(index, 1);
+              index--;
+            }
+            return match;
+          });
+          createDebug.formatArgs.call(self, args);
+          const logFn = self.log || createDebug.log;
+          logFn.apply(self, args);
+        }
+        debug.namespace = namespace;
+        debug.useColors = createDebug.useColors();
+        debug.color = createDebug.selectColor(namespace);
+        debug.extend = extend;
+        debug.destroy = createDebug.destroy;
+        Object.defineProperty(debug, "enabled", {
+          enumerable: true,
+          configurable: false,
+          get: () => {
+            if (enableOverride !== null) {
+              return enableOverride;
+            }
+            if (namespacesCache !== createDebug.namespaces) {
+              namespacesCache = createDebug.namespaces;
+              enabledCache = createDebug.enabled(namespace);
+            }
+            return enabledCache;
+          },
+          set: (v2) => {
+            enableOverride = v2;
+          }
+        });
+        if (typeof createDebug.init === "function") {
+          createDebug.init(debug);
+        }
+        return debug;
+      }
+      function extend(namespace, delimiter) {
+        const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
+        newDebug.log = this.log;
+        return newDebug;
+      }
+      function enable(namespaces) {
+        createDebug.save(namespaces);
+        createDebug.namespaces = namespaces;
+        createDebug.names = [];
+        createDebug.skips = [];
+        const split = (typeof namespaces === "string" ? namespaces : "").trim().replace(/\s+/g, ",").split(",").filter(Boolean);
+        for (const ns2 of split) {
+          if (ns2[0] === "-") {
+            createDebug.skips.push(ns2.slice(1));
+          } else {
+            createDebug.names.push(ns2);
+          }
+        }
+      }
+      function matchesTemplate(search, template) {
+        let searchIndex = 0;
+        let templateIndex = 0;
+        let starIndex = -1;
+        let matchIndex = 0;
+        while (searchIndex < search.length) {
+          if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === "*")) {
+            if (template[templateIndex] === "*") {
+              starIndex = templateIndex;
+              matchIndex = searchIndex;
+              templateIndex++;
+            } else {
+              searchIndex++;
+              templateIndex++;
+            }
+          } else if (starIndex !== -1) {
+            templateIndex = starIndex + 1;
+            matchIndex++;
+            searchIndex = matchIndex;
+          } else {
+            return false;
+          }
+        }
+        while (templateIndex < template.length && template[templateIndex] === "*") {
+          templateIndex++;
+        }
+        return templateIndex === template.length;
+      }
+      function disable() {
+        const namespaces = [
+          ...createDebug.names,
+          ...createDebug.skips.map((namespace) => "-" + namespace)
+        ].join(",");
+        createDebug.enable("");
+        return namespaces;
+      }
+      function enabled(name) {
+        for (const skip of createDebug.skips) {
+          if (matchesTemplate(name, skip)) {
+            return false;
+          }
+        }
+        for (const ns2 of createDebug.names) {
+          if (matchesTemplate(name, ns2)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function coerce(val) {
+        if (val instanceof Error) {
+          return val.stack || val.message;
+        }
+        return val;
+      }
+      function destroy() {
+        console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+      }
+      createDebug.enable(createDebug.load());
+      return createDebug;
+    }
+    module2.exports = setup;
+  }
+});
+
+// node_modules/router/node_modules/debug/src/browser.js
+var require_browser4 = __commonJS({
+  "node_modules/router/node_modules/debug/src/browser.js"(exports2, module2) {
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.storage = localstorage();
+    exports2.destroy = /* @__PURE__ */ (() => {
+      let warned = false;
+      return () => {
+        if (!warned) {
+          warned = true;
+          console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+        }
+      };
+    })();
+    exports2.colors = [
+      "#0000CC",
+      "#0000FF",
+      "#0033CC",
+      "#0033FF",
+      "#0066CC",
+      "#0066FF",
+      "#0099CC",
+      "#0099FF",
+      "#00CC00",
+      "#00CC33",
+      "#00CC66",
+      "#00CC99",
+      "#00CCCC",
+      "#00CCFF",
+      "#3300CC",
+      "#3300FF",
+      "#3333CC",
+      "#3333FF",
+      "#3366CC",
+      "#3366FF",
+      "#3399CC",
+      "#3399FF",
+      "#33CC00",
+      "#33CC33",
+      "#33CC66",
+      "#33CC99",
+      "#33CCCC",
+      "#33CCFF",
+      "#6600CC",
+      "#6600FF",
+      "#6633CC",
+      "#6633FF",
+      "#66CC00",
+      "#66CC33",
+      "#9900CC",
+      "#9900FF",
+      "#9933CC",
+      "#9933FF",
+      "#99CC00",
+      "#99CC33",
+      "#CC0000",
+      "#CC0033",
+      "#CC0066",
+      "#CC0099",
+      "#CC00CC",
+      "#CC00FF",
+      "#CC3300",
+      "#CC3333",
+      "#CC3366",
+      "#CC3399",
+      "#CC33CC",
+      "#CC33FF",
+      "#CC6600",
+      "#CC6633",
+      "#CC9900",
+      "#CC9933",
+      "#CCCC00",
+      "#CCCC33",
+      "#FF0000",
+      "#FF0033",
+      "#FF0066",
+      "#FF0099",
+      "#FF00CC",
+      "#FF00FF",
+      "#FF3300",
+      "#FF3333",
+      "#FF3366",
+      "#FF3399",
+      "#FF33CC",
+      "#FF33FF",
+      "#FF6600",
+      "#FF6633",
+      "#FF9900",
+      "#FF9933",
+      "#FFCC00",
+      "#FFCC33"
+    ];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
+        return true;
+      }
+      if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+        return false;
+      }
+      let m2;
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // Is firebug? http://stackoverflow.com/a/398120/376773
+      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // Is firefox >= v31?
+      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+      typeof navigator !== "undefined" && navigator.userAgent && (m2 = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m2[1], 10) >= 31 || // Double check webkit in userAgent just in case we are in a worker
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    function formatArgs(args) {
+      args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module2.exports.humanize(this.diff);
+      if (!this.useColors) {
+        return;
+      }
+      const c = "color: " + this.color;
+      args.splice(1, 0, c, "color: inherit");
+      let index = 0;
+      let lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, (match) => {
+        if (match === "%%") {
+          return;
+        }
+        index++;
+        if (match === "%c") {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c);
+    }
+    exports2.log = console.debug || console.log || (() => {
+    });
+    function save(namespaces) {
+      try {
+        if (namespaces) {
+          exports2.storage.setItem("debug", namespaces);
+        } else {
+          exports2.storage.removeItem("debug");
+        }
+      } catch (error) {
+      }
+    }
+    function load() {
+      let r;
+      try {
+        r = exports2.storage.getItem("debug") || exports2.storage.getItem("DEBUG");
+      } catch (error) {
+      }
+      if (!r && typeof process !== "undefined" && "env" in process) {
+        r = process.env.DEBUG;
+      }
+      return r;
+    }
+    function localstorage() {
+      try {
+        return localStorage;
+      } catch (error) {
+      }
+    }
+    module2.exports = require_common4()(exports2);
+    var { formatters } = module2.exports;
+    formatters.j = function(v2) {
+      try {
+        return JSON.stringify(v2);
+      } catch (error) {
+        return "[UnexpectedJSONParseError]: " + error.message;
+      }
+    };
+  }
+});
+
+// node_modules/router/node_modules/debug/src/node.js
+var require_node4 = __commonJS({
+  "node_modules/router/node_modules/debug/src/node.js"(exports2, module2) {
+    var tty = require("tty");
+    var util = require("util");
+    exports2.init = init;
+    exports2.log = log;
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.destroy = util.deprecate(
+      () => {
+      },
+      "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`."
+    );
+    exports2.colors = [6, 2, 3, 4, 5, 1];
+    try {
+      const supportsColor = require("supports-color");
+      if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+        exports2.colors = [
+          20,
+          21,
+          26,
+          27,
+          32,
+          33,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          56,
+          57,
+          62,
+          63,
+          68,
+          69,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          92,
+          93,
+          98,
+          99,
+          112,
+          113,
+          128,
+          129,
+          134,
+          135,
+          148,
+          149,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          178,
+          179,
+          184,
+          185,
+          196,
+          197,
+          198,
+          199,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          214,
+          215,
+          220,
+          221
+        ];
+      }
+    } catch (error) {
+    }
+    exports2.inspectOpts = Object.keys(process.env).filter((key) => {
+      return /^debug_/i.test(key);
+    }).reduce((obj, key) => {
+      const prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, (_2, k) => {
+        return k.toUpperCase();
+      });
+      let val = process.env[key];
+      if (/^(yes|on|true|enabled)$/i.test(val)) {
+        val = true;
+      } else if (/^(no|off|false|disabled)$/i.test(val)) {
+        val = false;
+      } else if (val === "null") {
+        val = null;
+      } else {
+        val = Number(val);
+      }
+      obj[prop] = val;
+      return obj;
+    }, {});
+    function useColors() {
+      return "colors" in exports2.inspectOpts ? Boolean(exports2.inspectOpts.colors) : tty.isatty(process.stderr.fd);
+    }
+    function formatArgs(args) {
+      const { namespace: name, useColors: useColors2 } = this;
+      if (useColors2) {
+        const c = this.color;
+        const colorCode = "\x1B[3" + (c < 8 ? c : "8;5;" + c);
+        const prefix = `  ${colorCode};1m${name} \x1B[0m`;
+        args[0] = prefix + args[0].split("\n").join("\n" + prefix);
+        args.push(colorCode + "m+" + module2.exports.humanize(this.diff) + "\x1B[0m");
+      } else {
+        args[0] = getDate() + name + " " + args[0];
+      }
+    }
+    function getDate() {
+      if (exports2.inspectOpts.hideDate) {
+        return "";
+      }
+      return (/* @__PURE__ */ new Date()).toISOString() + " ";
+    }
+    function log(...args) {
+      return process.stderr.write(util.formatWithOptions(exports2.inspectOpts, ...args) + "\n");
+    }
+    function save(namespaces) {
+      if (namespaces) {
+        process.env.DEBUG = namespaces;
+      } else {
+        delete process.env.DEBUG;
+      }
+    }
+    function load() {
+      return process.env.DEBUG;
+    }
+    function init(debug) {
+      debug.inspectOpts = {};
+      const keys = Object.keys(exports2.inspectOpts);
+      for (let i = 0; i < keys.length; i++) {
+        debug.inspectOpts[keys[i]] = exports2.inspectOpts[keys[i]];
+      }
+    }
+    module2.exports = require_common4()(exports2);
+    var { formatters } = module2.exports;
+    formatters.o = function(v2) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v2, this.inspectOpts).split("\n").map((str) => str.trim()).join(" ");
+    };
+    formatters.O = function(v2) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v2, this.inspectOpts);
+    };
+  }
+});
+
+// node_modules/router/node_modules/debug/src/index.js
+var require_src4 = __commonJS({
+  "node_modules/router/node_modules/debug/src/index.js"(exports2, module2) {
+    if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
+      module2.exports = require_browser4();
+    } else {
+      module2.exports = require_node4();
+    }
+  }
+});
+
 // node_modules/router/lib/layer.js
 var require_layer = __commonJS({
   "node_modules/router/lib/layer.js"(exports2, module2) {
     "use strict";
     var isPromise = require_is_promise();
     var pathRegexp = require_dist2();
-    var debug = require_src()("router:layer");
+    var debug = require_src4()("router:layer");
     var deprecate = require_depd()("router");
     var TRAILING_SLASH_REGEXP = /\/+$/;
     var MATCHING_GROUP_REGEXP = /\((?:\?<(.*?)>)?(?!\?)/g;
@@ -20709,7 +22305,7 @@ var require_layer = __commonJS({
 var require_route = __commonJS({
   "node_modules/router/lib/route.js"(exports2, module2) {
     "use strict";
-    var debug = require_src()("router:route");
+    var debug = require_src4()("router:route");
     var Layer = require_layer();
     var { METHODS } = require("node:http");
     var slice = Array.prototype.slice;
@@ -20785,7 +22381,7 @@ var require_route = __commonJS({
         sync = 0;
       }
     };
-    Route.prototype.all = function all(handler20) {
+    Route.prototype.all = function all(handler22) {
       const callbacks = flatten.call(slice.call(arguments), Infinity);
       if (callbacks.length === 0) {
         throw new TypeError("argument handler is required");
@@ -20803,7 +22399,7 @@ var require_route = __commonJS({
       return this;
     };
     methods.forEach(function(method) {
-      Route.prototype[method] = function(handler20) {
+      Route.prototype[method] = function(handler22) {
         const callbacks = flatten.call(slice.call(arguments), Infinity);
         if (callbacks.length === 0) {
           throw new TypeError("argument handler is required");
@@ -20834,7 +22430,7 @@ var require_router = __commonJS({
     var { METHODS } = require("node:http");
     var parseUrl = require_parseurl();
     var Route = require_route();
-    var debug = require_src()("router");
+    var debug = require_src4()("router");
     var deprecate = require_depd()("router");
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
@@ -21006,17 +22602,17 @@ var require_router = __commonJS({
         }
       }
     };
-    Router2.prototype.use = function use(handler20) {
+    Router2.prototype.use = function use(handler22) {
       let offset = 0;
       let path = "/";
-      if (typeof handler20 !== "function") {
-        let arg = handler20;
+      if (typeof handler22 !== "function") {
+        let arg = handler22;
         while (Array.isArray(arg) && arg.length !== 0) {
           arg = arg[0];
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path = handler20;
+          path = handler22;
         }
       }
       const callbacks = flatten.call(slice.call(arguments, offset), Infinity);
@@ -21228,7 +22824,7 @@ var require_application = __commonJS({
   "node_modules/express/lib/application.js"(exports2, module2) {
     "use strict";
     var finalhandler = require_finalhandler();
-    var debug = require_src()("express:application");
+    var debug = require_src3()("express:application");
     var View = require_view();
     var http = require("node:http");
     var methods = require_utils3().methods;
@@ -21484,9 +23080,9 @@ var require_application = __commonJS({
   }
 });
 
-// node_modules/negotiator/lib/accept.js
+// node_modules/accepts/node_modules/negotiator/lib/accept.js
 var require_accept = __commonJS({
-  "node_modules/negotiator/lib/accept.js"(exports2, module2) {
+  "node_modules/accepts/node_modules/negotiator/lib/accept.js"(exports2, module2) {
     "use strict";
     var contentType = require_dist();
     module2.exports = parseAccept;
@@ -21512,9 +23108,9 @@ var require_accept = __commonJS({
   }
 });
 
-// node_modules/negotiator/lib/charset.js
+// node_modules/accepts/node_modules/negotiator/lib/charset.js
 var require_charset = __commonJS({
-  "node_modules/negotiator/lib/charset.js"(exports2, module2) {
+  "node_modules/accepts/node_modules/negotiator/lib/charset.js"(exports2, module2) {
     "use strict";
     var parseAccept = require_accept();
     module2.exports = preferredCharsets;
@@ -21584,9 +23180,9 @@ var require_charset = __commonJS({
   }
 });
 
-// node_modules/negotiator/lib/encoding.js
+// node_modules/accepts/node_modules/negotiator/lib/encoding.js
 var require_encoding = __commonJS({
-  "node_modules/negotiator/lib/encoding.js"(exports2, module2) {
+  "node_modules/accepts/node_modules/negotiator/lib/encoding.js"(exports2, module2) {
     "use strict";
     var parseAccept = require_accept();
     module2.exports = preferredEncodings;
@@ -21684,9 +23280,9 @@ var require_encoding = __commonJS({
   }
 });
 
-// node_modules/negotiator/lib/language.js
+// node_modules/accepts/node_modules/negotiator/lib/language.js
 var require_language = __commonJS({
-  "node_modules/negotiator/lib/language.js"(exports2, module2) {
+  "node_modules/accepts/node_modules/negotiator/lib/language.js"(exports2, module2) {
     "use strict";
     var contentType = require_dist();
     var parseAccept = require_accept();
@@ -21768,9 +23364,9 @@ var require_language = __commonJS({
   }
 });
 
-// node_modules/negotiator/lib/mediaType.js
+// node_modules/accepts/node_modules/negotiator/lib/mediaType.js
 var require_mediaType = __commonJS({
-  "node_modules/negotiator/lib/mediaType.js"(exports2, module2) {
+  "node_modules/accepts/node_modules/negotiator/lib/mediaType.js"(exports2, module2) {
     "use strict";
     var contentType = require_dist();
     var parseAcceptHeader = require_accept();
@@ -21865,9 +23461,9 @@ var require_mediaType = __commonJS({
   }
 });
 
-// node_modules/negotiator/index.js
+// node_modules/accepts/node_modules/negotiator/index.js
 var require_negotiator = __commonJS({
-  "node_modules/negotiator/index.js"(exports2, module2) {
+  "node_modules/accepts/node_modules/negotiator/index.js"(exports2, module2) {
     "use strict";
     var preferredCharsets = require_charset();
     var preferredEncodings = require_encoding();
@@ -22788,12 +24384,544 @@ var require_cookie = __commonJS({
   }
 });
 
+// node_modules/send/node_modules/debug/src/common.js
+var require_common5 = __commonJS({
+  "node_modules/send/node_modules/debug/src/common.js"(exports2, module2) {
+    function setup(env) {
+      createDebug.debug = createDebug;
+      createDebug.default = createDebug;
+      createDebug.coerce = coerce;
+      createDebug.disable = disable;
+      createDebug.enable = enable;
+      createDebug.enabled = enabled;
+      createDebug.humanize = require_ms();
+      createDebug.destroy = destroy;
+      Object.keys(env).forEach((key) => {
+        createDebug[key] = env[key];
+      });
+      createDebug.names = [];
+      createDebug.skips = [];
+      createDebug.formatters = {};
+      function selectColor(namespace) {
+        let hash2 = 0;
+        for (let i = 0; i < namespace.length; i++) {
+          hash2 = (hash2 << 5) - hash2 + namespace.charCodeAt(i);
+          hash2 |= 0;
+        }
+        return createDebug.colors[Math.abs(hash2) % createDebug.colors.length];
+      }
+      createDebug.selectColor = selectColor;
+      function createDebug(namespace) {
+        let prevTime;
+        let enableOverride = null;
+        let namespacesCache;
+        let enabledCache;
+        function debug(...args) {
+          if (!debug.enabled) {
+            return;
+          }
+          const self = debug;
+          const curr = Number(/* @__PURE__ */ new Date());
+          const ms2 = curr - (prevTime || curr);
+          self.diff = ms2;
+          self.prev = prevTime;
+          self.curr = curr;
+          prevTime = curr;
+          args[0] = createDebug.coerce(args[0]);
+          if (typeof args[0] !== "string") {
+            args.unshift("%O");
+          }
+          let index = 0;
+          args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
+            if (match === "%%") {
+              return "%";
+            }
+            index++;
+            const formatter = createDebug.formatters[format];
+            if (typeof formatter === "function") {
+              const val = args[index];
+              match = formatter.call(self, val);
+              args.splice(index, 1);
+              index--;
+            }
+            return match;
+          });
+          createDebug.formatArgs.call(self, args);
+          const logFn = self.log || createDebug.log;
+          logFn.apply(self, args);
+        }
+        debug.namespace = namespace;
+        debug.useColors = createDebug.useColors();
+        debug.color = createDebug.selectColor(namespace);
+        debug.extend = extend;
+        debug.destroy = createDebug.destroy;
+        Object.defineProperty(debug, "enabled", {
+          enumerable: true,
+          configurable: false,
+          get: () => {
+            if (enableOverride !== null) {
+              return enableOverride;
+            }
+            if (namespacesCache !== createDebug.namespaces) {
+              namespacesCache = createDebug.namespaces;
+              enabledCache = createDebug.enabled(namespace);
+            }
+            return enabledCache;
+          },
+          set: (v2) => {
+            enableOverride = v2;
+          }
+        });
+        if (typeof createDebug.init === "function") {
+          createDebug.init(debug);
+        }
+        return debug;
+      }
+      function extend(namespace, delimiter) {
+        const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
+        newDebug.log = this.log;
+        return newDebug;
+      }
+      function enable(namespaces) {
+        createDebug.save(namespaces);
+        createDebug.namespaces = namespaces;
+        createDebug.names = [];
+        createDebug.skips = [];
+        const split = (typeof namespaces === "string" ? namespaces : "").trim().replace(/\s+/g, ",").split(",").filter(Boolean);
+        for (const ns2 of split) {
+          if (ns2[0] === "-") {
+            createDebug.skips.push(ns2.slice(1));
+          } else {
+            createDebug.names.push(ns2);
+          }
+        }
+      }
+      function matchesTemplate(search, template) {
+        let searchIndex = 0;
+        let templateIndex = 0;
+        let starIndex = -1;
+        let matchIndex = 0;
+        while (searchIndex < search.length) {
+          if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === "*")) {
+            if (template[templateIndex] === "*") {
+              starIndex = templateIndex;
+              matchIndex = searchIndex;
+              templateIndex++;
+            } else {
+              searchIndex++;
+              templateIndex++;
+            }
+          } else if (starIndex !== -1) {
+            templateIndex = starIndex + 1;
+            matchIndex++;
+            searchIndex = matchIndex;
+          } else {
+            return false;
+          }
+        }
+        while (templateIndex < template.length && template[templateIndex] === "*") {
+          templateIndex++;
+        }
+        return templateIndex === template.length;
+      }
+      function disable() {
+        const namespaces = [
+          ...createDebug.names,
+          ...createDebug.skips.map((namespace) => "-" + namespace)
+        ].join(",");
+        createDebug.enable("");
+        return namespaces;
+      }
+      function enabled(name) {
+        for (const skip of createDebug.skips) {
+          if (matchesTemplate(name, skip)) {
+            return false;
+          }
+        }
+        for (const ns2 of createDebug.names) {
+          if (matchesTemplate(name, ns2)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function coerce(val) {
+        if (val instanceof Error) {
+          return val.stack || val.message;
+        }
+        return val;
+      }
+      function destroy() {
+        console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+      }
+      createDebug.enable(createDebug.load());
+      return createDebug;
+    }
+    module2.exports = setup;
+  }
+});
+
+// node_modules/send/node_modules/debug/src/browser.js
+var require_browser5 = __commonJS({
+  "node_modules/send/node_modules/debug/src/browser.js"(exports2, module2) {
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.storage = localstorage();
+    exports2.destroy = /* @__PURE__ */ (() => {
+      let warned = false;
+      return () => {
+        if (!warned) {
+          warned = true;
+          console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+        }
+      };
+    })();
+    exports2.colors = [
+      "#0000CC",
+      "#0000FF",
+      "#0033CC",
+      "#0033FF",
+      "#0066CC",
+      "#0066FF",
+      "#0099CC",
+      "#0099FF",
+      "#00CC00",
+      "#00CC33",
+      "#00CC66",
+      "#00CC99",
+      "#00CCCC",
+      "#00CCFF",
+      "#3300CC",
+      "#3300FF",
+      "#3333CC",
+      "#3333FF",
+      "#3366CC",
+      "#3366FF",
+      "#3399CC",
+      "#3399FF",
+      "#33CC00",
+      "#33CC33",
+      "#33CC66",
+      "#33CC99",
+      "#33CCCC",
+      "#33CCFF",
+      "#6600CC",
+      "#6600FF",
+      "#6633CC",
+      "#6633FF",
+      "#66CC00",
+      "#66CC33",
+      "#9900CC",
+      "#9900FF",
+      "#9933CC",
+      "#9933FF",
+      "#99CC00",
+      "#99CC33",
+      "#CC0000",
+      "#CC0033",
+      "#CC0066",
+      "#CC0099",
+      "#CC00CC",
+      "#CC00FF",
+      "#CC3300",
+      "#CC3333",
+      "#CC3366",
+      "#CC3399",
+      "#CC33CC",
+      "#CC33FF",
+      "#CC6600",
+      "#CC6633",
+      "#CC9900",
+      "#CC9933",
+      "#CCCC00",
+      "#CCCC33",
+      "#FF0000",
+      "#FF0033",
+      "#FF0066",
+      "#FF0099",
+      "#FF00CC",
+      "#FF00FF",
+      "#FF3300",
+      "#FF3333",
+      "#FF3366",
+      "#FF3399",
+      "#FF33CC",
+      "#FF33FF",
+      "#FF6600",
+      "#FF6633",
+      "#FF9900",
+      "#FF9933",
+      "#FFCC00",
+      "#FFCC33"
+    ];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
+        return true;
+      }
+      if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+        return false;
+      }
+      let m2;
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // Is firebug? http://stackoverflow.com/a/398120/376773
+      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // Is firefox >= v31?
+      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+      typeof navigator !== "undefined" && navigator.userAgent && (m2 = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m2[1], 10) >= 31 || // Double check webkit in userAgent just in case we are in a worker
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    function formatArgs(args) {
+      args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module2.exports.humanize(this.diff);
+      if (!this.useColors) {
+        return;
+      }
+      const c = "color: " + this.color;
+      args.splice(1, 0, c, "color: inherit");
+      let index = 0;
+      let lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, (match) => {
+        if (match === "%%") {
+          return;
+        }
+        index++;
+        if (match === "%c") {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c);
+    }
+    exports2.log = console.debug || console.log || (() => {
+    });
+    function save(namespaces) {
+      try {
+        if (namespaces) {
+          exports2.storage.setItem("debug", namespaces);
+        } else {
+          exports2.storage.removeItem("debug");
+        }
+      } catch (error) {
+      }
+    }
+    function load() {
+      let r;
+      try {
+        r = exports2.storage.getItem("debug") || exports2.storage.getItem("DEBUG");
+      } catch (error) {
+      }
+      if (!r && typeof process !== "undefined" && "env" in process) {
+        r = process.env.DEBUG;
+      }
+      return r;
+    }
+    function localstorage() {
+      try {
+        return localStorage;
+      } catch (error) {
+      }
+    }
+    module2.exports = require_common5()(exports2);
+    var { formatters } = module2.exports;
+    formatters.j = function(v2) {
+      try {
+        return JSON.stringify(v2);
+      } catch (error) {
+        return "[UnexpectedJSONParseError]: " + error.message;
+      }
+    };
+  }
+});
+
+// node_modules/send/node_modules/debug/src/node.js
+var require_node5 = __commonJS({
+  "node_modules/send/node_modules/debug/src/node.js"(exports2, module2) {
+    var tty = require("tty");
+    var util = require("util");
+    exports2.init = init;
+    exports2.log = log;
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.destroy = util.deprecate(
+      () => {
+      },
+      "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`."
+    );
+    exports2.colors = [6, 2, 3, 4, 5, 1];
+    try {
+      const supportsColor = require("supports-color");
+      if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+        exports2.colors = [
+          20,
+          21,
+          26,
+          27,
+          32,
+          33,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          56,
+          57,
+          62,
+          63,
+          68,
+          69,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          92,
+          93,
+          98,
+          99,
+          112,
+          113,
+          128,
+          129,
+          134,
+          135,
+          148,
+          149,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          178,
+          179,
+          184,
+          185,
+          196,
+          197,
+          198,
+          199,
+          200,
+          201,
+          202,
+          203,
+          204,
+          205,
+          206,
+          207,
+          208,
+          209,
+          214,
+          215,
+          220,
+          221
+        ];
+      }
+    } catch (error) {
+    }
+    exports2.inspectOpts = Object.keys(process.env).filter((key) => {
+      return /^debug_/i.test(key);
+    }).reduce((obj, key) => {
+      const prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, (_2, k) => {
+        return k.toUpperCase();
+      });
+      let val = process.env[key];
+      if (/^(yes|on|true|enabled)$/i.test(val)) {
+        val = true;
+      } else if (/^(no|off|false|disabled)$/i.test(val)) {
+        val = false;
+      } else if (val === "null") {
+        val = null;
+      } else {
+        val = Number(val);
+      }
+      obj[prop] = val;
+      return obj;
+    }, {});
+    function useColors() {
+      return "colors" in exports2.inspectOpts ? Boolean(exports2.inspectOpts.colors) : tty.isatty(process.stderr.fd);
+    }
+    function formatArgs(args) {
+      const { namespace: name, useColors: useColors2 } = this;
+      if (useColors2) {
+        const c = this.color;
+        const colorCode = "\x1B[3" + (c < 8 ? c : "8;5;" + c);
+        const prefix = `  ${colorCode};1m${name} \x1B[0m`;
+        args[0] = prefix + args[0].split("\n").join("\n" + prefix);
+        args.push(colorCode + "m+" + module2.exports.humanize(this.diff) + "\x1B[0m");
+      } else {
+        args[0] = getDate() + name + " " + args[0];
+      }
+    }
+    function getDate() {
+      if (exports2.inspectOpts.hideDate) {
+        return "";
+      }
+      return (/* @__PURE__ */ new Date()).toISOString() + " ";
+    }
+    function log(...args) {
+      return process.stderr.write(util.formatWithOptions(exports2.inspectOpts, ...args) + "\n");
+    }
+    function save(namespaces) {
+      if (namespaces) {
+        process.env.DEBUG = namespaces;
+      } else {
+        delete process.env.DEBUG;
+      }
+    }
+    function load() {
+      return process.env.DEBUG;
+    }
+    function init(debug) {
+      debug.inspectOpts = {};
+      const keys = Object.keys(exports2.inspectOpts);
+      for (let i = 0; i < keys.length; i++) {
+        debug.inspectOpts[keys[i]] = exports2.inspectOpts[keys[i]];
+      }
+    }
+    module2.exports = require_common5()(exports2);
+    var { formatters } = module2.exports;
+    formatters.o = function(v2) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v2, this.inspectOpts).split("\n").map((str) => str.trim()).join(" ");
+    };
+    formatters.O = function(v2) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v2, this.inspectOpts);
+    };
+  }
+});
+
+// node_modules/send/node_modules/debug/src/index.js
+var require_src5 = __commonJS({
+  "node_modules/send/node_modules/debug/src/index.js"(exports2, module2) {
+    if (typeof process === "undefined" || process.type === "renderer" || process.browser === true || process.__nwjs) {
+      module2.exports = require_browser5();
+    } else {
+      module2.exports = require_node5();
+    }
+  }
+});
+
 // node_modules/send/index.js
 var require_send = __commonJS({
   "node_modules/send/index.js"(exports2, module2) {
     "use strict";
     var createError = require_http_errors();
-    var debug = require_src()("send");
+    var debug = require_src5()("send");
     var encodeUrl = require_encodeurl();
     var escapeHtml = require_escape_html();
     var etag = require_etag();
@@ -23966,6 +26094,518 @@ var require_express2 = __commonJS({
   }
 });
 
+// node_modules/negotiator/lib/charset.js
+var require_charset2 = __commonJS({
+  "node_modules/negotiator/lib/charset.js"(exports2, module2) {
+    "use strict";
+    module2.exports = preferredCharsets;
+    module2.exports.preferredCharsets = preferredCharsets;
+    var simpleCharsetRegExp = /^\s*([^\s;]+)\s*(?:;(.*))?$/;
+    function parseAcceptCharset(accept) {
+      var accepts = accept.split(",");
+      for (var i = 0, j = 0; i < accepts.length; i++) {
+        var charset = parseCharset(accepts[i].trim(), i);
+        if (charset) {
+          accepts[j++] = charset;
+        }
+      }
+      accepts.length = j;
+      return accepts;
+    }
+    function parseCharset(str, i) {
+      var match = simpleCharsetRegExp.exec(str);
+      if (!match) return null;
+      var charset = match[1];
+      var q = 1;
+      if (match[2]) {
+        var params = match[2].split(";");
+        for (var j = 0; j < params.length; j++) {
+          var p2 = params[j].trim().split("=");
+          if (p2[0] === "q") {
+            q = parseFloat(p2[1]);
+            break;
+          }
+        }
+      }
+      return {
+        charset,
+        q,
+        i
+      };
+    }
+    function getCharsetPriority(charset, accepted, index) {
+      var priority = { o: -1, q: 0, s: 0 };
+      for (var i = 0; i < accepted.length; i++) {
+        var spec = specify(charset, accepted[i], index);
+        if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+          priority = spec;
+        }
+      }
+      return priority;
+    }
+    function specify(charset, spec, index) {
+      var s = 0;
+      if (spec.charset.toLowerCase() === charset.toLowerCase()) {
+        s |= 1;
+      } else if (spec.charset !== "*") {
+        return null;
+      }
+      return {
+        i: index,
+        o: spec.i,
+        q: spec.q,
+        s
+      };
+    }
+    function preferredCharsets(accept, provided) {
+      var accepts = parseAcceptCharset(accept === void 0 ? "*" : accept || "");
+      if (!provided) {
+        return accepts.filter(isQuality).sort(compareSpecs).map(getFullCharset);
+      }
+      var priorities = provided.map(function getPriority(type, index) {
+        return getCharsetPriority(type, accepts, index);
+      });
+      return priorities.filter(isQuality).sort(compareSpecs).map(function getCharset(priority) {
+        return provided[priorities.indexOf(priority)];
+      });
+    }
+    function compareSpecs(a2, b) {
+      return b.q - a2.q || b.s - a2.s || a2.o - b.o || a2.i - b.i || 0;
+    }
+    function getFullCharset(spec) {
+      return spec.charset;
+    }
+    function isQuality(spec) {
+      return spec.q > 0;
+    }
+  }
+});
+
+// node_modules/negotiator/lib/encoding.js
+var require_encoding2 = __commonJS({
+  "node_modules/negotiator/lib/encoding.js"(exports2, module2) {
+    "use strict";
+    module2.exports = preferredEncodings;
+    module2.exports.preferredEncodings = preferredEncodings;
+    var simpleEncodingRegExp = /^\s*([^\s;]+)\s*(?:;(.*))?$/;
+    function parseAcceptEncoding(accept) {
+      var accepts = accept.split(",");
+      var hasIdentity = false;
+      var minQuality = 1;
+      for (var i = 0, j = 0; i < accepts.length; i++) {
+        var encoding = parseEncoding(accepts[i].trim(), i);
+        if (encoding) {
+          accepts[j++] = encoding;
+          hasIdentity = hasIdentity || specify("identity", encoding);
+          minQuality = Math.min(minQuality, encoding.q || 1);
+        }
+      }
+      if (!hasIdentity) {
+        accepts[j++] = {
+          encoding: "identity",
+          q: minQuality,
+          i
+        };
+      }
+      accepts.length = j;
+      return accepts;
+    }
+    function parseEncoding(str, i) {
+      var match = simpleEncodingRegExp.exec(str);
+      if (!match) return null;
+      var encoding = match[1];
+      var q = 1;
+      if (match[2]) {
+        var params = match[2].split(";");
+        for (var j = 0; j < params.length; j++) {
+          var p2 = params[j].trim().split("=");
+          if (p2[0] === "q") {
+            q = parseFloat(p2[1]);
+            break;
+          }
+        }
+      }
+      return {
+        encoding,
+        q,
+        i
+      };
+    }
+    function getEncodingPriority(encoding, accepted, index) {
+      var priority = { encoding, o: -1, q: 0, s: 0 };
+      for (var i = 0; i < accepted.length; i++) {
+        var spec = specify(encoding, accepted[i], index);
+        if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+          priority = spec;
+        }
+      }
+      return priority;
+    }
+    function specify(encoding, spec, index) {
+      var s = 0;
+      if (spec.encoding.toLowerCase() === encoding.toLowerCase()) {
+        s |= 1;
+      } else if (spec.encoding !== "*") {
+        return null;
+      }
+      return {
+        encoding,
+        i: index,
+        o: spec.i,
+        q: spec.q,
+        s
+      };
+    }
+    function preferredEncodings(accept, provided, preferred) {
+      var accepts = parseAcceptEncoding(accept || "");
+      var comparator = preferred ? function comparator2(a2, b) {
+        if (a2.q !== b.q) {
+          return b.q - a2.q;
+        }
+        var aPreferred = preferred.indexOf(a2.encoding);
+        var bPreferred = preferred.indexOf(b.encoding);
+        if (aPreferred === -1 && bPreferred === -1) {
+          return b.s - a2.s || a2.o - b.o || a2.i - b.i;
+        }
+        if (aPreferred !== -1 && bPreferred !== -1) {
+          return aPreferred - bPreferred;
+        }
+        return aPreferred === -1 ? 1 : -1;
+      } : compareSpecs;
+      if (!provided) {
+        return accepts.filter(isQuality).sort(comparator).map(getFullEncoding);
+      }
+      var priorities = provided.map(function getPriority(type, index) {
+        return getEncodingPriority(type, accepts, index);
+      });
+      return priorities.filter(isQuality).sort(comparator).map(function getEncoding(priority) {
+        return provided[priorities.indexOf(priority)];
+      });
+    }
+    function compareSpecs(a2, b) {
+      return b.q - a2.q || b.s - a2.s || a2.o - b.o || a2.i - b.i;
+    }
+    function getFullEncoding(spec) {
+      return spec.encoding;
+    }
+    function isQuality(spec) {
+      return spec.q > 0;
+    }
+  }
+});
+
+// node_modules/negotiator/lib/language.js
+var require_language2 = __commonJS({
+  "node_modules/negotiator/lib/language.js"(exports2, module2) {
+    "use strict";
+    module2.exports = preferredLanguages;
+    module2.exports.preferredLanguages = preferredLanguages;
+    var simpleLanguageRegExp = /^\s*([^\s\-;]+)(?:-([^\s;]+))?\s*(?:;(.*))?$/;
+    function parseAcceptLanguage(accept) {
+      var accepts = accept.split(",");
+      for (var i = 0, j = 0; i < accepts.length; i++) {
+        var language = parseLanguage(accepts[i].trim(), i);
+        if (language) {
+          accepts[j++] = language;
+        }
+      }
+      accepts.length = j;
+      return accepts;
+    }
+    function parseLanguage(str, i) {
+      var match = simpleLanguageRegExp.exec(str);
+      if (!match) return null;
+      var prefix = match[1];
+      var suffix = match[2];
+      var full = prefix;
+      if (suffix) full += "-" + suffix;
+      var q = 1;
+      if (match[3]) {
+        var params = match[3].split(";");
+        for (var j = 0; j < params.length; j++) {
+          var p2 = params[j].split("=");
+          if (p2[0] === "q") q = parseFloat(p2[1]);
+        }
+      }
+      return {
+        prefix,
+        suffix,
+        q,
+        i,
+        full
+      };
+    }
+    function getLanguagePriority(language, accepted, index) {
+      var priority = { o: -1, q: 0, s: 0 };
+      for (var i = 0; i < accepted.length; i++) {
+        var spec = specify(language, accepted[i], index);
+        if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+          priority = spec;
+        }
+      }
+      return priority;
+    }
+    function specify(language, spec, index) {
+      var p2 = parseLanguage(language);
+      if (!p2) return null;
+      var s = 0;
+      if (spec.full.toLowerCase() === p2.full.toLowerCase()) {
+        s |= 4;
+      } else if (spec.prefix.toLowerCase() === p2.full.toLowerCase()) {
+        s |= 2;
+      } else if (spec.full.toLowerCase() === p2.prefix.toLowerCase()) {
+        s |= 1;
+      } else if (spec.full !== "*") {
+        return null;
+      }
+      return {
+        i: index,
+        o: spec.i,
+        q: spec.q,
+        s
+      };
+    }
+    function preferredLanguages(accept, provided) {
+      var accepts = parseAcceptLanguage(accept === void 0 ? "*" : accept || "");
+      if (!provided) {
+        return accepts.filter(isQuality).sort(compareSpecs).map(getFullLanguage);
+      }
+      var priorities = provided.map(function getPriority(type, index) {
+        return getLanguagePriority(type, accepts, index);
+      });
+      return priorities.filter(isQuality).sort(compareSpecs).map(function getLanguage(priority) {
+        return provided[priorities.indexOf(priority)];
+      });
+    }
+    function compareSpecs(a2, b) {
+      return b.q - a2.q || b.s - a2.s || a2.o - b.o || a2.i - b.i || 0;
+    }
+    function getFullLanguage(spec) {
+      return spec.full;
+    }
+    function isQuality(spec) {
+      return spec.q > 0;
+    }
+  }
+});
+
+// node_modules/negotiator/lib/mediaType.js
+var require_mediaType2 = __commonJS({
+  "node_modules/negotiator/lib/mediaType.js"(exports2, module2) {
+    "use strict";
+    module2.exports = preferredMediaTypes;
+    module2.exports.preferredMediaTypes = preferredMediaTypes;
+    var simpleMediaTypeRegExp = /^\s*([^\s\/;]+)\/([^;\s]+)\s*(?:;(.*))?$/;
+    function parseAccept(accept) {
+      var accepts = splitMediaTypes(accept);
+      for (var i = 0, j = 0; i < accepts.length; i++) {
+        var mediaType = parseMediaType(accepts[i].trim(), i);
+        if (mediaType) {
+          accepts[j++] = mediaType;
+        }
+      }
+      accepts.length = j;
+      return accepts;
+    }
+    function parseMediaType(str, i) {
+      var match = simpleMediaTypeRegExp.exec(str);
+      if (!match) return null;
+      var params = /* @__PURE__ */ Object.create(null);
+      var q = 1;
+      var subtype = match[2];
+      var type = match[1];
+      if (match[3]) {
+        var kvps = splitParameters(match[3]).map(splitKeyValuePair);
+        for (var j = 0; j < kvps.length; j++) {
+          var pair = kvps[j];
+          var key = pair[0].toLowerCase();
+          var val = pair[1];
+          var value = val && val[0] === '"' && val[val.length - 1] === '"' ? val.slice(1, -1) : val;
+          if (key === "q") {
+            q = parseFloat(value);
+            break;
+          }
+          params[key] = value;
+        }
+      }
+      return {
+        type,
+        subtype,
+        params,
+        q,
+        i
+      };
+    }
+    function getMediaTypePriority(type, accepted, index) {
+      var priority = { o: -1, q: 0, s: 0 };
+      for (var i = 0; i < accepted.length; i++) {
+        var spec = specify(type, accepted[i], index);
+        if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+          priority = spec;
+        }
+      }
+      return priority;
+    }
+    function specify(type, spec, index) {
+      var p2 = parseMediaType(type);
+      var s = 0;
+      if (!p2) {
+        return null;
+      }
+      if (spec.type.toLowerCase() == p2.type.toLowerCase()) {
+        s |= 4;
+      } else if (spec.type != "*") {
+        return null;
+      }
+      if (spec.subtype.toLowerCase() == p2.subtype.toLowerCase()) {
+        s |= 2;
+      } else if (spec.subtype != "*") {
+        return null;
+      }
+      var keys = Object.keys(spec.params);
+      if (keys.length > 0) {
+        if (keys.every(function(k) {
+          return spec.params[k] == "*" || (spec.params[k] || "").toLowerCase() == (p2.params[k] || "").toLowerCase();
+        })) {
+          s |= 1;
+        } else {
+          return null;
+        }
+      }
+      return {
+        i: index,
+        o: spec.i,
+        q: spec.q,
+        s
+      };
+    }
+    function preferredMediaTypes(accept, provided) {
+      var accepts = parseAccept(accept === void 0 ? "*/*" : accept || "");
+      if (!provided) {
+        return accepts.filter(isQuality).sort(compareSpecs).map(getFullType);
+      }
+      var priorities = provided.map(function getPriority(type, index) {
+        return getMediaTypePriority(type, accepts, index);
+      });
+      return priorities.filter(isQuality).sort(compareSpecs).map(function getType(priority) {
+        return provided[priorities.indexOf(priority)];
+      });
+    }
+    function compareSpecs(a2, b) {
+      return b.q - a2.q || b.s - a2.s || a2.o - b.o || a2.i - b.i || 0;
+    }
+    function getFullType(spec) {
+      return spec.type + "/" + spec.subtype;
+    }
+    function isQuality(spec) {
+      return spec.q > 0;
+    }
+    function quoteCount(string) {
+      var count = 0;
+      var index = 0;
+      while ((index = string.indexOf('"', index)) !== -1) {
+        count++;
+        index++;
+      }
+      return count;
+    }
+    function splitKeyValuePair(str) {
+      var index = str.indexOf("=");
+      var key;
+      var val;
+      if (index === -1) {
+        key = str;
+      } else {
+        key = str.slice(0, index);
+        val = str.slice(index + 1);
+      }
+      return [key, val];
+    }
+    function splitMediaTypes(accept) {
+      var accepts = accept.split(",");
+      for (var i = 1, j = 0; i < accepts.length; i++) {
+        if (quoteCount(accepts[j]) % 2 == 0) {
+          accepts[++j] = accepts[i];
+        } else {
+          accepts[j] += "," + accepts[i];
+        }
+      }
+      accepts.length = j + 1;
+      return accepts;
+    }
+    function splitParameters(str) {
+      var parameters = str.split(";");
+      for (var i = 1, j = 0; i < parameters.length; i++) {
+        if (quoteCount(parameters[j]) % 2 == 0) {
+          parameters[++j] = parameters[i];
+        } else {
+          parameters[j] += ";" + parameters[i];
+        }
+      }
+      parameters.length = j + 1;
+      for (var i = 0; i < parameters.length; i++) {
+        parameters[i] = parameters[i].trim();
+      }
+      return parameters;
+    }
+  }
+});
+
+// node_modules/negotiator/index.js
+var require_negotiator2 = __commonJS({
+  "node_modules/negotiator/index.js"(exports2, module2) {
+    "use strict";
+    var preferredCharsets = require_charset2();
+    var preferredEncodings = require_encoding2();
+    var preferredLanguages = require_language2();
+    var preferredMediaTypes = require_mediaType2();
+    module2.exports = Negotiator;
+    module2.exports.Negotiator = Negotiator;
+    function Negotiator(request) {
+      if (!(this instanceof Negotiator)) {
+        return new Negotiator(request);
+      }
+      this.request = request;
+    }
+    Negotiator.prototype.charset = function charset(available) {
+      var set = this.charsets(available);
+      return set && set[0];
+    };
+    Negotiator.prototype.charsets = function charsets(available) {
+      return preferredCharsets(this.request.headers["accept-charset"], available);
+    };
+    Negotiator.prototype.encoding = function encoding(available, preferred) {
+      var set = this.encodings(available, preferred);
+      return set && set[0];
+    };
+    Negotiator.prototype.encodings = function encodings(available, preferred) {
+      return preferredEncodings(this.request.headers["accept-encoding"], available, preferred);
+    };
+    Negotiator.prototype.language = function language(available) {
+      var set = this.languages(available);
+      return set && set[0];
+    };
+    Negotiator.prototype.languages = function languages(available) {
+      return preferredLanguages(this.request.headers["accept-language"], available);
+    };
+    Negotiator.prototype.mediaType = function mediaType(available) {
+      var set = this.mediaTypes(available);
+      return set && set[0];
+    };
+    Negotiator.prototype.mediaTypes = function mediaTypes(available) {
+      return preferredMediaTypes(this.request.headers.accept, available);
+    };
+    Negotiator.prototype.preferredCharset = Negotiator.prototype.charset;
+    Negotiator.prototype.preferredCharsets = Negotiator.prototype.charsets;
+    Negotiator.prototype.preferredEncoding = Negotiator.prototype.encoding;
+    Negotiator.prototype.preferredEncodings = Negotiator.prototype.encodings;
+    Negotiator.prototype.preferredLanguage = Negotiator.prototype.language;
+    Negotiator.prototype.preferredLanguages = Negotiator.prototype.languages;
+    Negotiator.prototype.preferredMediaType = Negotiator.prototype.mediaType;
+    Negotiator.prototype.preferredMediaTypes = Negotiator.prototype.mediaTypes;
+  }
+});
+
 // node_modules/safe-buffer/index.js
 var require_safe_buffer = __commonJS({
   "node_modules/safe-buffer/index.js"(exports2, module2) {
@@ -24021,6 +26661,820 @@ var require_safe_buffer = __commonJS({
       }
       return buffer.SlowBuffer(size);
     };
+  }
+});
+
+// node_modules/compressible/index.js
+var require_compressible = __commonJS({
+  "node_modules/compressible/index.js"(exports2, module2) {
+    "use strict";
+    var db = require_mime_db();
+    var COMPRESSIBLE_TYPE_REGEXP = /^text\/|\+(?:json|text|xml)$/i;
+    var EXTRACT_TYPE_REGEXP = /^\s*([^;\s]*)(?:;|\s|$)/;
+    module2.exports = compressible;
+    function compressible(type) {
+      if (!type || typeof type !== "string") {
+        return false;
+      }
+      var match = EXTRACT_TYPE_REGEXP.exec(type);
+      var mime = match && match[1].toLowerCase();
+      var data = db[mime];
+      if (data && data.compressible !== void 0) {
+        return data.compressible;
+      }
+      return COMPRESSIBLE_TYPE_REGEXP.test(mime) || void 0;
+    }
+  }
+});
+
+// node_modules/debug/node_modules/ms/index.js
+var require_ms2 = __commonJS({
+  "node_modules/debug/node_modules/ms/index.js"(exports2, module2) {
+    var s = 1e3;
+    var m2 = s * 60;
+    var h = m2 * 60;
+    var d = h * 24;
+    var y2 = d * 365.25;
+    module2.exports = function(val, options) {
+      options = options || {};
+      var type = typeof val;
+      if (type === "string" && val.length > 0) {
+        return parse(val);
+      } else if (type === "number" && isNaN(val) === false) {
+        return options.long ? fmtLong(val) : fmtShort(val);
+      }
+      throw new Error(
+        "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
+      );
+    };
+    function parse(str) {
+      str = String(str);
+      if (str.length > 100) {
+        return;
+      }
+      var match = /^((?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|years?|yrs?|y)?$/i.exec(
+        str
+      );
+      if (!match) {
+        return;
+      }
+      var n = parseFloat(match[1]);
+      var type = (match[2] || "ms").toLowerCase();
+      switch (type) {
+        case "years":
+        case "year":
+        case "yrs":
+        case "yr":
+        case "y":
+          return n * y2;
+        case "days":
+        case "day":
+        case "d":
+          return n * d;
+        case "hours":
+        case "hour":
+        case "hrs":
+        case "hr":
+        case "h":
+          return n * h;
+        case "minutes":
+        case "minute":
+        case "mins":
+        case "min":
+        case "m":
+          return n * m2;
+        case "seconds":
+        case "second":
+        case "secs":
+        case "sec":
+        case "s":
+          return n * s;
+        case "milliseconds":
+        case "millisecond":
+        case "msecs":
+        case "msec":
+        case "ms":
+          return n;
+        default:
+          return void 0;
+      }
+    }
+    function fmtShort(ms2) {
+      if (ms2 >= d) {
+        return Math.round(ms2 / d) + "d";
+      }
+      if (ms2 >= h) {
+        return Math.round(ms2 / h) + "h";
+      }
+      if (ms2 >= m2) {
+        return Math.round(ms2 / m2) + "m";
+      }
+      if (ms2 >= s) {
+        return Math.round(ms2 / s) + "s";
+      }
+      return ms2 + "ms";
+    }
+    function fmtLong(ms2) {
+      return plural(ms2, d, "day") || plural(ms2, h, "hour") || plural(ms2, m2, "minute") || plural(ms2, s, "second") || ms2 + " ms";
+    }
+    function plural(ms2, n, name) {
+      if (ms2 < n) {
+        return;
+      }
+      if (ms2 < n * 1.5) {
+        return Math.floor(ms2 / n) + " " + name;
+      }
+      return Math.ceil(ms2 / n) + " " + name + "s";
+    }
+  }
+});
+
+// node_modules/debug/src/debug.js
+var require_debug = __commonJS({
+  "node_modules/debug/src/debug.js"(exports2, module2) {
+    exports2 = module2.exports = createDebug.debug = createDebug["default"] = createDebug;
+    exports2.coerce = coerce;
+    exports2.disable = disable;
+    exports2.enable = enable;
+    exports2.enabled = enabled;
+    exports2.humanize = require_ms2();
+    exports2.names = [];
+    exports2.skips = [];
+    exports2.formatters = {};
+    var prevTime;
+    function selectColor(namespace) {
+      var hash2 = 0, i;
+      for (i in namespace) {
+        hash2 = (hash2 << 5) - hash2 + namespace.charCodeAt(i);
+        hash2 |= 0;
+      }
+      return exports2.colors[Math.abs(hash2) % exports2.colors.length];
+    }
+    function createDebug(namespace) {
+      function debug() {
+        if (!debug.enabled) return;
+        var self = debug;
+        var curr = +/* @__PURE__ */ new Date();
+        var ms2 = curr - (prevTime || curr);
+        self.diff = ms2;
+        self.prev = prevTime;
+        self.curr = curr;
+        prevTime = curr;
+        var args = new Array(arguments.length);
+        for (var i = 0; i < args.length; i++) {
+          args[i] = arguments[i];
+        }
+        args[0] = exports2.coerce(args[0]);
+        if ("string" !== typeof args[0]) {
+          args.unshift("%O");
+        }
+        var index = 0;
+        args[0] = args[0].replace(/%([a-zA-Z%])/g, function(match, format) {
+          if (match === "%%") return match;
+          index++;
+          var formatter = exports2.formatters[format];
+          if ("function" === typeof formatter) {
+            var val = args[index];
+            match = formatter.call(self, val);
+            args.splice(index, 1);
+            index--;
+          }
+          return match;
+        });
+        exports2.formatArgs.call(self, args);
+        var logFn = debug.log || exports2.log || console.log.bind(console);
+        logFn.apply(self, args);
+      }
+      debug.namespace = namespace;
+      debug.enabled = exports2.enabled(namespace);
+      debug.useColors = exports2.useColors();
+      debug.color = selectColor(namespace);
+      if ("function" === typeof exports2.init) {
+        exports2.init(debug);
+      }
+      return debug;
+    }
+    function enable(namespaces) {
+      exports2.save(namespaces);
+      exports2.names = [];
+      exports2.skips = [];
+      var split = (typeof namespaces === "string" ? namespaces : "").split(/[\s,]+/);
+      var len = split.length;
+      for (var i = 0; i < len; i++) {
+        if (!split[i]) continue;
+        namespaces = split[i].replace(/\*/g, ".*?");
+        if (namespaces[0] === "-") {
+          exports2.skips.push(new RegExp("^" + namespaces.substr(1) + "$"));
+        } else {
+          exports2.names.push(new RegExp("^" + namespaces + "$"));
+        }
+      }
+    }
+    function disable() {
+      exports2.enable("");
+    }
+    function enabled(name) {
+      var i, len;
+      for (i = 0, len = exports2.skips.length; i < len; i++) {
+        if (exports2.skips[i].test(name)) {
+          return false;
+        }
+      }
+      for (i = 0, len = exports2.names.length; i < len; i++) {
+        if (exports2.names[i].test(name)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    function coerce(val) {
+      if (val instanceof Error) return val.stack || val.message;
+      return val;
+    }
+  }
+});
+
+// node_modules/debug/src/browser.js
+var require_browser6 = __commonJS({
+  "node_modules/debug/src/browser.js"(exports2, module2) {
+    exports2 = module2.exports = require_debug();
+    exports2.log = log;
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.storage = "undefined" != typeof chrome && "undefined" != typeof chrome.storage ? chrome.storage.local : localstorage();
+    exports2.colors = [
+      "lightseagreen",
+      "forestgreen",
+      "goldenrod",
+      "dodgerblue",
+      "darkorchid",
+      "crimson"
+    ];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && window.process.type === "renderer") {
+        return true;
+      }
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // is firebug? http://stackoverflow.com/a/398120/376773
+      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // is firefox >= v31?
+      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31 || // double check webkit in userAgent just in case we are in a worker
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    exports2.formatters.j = function(v2) {
+      try {
+        return JSON.stringify(v2);
+      } catch (err) {
+        return "[UnexpectedJSONParseError]: " + err.message;
+      }
+    };
+    function formatArgs(args) {
+      var useColors2 = this.useColors;
+      args[0] = (useColors2 ? "%c" : "") + this.namespace + (useColors2 ? " %c" : " ") + args[0] + (useColors2 ? "%c " : " ") + "+" + exports2.humanize(this.diff);
+      if (!useColors2) return;
+      var c = "color: " + this.color;
+      args.splice(1, 0, c, "color: inherit");
+      var index = 0;
+      var lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, function(match) {
+        if ("%%" === match) return;
+        index++;
+        if ("%c" === match) {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c);
+    }
+    function log() {
+      return "object" === typeof console && console.log && Function.prototype.apply.call(console.log, console, arguments);
+    }
+    function save(namespaces) {
+      try {
+        if (null == namespaces) {
+          exports2.storage.removeItem("debug");
+        } else {
+          exports2.storage.debug = namespaces;
+        }
+      } catch (e) {
+      }
+    }
+    function load() {
+      var r;
+      try {
+        r = exports2.storage.debug;
+      } catch (e) {
+      }
+      if (!r && typeof process !== "undefined" && "env" in process) {
+        r = process.env.DEBUG;
+      }
+      return r;
+    }
+    exports2.enable(load());
+    function localstorage() {
+      try {
+        return window.localStorage;
+      } catch (e) {
+      }
+    }
+  }
+});
+
+// node_modules/debug/src/node.js
+var require_node6 = __commonJS({
+  "node_modules/debug/src/node.js"(exports2, module2) {
+    var tty = require("tty");
+    var util = require("util");
+    exports2 = module2.exports = require_debug();
+    exports2.init = init;
+    exports2.log = log;
+    exports2.formatArgs = formatArgs;
+    exports2.save = save;
+    exports2.load = load;
+    exports2.useColors = useColors;
+    exports2.colors = [6, 2, 3, 4, 5, 1];
+    exports2.inspectOpts = Object.keys(process.env).filter(function(key) {
+      return /^debug_/i.test(key);
+    }).reduce(function(obj, key) {
+      var prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, function(_2, k) {
+        return k.toUpperCase();
+      });
+      var val = process.env[key];
+      if (/^(yes|on|true|enabled)$/i.test(val)) val = true;
+      else if (/^(no|off|false|disabled)$/i.test(val)) val = false;
+      else if (val === "null") val = null;
+      else val = Number(val);
+      obj[prop] = val;
+      return obj;
+    }, {});
+    var fd = parseInt(process.env.DEBUG_FD, 10) || 2;
+    if (1 !== fd && 2 !== fd) {
+      util.deprecate(function() {
+      }, "except for stderr(2) and stdout(1), any other usage of DEBUG_FD is deprecated. Override debug.log if you want to use a different log function (https://git.io/debug_fd)")();
+    }
+    var stream = 1 === fd ? process.stdout : 2 === fd ? process.stderr : createWritableStdioStream(fd);
+    function useColors() {
+      return "colors" in exports2.inspectOpts ? Boolean(exports2.inspectOpts.colors) : tty.isatty(fd);
+    }
+    exports2.formatters.o = function(v2) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v2, this.inspectOpts).split("\n").map(function(str) {
+        return str.trim();
+      }).join(" ");
+    };
+    exports2.formatters.O = function(v2) {
+      this.inspectOpts.colors = this.useColors;
+      return util.inspect(v2, this.inspectOpts);
+    };
+    function formatArgs(args) {
+      var name = this.namespace;
+      var useColors2 = this.useColors;
+      if (useColors2) {
+        var c = this.color;
+        var prefix = "  \x1B[3" + c + ";1m" + name + " \x1B[0m";
+        args[0] = prefix + args[0].split("\n").join("\n" + prefix);
+        args.push("\x1B[3" + c + "m+" + exports2.humanize(this.diff) + "\x1B[0m");
+      } else {
+        args[0] = (/* @__PURE__ */ new Date()).toUTCString() + " " + name + " " + args[0];
+      }
+    }
+    function log() {
+      return stream.write(util.format.apply(util, arguments) + "\n");
+    }
+    function save(namespaces) {
+      if (null == namespaces) {
+        delete process.env.DEBUG;
+      } else {
+        process.env.DEBUG = namespaces;
+      }
+    }
+    function load() {
+      return process.env.DEBUG;
+    }
+    function createWritableStdioStream(fd2) {
+      var stream2;
+      var tty_wrap = process.binding("tty_wrap");
+      switch (tty_wrap.guessHandleType(fd2)) {
+        case "TTY":
+          stream2 = new tty.WriteStream(fd2);
+          stream2._type = "tty";
+          if (stream2._handle && stream2._handle.unref) {
+            stream2._handle.unref();
+          }
+          break;
+        case "FILE":
+          var fs = require("fs");
+          stream2 = new fs.SyncWriteStream(fd2, { autoClose: false });
+          stream2._type = "fs";
+          break;
+        case "PIPE":
+        case "TCP":
+          var net = require("net");
+          stream2 = new net.Socket({
+            fd: fd2,
+            readable: false,
+            writable: true
+          });
+          stream2.readable = false;
+          stream2.read = null;
+          stream2._type = "pipe";
+          if (stream2._handle && stream2._handle.unref) {
+            stream2._handle.unref();
+          }
+          break;
+        default:
+          throw new Error("Implement me. Unknown stream file type!");
+      }
+      stream2.fd = fd2;
+      stream2._isStdio = true;
+      return stream2;
+    }
+    function init(debug) {
+      debug.inspectOpts = {};
+      var keys = Object.keys(exports2.inspectOpts);
+      for (var i = 0; i < keys.length; i++) {
+        debug.inspectOpts[keys[i]] = exports2.inspectOpts[keys[i]];
+      }
+    }
+    exports2.enable(load());
+  }
+});
+
+// node_modules/debug/src/index.js
+var require_src6 = __commonJS({
+  "node_modules/debug/src/index.js"(exports2, module2) {
+    if (typeof process !== "undefined" && process.type === "renderer") {
+      module2.exports = require_browser6();
+    } else {
+      module2.exports = require_node6();
+    }
+  }
+});
+
+// node_modules/destroy/index.js
+var require_destroy = __commonJS({
+  "node_modules/destroy/index.js"(exports2, module2) {
+    "use strict";
+    var EventEmitter = require("events").EventEmitter;
+    var ReadStream = require("fs").ReadStream;
+    var Stream = require("stream");
+    var Zlib = require("zlib");
+    module2.exports = destroy;
+    function destroy(stream, suppress) {
+      if (isFsReadStream(stream)) {
+        destroyReadStream(stream);
+      } else if (isZlibStream(stream)) {
+        destroyZlibStream(stream);
+      } else if (hasDestroy(stream)) {
+        stream.destroy();
+      }
+      if (isEventEmitter(stream) && suppress) {
+        stream.removeAllListeners("error");
+        stream.addListener("error", noop);
+      }
+      return stream;
+    }
+    function destroyReadStream(stream) {
+      stream.destroy();
+      if (typeof stream.close === "function") {
+        stream.on("open", onOpenClose);
+      }
+    }
+    function closeZlibStream(stream) {
+      if (stream._hadError === true) {
+        var prop = stream._binding === null ? "_binding" : "_handle";
+        stream[prop] = {
+          close: function() {
+            this[prop] = null;
+          }
+        };
+      }
+      stream.close();
+    }
+    function destroyZlibStream(stream) {
+      if (typeof stream.destroy === "function") {
+        if (stream._binding) {
+          stream.destroy();
+          if (stream._processing) {
+            stream._needDrain = true;
+            stream.once("drain", onDrainClearBinding);
+          } else {
+            stream._binding.clear();
+          }
+        } else if (stream._destroy && stream._destroy !== Stream.Transform.prototype._destroy) {
+          stream.destroy();
+        } else if (stream._destroy && typeof stream.close === "function") {
+          stream.destroyed = true;
+          stream.close();
+        } else {
+          stream.destroy();
+        }
+      } else if (typeof stream.close === "function") {
+        closeZlibStream(stream);
+      }
+    }
+    function hasDestroy(stream) {
+      return stream instanceof Stream && typeof stream.destroy === "function";
+    }
+    function isEventEmitter(val) {
+      return val instanceof EventEmitter;
+    }
+    function isFsReadStream(stream) {
+      return stream instanceof ReadStream;
+    }
+    function isZlibStream(stream) {
+      return stream instanceof Zlib.Gzip || stream instanceof Zlib.Gunzip || stream instanceof Zlib.Deflate || stream instanceof Zlib.DeflateRaw || stream instanceof Zlib.Inflate || stream instanceof Zlib.InflateRaw || stream instanceof Zlib.Unzip;
+    }
+    function noop() {
+    }
+    function onDrainClearBinding() {
+      this._binding.clear();
+    }
+    function onOpenClose() {
+      if (typeof this.fd === "number") {
+        this.close();
+      }
+    }
+  }
+});
+
+// node_modules/on-headers/index.js
+var require_on_headers = __commonJS({
+  "node_modules/on-headers/index.js"(exports2, module2) {
+    "use strict";
+    module2.exports = onHeaders;
+    var http = require("http");
+    var isAppendHeaderSupported = typeof http.ServerResponse.prototype.appendHeader === "function";
+    var set1dArray = isAppendHeaderSupported ? set1dArrayWithAppend : set1dArrayWithSet;
+    function createWriteHead(prevWriteHead, listener) {
+      var fired = false;
+      return function writeHead(statusCode) {
+        var args = setWriteHeadHeaders.apply(this, arguments);
+        if (!fired) {
+          fired = true;
+          listener.call(this);
+          if (typeof args[0] === "number" && this.statusCode !== args[0]) {
+            args[0] = this.statusCode;
+            args.length = 1;
+          }
+        }
+        return prevWriteHead.apply(this, args);
+      };
+    }
+    function onHeaders(res, listener) {
+      if (!res) {
+        throw new TypeError("argument res is required");
+      }
+      if (typeof listener !== "function") {
+        throw new TypeError("argument listener must be a function");
+      }
+      res.writeHead = createWriteHead(res.writeHead, listener);
+    }
+    function setHeadersFromArray(res, headers) {
+      if (headers.length && Array.isArray(headers[0])) {
+        set2dArray(res, headers);
+      } else {
+        if (headers.length % 2 !== 0) {
+          throw new TypeError("headers array is malformed");
+        }
+        set1dArray(res, headers);
+      }
+    }
+    function setHeadersFromObject(res, headers) {
+      var keys = Object.keys(headers);
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (k) res.setHeader(k, headers[k]);
+      }
+    }
+    function setWriteHeadHeaders(statusCode) {
+      var length = arguments.length;
+      var headerIndex = length > 1 && typeof arguments[1] === "string" ? 2 : 1;
+      var headers = length >= headerIndex + 1 ? arguments[headerIndex] : void 0;
+      this.statusCode = statusCode;
+      if (Array.isArray(headers)) {
+        setHeadersFromArray(this, headers);
+      } else if (headers) {
+        setHeadersFromObject(this, headers);
+      }
+      var args = new Array(Math.min(length, headerIndex));
+      for (var i = 0; i < args.length; i++) {
+        args[i] = arguments[i];
+      }
+      return args;
+    }
+    function set2dArray(res, headers) {
+      var key;
+      for (var i = 0; i < headers.length; i++) {
+        key = headers[i][0];
+        if (key) {
+          res.setHeader(key, headers[i][1]);
+        }
+      }
+    }
+    function set1dArrayWithAppend(res, headers) {
+      for (var i = 0; i < headers.length; i += 2) {
+        res.removeHeader(headers[i]);
+      }
+      var key;
+      for (var j = 0; j < headers.length; j += 2) {
+        key = headers[j];
+        if (key) {
+          res.appendHeader(key, headers[j + 1]);
+        }
+      }
+    }
+    function set1dArrayWithSet(res, headers) {
+      var key;
+      for (var i = 0; i < headers.length; i += 2) {
+        key = headers[i];
+        if (key) {
+          res.setHeader(key, headers[i + 1]);
+        }
+      }
+    }
+  }
+});
+
+// node_modules/compression/index.js
+var require_compression = __commonJS({
+  "node_modules/compression/index.js"(exports2, module2) {
+    "use strict";
+    var Negotiator = require_negotiator2();
+    var Buffer2 = require_safe_buffer().Buffer;
+    var bytes = require_bytes();
+    var compressible = require_compressible();
+    var debug = require_src6()("compression");
+    var destroy = require_destroy();
+    var onHeaders = require_on_headers();
+    var vary = require_vary();
+    var zlib = require("zlib");
+    module2.exports = compression2;
+    module2.exports.filter = shouldCompress;
+    var hasBrotliSupport = "createBrotliCompress" in zlib;
+    var cacheControlNoTransformRegExp = /(?:^|,)\s*?no-transform\s*?(?:,|$)/i;
+    var SUPPORTED_ENCODING = hasBrotliSupport ? ["br", "gzip", "deflate", "identity"] : ["gzip", "deflate", "identity"];
+    var PREFERRED_ENCODING = hasBrotliSupport ? ["br", "gzip"] : ["gzip"];
+    var encodingSupported = ["gzip", "deflate", "identity", "br"];
+    function compression2(options) {
+      var opts = options || {};
+      var optsBrotli = {};
+      if (hasBrotliSupport) {
+        Object.assign(optsBrotli, opts.brotli);
+        var brotliParams = {};
+        brotliParams[zlib.constants.BROTLI_PARAM_QUALITY] = 4;
+        optsBrotli.params = Object.assign(brotliParams, optsBrotli.params);
+      }
+      var filter = opts.filter || shouldCompress;
+      var threshold = bytes.parse(opts.threshold);
+      var enforceEncoding = opts.enforceEncoding || "identity";
+      if (threshold == null) {
+        threshold = 1024;
+      }
+      return function compression3(req, res, next) {
+        var ended = false;
+        var length;
+        var listeners = [];
+        var stream;
+        var closed = false;
+        var _end = res.end;
+        var _on = res.on;
+        var _write = res.write;
+        res.flush = function flush() {
+          if (stream) {
+            stream.flush();
+          }
+        };
+        res.write = function write(chunk, encoding) {
+          if (ended) {
+            return false;
+          }
+          if (!headersSent(res)) {
+            this.writeHead(this.statusCode);
+          }
+          return stream ? stream.write(toBuffer(chunk, encoding)) : _write.call(this, chunk, encoding);
+        };
+        res.end = function end(chunk, encoding) {
+          if (ended) {
+            return false;
+          }
+          if (!headersSent(res)) {
+            if (!this.getHeader("Content-Length")) {
+              length = chunkLength(chunk, encoding);
+            }
+            this.writeHead(this.statusCode);
+          }
+          if (!stream) {
+            return _end.call(this, chunk, encoding);
+          }
+          ended = true;
+          return chunk ? stream.end(toBuffer(chunk, encoding)) : stream.end();
+        };
+        res.on = function on(type, listener) {
+          if (!listeners || type !== "drain") {
+            return _on.call(this, type, listener);
+          }
+          if (stream) {
+            return stream.on(type, listener);
+          }
+          listeners.push([type, listener]);
+          return this;
+        };
+        function nocompress(msg) {
+          debug("no compression: %s", msg);
+          addListeners(res, _on, listeners);
+          listeners = null;
+        }
+        _on.call(res, "close", function onResponseClose() {
+          closed = true;
+          destroy(stream);
+        });
+        onHeaders(res, function onResponseHeaders() {
+          if (!filter(req, res)) {
+            nocompress("filtered");
+            return;
+          }
+          if (!shouldTransform(req, res)) {
+            nocompress("no transform");
+            return;
+          }
+          vary(res, "Accept-Encoding");
+          if (Number(res.getHeader("Content-Length")) < threshold || length < threshold) {
+            nocompress("size below threshold");
+            return;
+          }
+          var encoding = res.getHeader("Content-Encoding") || "identity";
+          if (encoding !== "identity") {
+            nocompress("already encoded");
+            return;
+          }
+          if (req.method === "HEAD") {
+            nocompress("HEAD request");
+            return;
+          }
+          var negotiator = new Negotiator(req);
+          var method = negotiator.encoding(SUPPORTED_ENCODING, PREFERRED_ENCODING);
+          if (!req.headers["accept-encoding"] && encodingSupported.indexOf(enforceEncoding) !== -1) {
+            method = enforceEncoding;
+          }
+          if (!method || method === "identity") {
+            nocompress("not acceptable");
+            return;
+          }
+          debug("%s compression", method);
+          stream = method === "gzip" ? zlib.createGzip(opts) : method === "br" ? zlib.createBrotliCompress(optsBrotli) : zlib.createDeflate(opts);
+          if (closed) {
+            destroy(stream);
+            stream = null;
+            return;
+          }
+          addListeners(stream, stream.on, listeners);
+          res.setHeader("Content-Encoding", method);
+          res.removeHeader("Content-Length");
+          stream.on("data", function onStreamData(chunk) {
+            if (_write.call(res, chunk) === false) {
+              stream.pause();
+            }
+          });
+          stream.on("end", function onStreamEnd() {
+            _end.call(res);
+          });
+          _on.call(res, "drain", function onResponseDrain() {
+            stream.resume();
+          });
+        });
+        next();
+      };
+    }
+    function addListeners(stream, on, listeners) {
+      for (var i = 0; i < listeners.length; i++) {
+        on.apply(stream, listeners[i]);
+      }
+    }
+    function chunkLength(chunk, encoding) {
+      if (!chunk) {
+        return 0;
+      }
+      return Buffer2.isBuffer(chunk) ? chunk.length : Buffer2.byteLength(chunk, encoding);
+    }
+    function shouldCompress(req, res) {
+      var type = res.getHeader("Content-Type");
+      if (type === void 0 || !compressible(type)) {
+        debug("%s not compressible", type);
+        return false;
+      }
+      return true;
+    }
+    function shouldTransform(req, res) {
+      var cacheControl = res.getHeader("Cache-Control");
+      return !cacheControl || !cacheControlNoTransformRegExp.test(cacheControl);
+    }
+    function toBuffer(chunk, encoding) {
+      return Buffer2.isBuffer(chunk) ? chunk : Buffer2.from(chunk, encoding);
+    }
+    function headersSent(res) {
+      return typeof res.headersSent !== "boolean" ? Boolean(res._header) : res.headersSent;
+    }
   }
 });
 
@@ -24735,9 +28189,9 @@ var require_jws = __commonJS({
 var require_decode = __commonJS({
   "node_modules/jsonwebtoken/decode.js"(exports2, module2) {
     var jws = require_jws();
-    module2.exports = function(jwt2, options) {
+    module2.exports = function(jwt3, options) {
       options = options || {};
-      var decoded = jws.decode(jwt2, options);
+      var decoded = jws.decode(jwt3, options);
       if (!decoded) {
         return null;
       }
@@ -24842,6 +28296,33 @@ var require_constants = __commonJS({
     9007199254740991;
     var MAX_SAFE_COMPONENT_LENGTH = 16;
     var MAX_SAFE_BUILD_LENGTH = MAX_LENGTH - 6;
+    var WHITESPACE_CHARACTERS = [
+      "	",
+      "\n",
+      "\v",
+      "\f",
+      "\r",
+      " ",
+      "\xA0",
+      "\u1680",
+      "\u2000",
+      "\u2001",
+      "\u2002",
+      "\u2003",
+      "\u2004",
+      "\u2005",
+      "\u2006",
+      "\u2007",
+      "\u2008",
+      "\u2009",
+      "\u200A",
+      "\u2028",
+      "\u2029",
+      "\u202F",
+      "\u205F",
+      "\u3000",
+      "\uFEFF"
+    ];
     var RELEASE_TYPES = [
       "major",
       "premajor",
@@ -24856,6 +28337,7 @@ var require_constants = __commonJS({
       MAX_SAFE_COMPONENT_LENGTH,
       MAX_SAFE_BUILD_LENGTH,
       MAX_SAFE_INTEGER,
+      WHITESPACE_CHARACTERS,
       RELEASE_TYPES,
       SEMVER_SPEC_VERSION,
       FLAG_INCLUDE_PRERELEASE: 1,
@@ -24865,7 +28347,7 @@ var require_constants = __commonJS({
 });
 
 // node_modules/semver/internal/debug.js
-var require_debug = __commonJS({
+var require_debug2 = __commonJS({
   "node_modules/semver/internal/debug.js"(exports2, module2) {
     "use strict";
     var debug = typeof process === "object" && process.env && process.env.NODE_DEBUG && /\bsemver\b/i.test(process.env.NODE_DEBUG) ? (...args) => console.error("SEMVER", ...args) : () => {
@@ -24883,7 +28365,7 @@ var require_re = __commonJS({
       MAX_SAFE_BUILD_LENGTH,
       MAX_LENGTH
     } = require_constants();
-    var debug = require_debug();
+    var debug = require_debug2();
     exports2 = module2.exports = {};
     var re = exports2.re = [];
     var safeRe = exports2.safeRe = [];
@@ -25010,7 +28492,7 @@ var require_identifiers = __commonJS({
 var require_semver = __commonJS({
   "node_modules/semver/classes/semver.js"(exports2, module2) {
     "use strict";
-    var debug = require_debug();
+    var debug = require_debug2();
     var { MAX_LENGTH, MAX_SAFE_INTEGER } = require_constants();
     var { safeRe: re, t } = require_re();
     var parseOptions = require_parse_options();
@@ -25756,6 +29238,197 @@ var require_lrucache = __commonJS({
   }
 });
 
+// node_modules/semver/internal/trim-comparator-whitespace.js
+var require_trim_comparator_whitespace = __commonJS({
+  "node_modules/semver/internal/trim-comparator-whitespace.js"(exports2, module2) {
+    "use strict";
+    var {
+      MAX_LENGTH,
+      MAX_SAFE_BUILD_LENGTH,
+      WHITESPACE_CHARACTERS
+    } = require_constants();
+    var whitespace = new Uint8Array(65536);
+    for (const char of WHITESPACE_CHARACTERS) {
+      whitespace[char.charCodeAt(0)] = 1;
+    }
+    var isWhitespace = (char) => char !== void 0 && whitespace[char.charCodeAt(0)] === 1;
+    var isVersionPrefix = (char) => char === "v" || char === "=" || isWhitespace(char);
+    var isDigit = (char) => char !== void 0 && char >= "0" && char <= "9";
+    var isLetter = (char) => char !== void 0 && (char >= "a" && char <= "z" || char >= "A" && char <= "Z");
+    var isIdentifierCharacter = (char) => isDigit(char) || isLetter(char) || char === "-";
+    var isVersionStart = (char) => isDigit(char) || char === "x" || char === "X" || char === "*";
+    var findDigitsEndIndex = (range, start, limit, digitRuns) => {
+      if (!isDigit(range[start])) {
+        return start;
+      }
+      if (start >= digitRuns.start && start < digitRuns.end) {
+        return Math.min(start + limit, digitRuns.end);
+      }
+      if (start >= digitRuns.previousStart && start < digitRuns.previousEnd) {
+        return Math.min(start + limit, digitRuns.previousEnd);
+      }
+      let end = start + 1;
+      while (isDigit(range[end])) {
+        end++;
+      }
+      digitRuns.previousStart = digitRuns.start;
+      digitRuns.previousEnd = digitRuns.end;
+      digitRuns.start = start;
+      digitRuns.end = end;
+      return Math.min(start + limit, end);
+    };
+    var findVersionNumberEndIndex = (range, start, loose, digitRuns) => {
+      if (!loose && range[start] === "0") {
+        return start + 1;
+      }
+      return findDigitsEndIndex(range, start, loose ? MAX_LENGTH : MAX_LENGTH + 1, digitRuns);
+    };
+    var findPrereleaseIdentifierEndIndex = (range, start, loose, digitRuns) => {
+      const digitsEnd = findDigitsEndIndex(range, start, MAX_LENGTH, digitRuns);
+      if (isLetter(range[digitsEnd]) || range[digitsEnd] === "-") {
+        let end = digitsEnd + 1;
+        const limit = end + MAX_SAFE_BUILD_LENGTH;
+        while (end < limit && isIdentifierCharacter(range[end])) {
+          end++;
+        }
+        return end;
+      }
+      return findVersionNumberEndIndex(range, start, loose, digitRuns);
+    };
+    var findPrereleaseEndIndex = (range, start, loose, digitRuns) => {
+      const hyphen = range[start] === "-";
+      if (!loose && !hyphen) {
+        return start;
+      }
+      const identifierStart = start + (hyphen ? 1 : 0);
+      let end = findPrereleaseIdentifierEndIndex(range, identifierStart, loose, digitRuns);
+      if (end === identifierStart) {
+        if (!loose || !hyphen) {
+          return start;
+        }
+        end = findPrereleaseIdentifierEndIndex(range, start, loose, digitRuns);
+      }
+      while (range[end] === ".") {
+        const next = findPrereleaseIdentifierEndIndex(range, end + 1, loose, digitRuns);
+        if (next === end + 1) {
+          break;
+        }
+        end = next;
+      }
+      return end;
+    };
+    var findBuildIdentifierEndIndex = (range, start) => {
+      let end = start;
+      while (end - start < MAX_SAFE_BUILD_LENGTH && isIdentifierCharacter(range[end])) {
+        end++;
+      }
+      return end;
+    };
+    var findBuildEndIndex = (range, start) => {
+      if (range[start] !== "+") {
+        return start;
+      }
+      let end = findBuildIdentifierEndIndex(range, start + 1);
+      if (end === start + 1) {
+        return start;
+      }
+      while (range[end] === ".") {
+        const next = findBuildIdentifierEndIndex(range, end + 1);
+        if (next === end + 1) {
+          break;
+        }
+        end = next;
+      }
+      return end;
+    };
+    var findLooseFullVersionEndIndex = (range, start, digitRuns) => {
+      let end = start;
+      for (let component = 0; component < 3; component++) {
+        const next = findVersionNumberEndIndex(range, end, true, digitRuns);
+        if (next === end) {
+          return start;
+        }
+        end = next;
+        if (component < 2) {
+          if (range[end] !== ".") {
+            return start;
+          }
+          end++;
+        }
+      }
+      const prereleaseEnd = findPrereleaseEndIndex(range, end, true, digitRuns);
+      return findBuildEndIndex(range, prereleaseEnd);
+    };
+    var findPartialVersionComponentEndIndex = (range, start, digitRuns) => {
+      if (isDigit(range[start])) {
+        return findVersionNumberEndIndex(range, start, false, digitRuns);
+      }
+      return isVersionStart(range[start]) ? start + 1 : start;
+    };
+    var findPartialVersionEndIndex = (range, start, digitRuns) => {
+      let end = findPartialVersionComponentEndIndex(range, start, digitRuns);
+      for (let component = 0; component < 2; component++) {
+        if (range[end] !== ".") {
+          return end;
+        }
+        const next = findPartialVersionComponentEndIndex(range, end + 1, digitRuns);
+        if (next === end + 1) {
+          return end;
+        }
+        end = next;
+      }
+      const prereleaseEnd = findPrereleaseEndIndex(range, end, false, digitRuns);
+      return findBuildEndIndex(range, prereleaseEnd);
+    };
+    var findVersionEndIndex = (range, start, digitRuns) => {
+      const fullVersionEnd = findLooseFullVersionEndIndex(range, start, digitRuns);
+      return fullVersionEnd !== start ? fullVersionEnd : findPartialVersionEndIndex(range, start, digitRuns);
+    };
+    var findRemovableWhitespaceIndex = (range, matchStart) => {
+      let position = matchStart;
+      if (isWhitespace(range[position])) {
+        position++;
+      }
+      if (range[position] === "<" || range[position] === ">") {
+        position++;
+      }
+      if (range[position] === "=") {
+        position++;
+      }
+      return isWhitespace(range[position]) ? position : -1;
+    };
+    var trimComparatorWhitespace = (range) => {
+      let result = "";
+      let copyFrom = 0;
+      let cursor = 0;
+      const digitRuns = { start: -1, end: -1, previousStart: -1, previousEnd: -1 };
+      while (cursor < range.length) {
+        const matchStart = cursor;
+        if (range[cursor] === "<" || range[cursor] === ">") {
+          cursor++;
+        } else if (!isVersionPrefix(range[cursor]) && !isVersionStart(range[cursor])) {
+          cursor++;
+          continue;
+        }
+        while (cursor < range.length && isVersionPrefix(range[cursor])) {
+          cursor++;
+        }
+        if (!isVersionStart(range[cursor])) {
+          continue;
+        }
+        const whitespacePosition = findRemovableWhitespaceIndex(range, matchStart);
+        if (whitespacePosition !== -1) {
+          result += range.slice(copyFrom, whitespacePosition);
+          copyFrom = whitespacePosition + 1;
+        }
+        cursor = findVersionEndIndex(range, cursor, digitRuns);
+      }
+      return result + range.slice(copyFrom);
+    };
+    module2.exports = trimComparatorWhitespace;
+  }
+});
+
 // node_modules/semver/classes/range.js
 var require_range2 = __commonJS({
   "node_modules/semver/classes/range.js"(exports2, module2) {
@@ -25837,7 +29510,7 @@ var require_range2 = __commonJS({
         const hr = loose ? re[t.HYPHENRANGELOOSE] : re[t.HYPHENRANGE];
         range = range.replace(hr, hyphenReplace(this.options.includePrerelease));
         debug("hyphen replace", range);
-        range = range.replace(re[t.COMPARATORTRIM], comparatorTrimReplace);
+        range = trimComparatorWhitespace(range);
         debug("comparator trim", range);
         range = range.replace(re[t.TILDETRIM], tildeTrimReplace);
         debug("tilde trim", range);
@@ -25905,13 +29578,13 @@ var require_range2 = __commonJS({
     var cache = new LRU();
     var parseOptions = require_parse_options();
     var Comparator = require_comparator();
-    var debug = require_debug();
+    var debug = require_debug2();
     var SemVer = require_semver();
+    var trimComparatorWhitespace = require_trim_comparator_whitespace();
     var {
       safeRe: re,
       src,
       t,
-      comparatorTrimReplace,
       tildeTrimReplace,
       caretTrimReplace
     } = require_re();
@@ -26248,7 +29921,7 @@ var require_comparator = __commonJS({
     var parseOptions = require_parse_options();
     var { safeRe: re, t } = require_re();
     var cmp = require_cmp();
-    var debug = require_debug();
+    var debug = require_debug2();
     var SemVer = require_semver();
     var Range = require_range2();
   }
@@ -27782,10 +31455,11 @@ var require_jsonwebtoken = __commonJS({
 // src/server/index.ts
 var index_exports = {};
 __export(index_exports, {
-  default: () => handler19
+  default: () => handler21
 });
 module.exports = __toCommonJS(index_exports);
 var import_express2 = __toESM(require_express2(), 1);
+var import_compression = __toESM(require_compression(), 1);
 
 // src/server/apiRouter.ts
 var import_express = __toESM(require_express2(), 1);
@@ -34909,8 +38583,10 @@ var export_types = Qe.types;
 
 // src/server/_db.ts
 var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
-var DEFAULT_SESSION_SECRET = "edusync_default_session_secret_min_32_chars_long_key_fallback";
-var SESSION_SECRET = process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32 ? process.env.SESSION_SECRET : DEFAULT_SESSION_SECRET;
+if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
+  throw new Error("SESSION_SECRET environment variable is required and must be at least 32 characters long.");
+}
+var SESSION_SECRET = process.env.SESSION_SECRET;
 var COOKIE_NAME = "edusync_session";
 var getDatabaseUrl = () => {
   return process.env.DATABASE_URL || "";
@@ -34986,17 +38662,48 @@ function extractToken(req) {
   }
   return null;
 }
-function authenticateRequest(req) {
+async function getSessionUser(req, res) {
   const token = extractToken(req);
   if (!token) return null;
-  return verifyToken(token);
+  const payload = verifyToken(token);
+  if (!payload || !payload.userId) return null;
+  try {
+    const sql = getDb();
+    const rows = await sql`
+            SELECT id, name, email, role, school_id, status, avatar_url
+            FROM profiles
+            WHERE id = ${payload.userId}
+            LIMIT 1
+        `;
+    if (!rows || rows.length === 0) {
+      if (res) clearSessionCookie(res);
+      return null;
+    }
+    const user = rows[0];
+    const invalidStatuses = ["Inactive", "Suspended", "Pending Approval", "Pending"];
+    if (invalidStatuses.includes(user.status)) {
+      if (res) clearSessionCookie(res);
+      return null;
+    }
+    return {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      schoolId: user.school_id || null,
+      name: user.name || "",
+      avatarUrl: user.avatar_url || ""
+    };
+  } catch (err) {
+    console.error("getSessionUser error:", err);
+    return null;
+  }
 }
 function setSessionCookie(res, token) {
+  const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
   const cookieStr = serializeCookie(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    partitioned: true,
+    secure: isProd,
+    sameSite: "lax",
     path: "/",
     maxAge: 12 * 60 * 60
     // 12 hours
@@ -35004,11 +38711,11 @@ function setSessionCookie(res, token) {
   res.setHeader("Set-Cookie", cookieStr);
 }
 function clearSessionCookie(res) {
+  const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
   const cookieStr = serializeCookie(COOKIE_NAME, "", {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    partitioned: true,
+    secure: isProd,
+    sameSite: "lax",
     path: "/",
     maxAge: 0
   });
@@ -35026,32 +38733,6 @@ function toCamelCase(obj) {
 }
 
 // src/server/handlers/auth/login.ts
-var failedAttempts = /* @__PURE__ */ new Map();
-var RATE_LIMIT_WINDOW_MS = 15 * 60 * 1e3;
-var MAX_FAILED_ATTEMPTS = 5;
-function isRateLimited(email) {
-  const record = failedAttempts.get(email);
-  if (!record) return false;
-  if (Date.now() > record.resetTime) {
-    failedAttempts.delete(email);
-    return false;
-  }
-  return record.count >= MAX_FAILED_ATTEMPTS;
-}
-function recordFailedAttempt(email) {
-  const record = failedAttempts.get(email);
-  if (!record || Date.now() > record.resetTime) {
-    failedAttempts.set(email, {
-      count: 1,
-      resetTime: Date.now() + RATE_LIMIT_WINDOW_MS
-    });
-  } else {
-    record.count += 1;
-  }
-}
-function clearFailedAttempts(email) {
-  failedAttempts.delete(email);
-}
 async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
@@ -35064,12 +38745,25 @@ async function handler(req, res) {
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required." });
     }
-    if (isRateLimited(email)) {
-      return res.status(429).json({
-        error: "Too many failed login attempts. Please try again after 15 minutes."
-      });
-    }
     const sql = getDb();
+    const ipHeader = req.headers?.["x-forwarded-for"] || req.socket?.remoteAddress || "";
+    const clientIp = typeof ipHeader === "string" ? ipHeader.split(",")[0].trim() || null : null;
+    try {
+      const attemptCountRows = await sql`
+                SELECT COUNT(*)::int as count 
+                FROM login_attempts 
+                WHERE LOWER(email) = LOWER(${email}) 
+                  AND attempted_at >= NOW() - INTERVAL '15 minutes'
+            `;
+      const failedCount = attemptCountRows?.[0]?.count || 0;
+      if (failedCount >= 5) {
+        return res.status(429).json({
+          error: "Too many failed login attempts. Please try again after 15 minutes."
+        });
+      }
+    } catch (rlErr) {
+      console.warn("Rate-limit check skipped due to DB error:", rlErr);
+    }
     const users = await sql`
             SELECT id, school_id, name, email, password, role, status, 
                    avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login
@@ -35078,36 +38772,41 @@ async function handler(req, res) {
             LIMIT 1
         `;
     if (!users || users.length === 0) {
-      recordFailedAttempt(email);
+      try {
+        await sql`INSERT INTO login_attempts (email, ip, attempted_at) VALUES (${email}, ${clientIp}, NOW())`;
+        await sql`DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL '1 day'`;
+      } catch {
+      }
       return res.status(401).json({ error: "Invalid email or password." });
     }
     const user = users[0];
+    const storedPassword = user.password || "";
+    const isBcrypt = storedPassword.startsWith("$2a$") || storedPassword.startsWith("$2b$") || storedPassword.startsWith("$2y$");
+    let isMatch = false;
+    if (isBcrypt) {
+      isMatch = await bcryptjs_default.compare(password, storedPassword);
+    }
+    if (!isMatch) {
+      try {
+        await sql`INSERT INTO login_attempts (email, ip, attempted_at) VALUES (${email}, ${clientIp}, NOW())`;
+        await sql`DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL '1 day'`;
+      } catch {
+      }
+      return res.status(401).json({ error: "Invalid email or password." });
+    }
     if (user.status === "Pending Approval" || user.status === "Pending") {
       return res.status(403).json({ error: "Your account is pending approval by administration." });
     }
     if (user.status === "Suspended" || user.status === "Inactive") {
       return res.status(403).json({ error: "Your account is inactive or suspended. Please contact administration." });
     }
-    let isMatch = false;
-    const storedPassword = user.password || "";
-    if (storedPassword.startsWith("$2a$") || storedPassword.startsWith("$2b$") || storedPassword.startsWith("$2y$")) {
-      isMatch = await bcryptjs_default.compare(password, storedPassword);
-    } else {
-      if (storedPassword === password) {
-        isMatch = true;
-        try {
-          const newHash = await bcryptjs_default.hash(password, 10);
-          await sql`UPDATE profiles SET password = ${newHash} WHERE id = ${user.id}`;
-        } catch (hashErr) {
-          console.error("Auto-upgrade password hashing error:", hashErr);
-        }
-      }
+    if (user.status !== "Active") {
+      return res.status(403).json({ error: "Your account is not active. Please contact administration." });
     }
-    if (!isMatch) {
-      recordFailedAttempt(email);
-      return res.status(401).json({ error: "Invalid email or password." });
+    try {
+      await sql`DELETE FROM login_attempts WHERE LOWER(email) = LOWER(${email})`;
+    } catch {
     }
-    clearFailedAttempts(email);
     try {
       await sql`UPDATE profiles SET last_login = NOW() WHERE id = ${user.id}`;
     } catch (loginTimeErr) {
@@ -35142,29 +38841,22 @@ async function handler2(req, res) {
     return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
   try {
-    const token = extractToken(req);
-    if (!token) {
-      return res.status(401).json({ user: null, error: "No active session found" });
-    }
-    const payload = verifyToken(token);
-    if (!payload || !payload.userId) {
-      return res.status(401).json({ user: null, error: "Session expired or invalid" });
+    const session = await getSessionUser(req, res);
+    if (!session) {
+      return res.status(401).json({ user: null, error: "Session expired, invalid, or account inactive" });
     }
     const sql = getDb();
     const users = await sql`
             SELECT id, school_id, name, email, role, status, 
                    avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login
             FROM profiles 
-            WHERE id = ${payload.userId} 
+            WHERE id = ${session.userId} 
             LIMIT 1
         `;
     if (!users || users.length === 0) {
       return res.status(401).json({ user: null, error: "User not found" });
     }
     const user = users[0];
-    if (user.status === "Suspended" || user.status === "Inactive") {
-      return res.status(403).json({ user: null, error: "Account suspended or inactive" });
-    }
     const safeUser = toCamelCase(user);
     return res.status(200).json({
       user: safeUser
@@ -35193,24 +38885,12 @@ async function handler3(req, res) {
 // src/server/handlers/write/_helpers.ts
 var import_crypto2 = __toESM(require("crypto"), 1);
 async function verifySession(req, res) {
-  const session = authenticateRequest(req);
+  const session = await getSessionUser(req, res);
   if (!session) {
-    res.status(401).json({ error: "Unauthorized: Valid session required." });
+    res.status(401).json({ error: "Unauthorized: Session invalid or account inactive." });
     return null;
   }
   const sql = getDb();
-  try {
-    const users = await sql`SELECT status FROM profiles WHERE id = ${session.userId} LIMIT 1`;
-    if (!users || users.length === 0 || users[0].status && (users[0].status === "Inactive" || users[0].status === "Suspended")) {
-      clearSessionCookie(res);
-      res.status(401).json({ error: "Unauthorized: Account is inactive or suspended." });
-      return null;
-    }
-  } catch (err) {
-    console.error("verifySession status check error:", err);
-    res.status(401).json({ error: "Unauthorized: Session validation failed." });
-    return null;
-  }
   return { session, sql };
 }
 function requireSameSchool(session, recordSchoolId) {
@@ -35251,6 +38931,34 @@ async function writeServerAuditLog(sql, session, action, details, schoolId) {
     console.warn("Failed to record server audit log:", err);
   }
 }
+var ALLOWED_AVATAR_MIMES = ["image/jpeg", "image/png", "image/webp"];
+var MAX_AVATAR_PAYLOAD_CHARS = Math.ceil(500 * 1024 * 4 / 3) + 100;
+function validateAvatarDataUrl(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== "string" || dataUrl.trim() === "") {
+    return { valid: true };
+  }
+  const trimmed = dataUrl.trim();
+  if (trimmed.startsWith("/api/photo")) {
+    return { valid: true };
+  }
+  if (!trimmed.startsWith("data:")) {
+    return { valid: false, error: "Avatar must be a valid image data URL." };
+  }
+  if (trimmed.length > MAX_AVATAR_PAYLOAD_CHARS) {
+    return { valid: false, error: "Avatar image payload exceeds 500 KB limit." };
+  }
+  const commaIndex = trimmed.indexOf(",");
+  if (commaIndex === -1) {
+    return { valid: false, error: "Malformed avatar data URL." };
+  }
+  const meta = trimmed.slice(0, commaIndex);
+  const mimeMatch = meta.match(/data:([^;]+)/);
+  const mime = mimeMatch ? mimeMatch[1].toLowerCase().trim() : "";
+  if (!ALLOWED_AVATAR_MIMES.includes(mime)) {
+    return { valid: false, error: "Avatar must be a JPEG, PNG, or WebP image." };
+  }
+  return { valid: true };
+}
 
 // src/server/handlers/auth/change-password.ts
 async function handler4(req, res) {
@@ -35259,22 +38967,16 @@ async function handler4(req, res) {
     return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
   try {
-    const token = extractToken(req);
-    if (!token) {
-      return res.status(401).json({ error: "Unauthorized: No active session" });
-    }
-    const payload = verifyToken(token);
-    if (!payload || !payload.userId) {
-      return res.status(401).json({ error: "Unauthorized: Session invalid or expired" });
-    }
+    const auth = await verifySession(req, res);
+    if (!auth) return;
+    const { session, sql } = auth;
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
     const { currentPassword, newPassword, targetUserId } = body;
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ error: "New password must be at least 6 characters long." });
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters long." });
     }
-    const sql = getDb();
-    const userIdToUpdate = targetUserId && targetUserId !== payload.userId ? targetUserId : payload.userId;
-    const isSelf = userIdToUpdate === payload.userId;
+    const userIdToUpdate = targetUserId && targetUserId !== session.userId ? targetUserId : session.userId;
+    const isSelf = userIdToUpdate === session.userId;
     const users = await sql`
             SELECT id, password, role, school_id FROM profiles WHERE id = ${userIdToUpdate} LIMIT 1
         `;
@@ -35286,12 +38988,12 @@ async function handler4(req, res) {
       return res.status(403).json({ error: "Forbidden: Nobody may reset an Owner password except that Owner." });
     }
     if (!isSelf) {
-      if (payload.role === "Owner") {
+      if (session.role === "Owner") {
         if (targetUser.role === "Owner") {
           return res.status(403).json({ error: "Forbidden: Owner cannot reset another Owner password." });
         }
-      } else if (payload.role === "Admin") {
-        if (targetUser.school_id !== payload.schoolId) {
+      } else if (session.role === "Admin") {
+        if (targetUser.school_id !== session.schoolId) {
           return res.status(403).json({ error: "Forbidden: Admin can only reset passwords for users in their own school." });
         }
         const rolesBelowAdmin = ["Accountant", "Teacher", "Parent", "Student"];
@@ -35325,7 +39027,7 @@ async function handler4(req, res) {
         `;
     await writeServerAuditLog(
       sql,
-      payload,
+      session,
       isSelf ? "Change Password" : "Reset Password",
       isSelf ? "User changed their own password" : `Reset password for user ID ${userIdToUpdate} (${targetUser.role})`,
       targetUser.school_id
@@ -35357,8 +39059,8 @@ async function handler5(req, res) {
       return res.status(403).json({ error: "Registration is only permitted for Teacher, Parent, or Student roles." });
     }
     const normalizedEmail = email.trim().toLowerCase();
-    if (password.length < 6) {
-      return res.status(400).json({ error: "Password must be at least 6 characters long." });
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters long." });
     }
     const sql = getDb();
     const existing = await sql`SELECT id FROM profiles WHERE LOWER(email) = LOWER(${normalizedEmail}) LIMIT 1`;
@@ -35409,16 +39111,11 @@ async function handler6(req, res) {
     return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
   try {
-    const session = authenticateRequest(req);
+    const session = await getSessionUser(req, res);
     if (!session) {
       return res.status(401).json({ error: "Unauthorized: Session invalid or expired" });
     }
     const sql = getDb();
-    const userCheck = await sql`SELECT status FROM profiles WHERE id = ${session.userId} LIMIT 1`;
-    if (!userCheck || userCheck.length === 0 || userCheck[0].status && (userCheck[0].status === "Inactive" || userCheck[0].status === "Suspended")) {
-      clearSessionCookie(res);
-      return res.status(401).json({ error: "Unauthorized: Account is inactive or suspended" });
-    }
     const { role, userId, schoolId: userSchoolId } = session;
     const requestedSchoolId = req.query?.schoolId || req.query?.activeSchoolId;
     const isOwner = role === "Owner";
@@ -35435,21 +39132,24 @@ async function handler6(req, res) {
       schoolsData = await sql`SELECT id, name, address, logo_url FROM schools WHERE id = ${effectiveSchoolId}`;
     }
     let classesData = [];
+    let branchesData = [];
     let subjectsData = [];
     let examsData = [];
     let feeHeadsData = [];
     let eventsData = [];
     if (isOwner && !effectiveSchoolId) {
-      [classesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
-        sql`SELECT id, name, section, teacher_id, school_id, sort_order FROM classes ORDER BY sort_order ASC, name ASC`,
+      [classesData, branchesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
+        sql`SELECT id, name, section, teacher_id, school_id, branch_id, sort_order FROM classes ORDER BY sort_order ASC, name ASC`,
+        sql`SELECT id, name, address, school_id FROM branches ORDER BY name ASC`,
         sql`SELECT id, name, school_id FROM subjects ORDER BY name ASC`,
         sql`SELECT id, name, school_id FROM exams ORDER BY name ASC`,
         sql`SELECT id, name, default_amount, school_id FROM fee_heads ORDER BY name ASC`,
         sql`SELECT id, title, description, date, category, school_id FROM school_events ORDER BY date ASC`
       ]);
     } else if (effectiveSchoolId) {
-      [classesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
-        sql`SELECT id, name, section, teacher_id, school_id, sort_order FROM classes WHERE school_id = ${effectiveSchoolId} ORDER BY sort_order ASC, name ASC`,
+      [classesData, branchesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
+        sql`SELECT id, name, section, teacher_id, school_id, branch_id, sort_order FROM classes WHERE school_id = ${effectiveSchoolId} ORDER BY sort_order ASC, name ASC`,
+        sql`SELECT id, name, address, school_id FROM branches WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
         sql`SELECT id, name, school_id FROM subjects WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
         sql`SELECT id, name, school_id FROM exams WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
         sql`SELECT id, name, default_amount, school_id FROM fee_heads WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
@@ -35459,25 +39159,37 @@ async function handler6(req, res) {
     let usersData = [];
     if (isOwner) {
       usersData = effectiveSchoolId ? await sql`
-                    SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    SELECT id, school_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                     FROM profiles 
                     WHERE school_id = ${effectiveSchoolId} OR school_id IS NULL
                     ORDER BY name ASC
                   ` : await sql`
-                    SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    SELECT id, school_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                     FROM profiles 
                     ORDER BY name ASC
                   `;
     } else if (isAdmin || isAccountant) {
       usersData = await sql`
-                SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                SELECT id, school_id, name, email, role, status, 
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                       length(avatar_url) AS avatar_len, 
+                       child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                 FROM profiles 
                 WHERE (school_id = ${effectiveSchoolId} OR school_id IS NULL) AND role != 'Owner'
                 ORDER BY name ASC
             `;
     } else if (isTeacher) {
       usersData = await sql`
-                SELECT id, school_id, name, email, role, status, avatar_url, last_login 
+                SELECT id, school_id, name, email, role, status, 
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                       length(avatar_url) AS avatar_len, 
+                       last_login 
                 FROM profiles 
                 WHERE school_id = ${effectiveSchoolId} AND role IN ('Admin', 'Accountant', 'Teacher')
                 ORDER BY name ASC
@@ -35488,7 +39200,28 @@ async function handler6(req, res) {
     let studentsData = [];
     let targetStudentIds = [];
     if (isOwner || isAdmin || isAccountant || isTeacher) {
-      studentsData = effectiveSchoolId ? await sql`SELECT * FROM students WHERE school_id = ${effectiveSchoolId} ORDER BY roll_number ASC, name ASC` : await sql`SELECT * FROM students ORDER BY roll_number ASC, name ASC`;
+      studentsData = effectiveSchoolId ? await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    WHERE school_id = ${effectiveSchoolId} 
+                    ORDER BY roll_number ASC, name ASC
+                  ` : await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    ORDER BY roll_number ASC, name ASC
+                  `;
       if (isTeacher) {
         studentsData = studentsData.map((s) => {
           const { father_cnic: _fc, ...safeStudent } = s;
@@ -35512,18 +39245,41 @@ async function handler6(req, res) {
         }
       }
       if (childIds.length > 0) {
-        studentsData = await sql`SELECT * FROM students WHERE id = ANY(${childIds}) ORDER BY name ASC`;
+        studentsData = await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    WHERE id = ANY(${childIds}) 
+                    ORDER BY name ASC
+                `;
       } else {
         studentsData = [];
       }
       targetStudentIds = studentsData.map((s) => s.id);
     } else if (isStudent) {
-      studentsData = await sql`SELECT * FROM students WHERE user_id = ${userId} LIMIT 1`;
+      studentsData = await sql`
+                SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                       father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                       secondary_contact_number, address, status, gender, date_of_leaving,
+                       reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                       fee_structure, admitted_class, caste, last_school_attended,
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                       length(avatar_url) AS avatar_len
+                FROM students 
+                WHERE user_id = ${userId} 
+                LIMIT 1
+            `;
       targetStudentIds = studentsData.map((s) => s.id);
     }
     let feesData = [];
     let attData = [];
     let resData = [];
+    let ledgerRows = [];
     if (targetStudentIds.length > 0) {
       const requestedYear = req.query?.year;
       let effectiveYear = null;
@@ -35536,8 +39292,10 @@ async function handler6(req, res) {
         effectiveYear = getCurrentKarachiYear();
       }
       if (!isTeacher) {
+        let currentFeesData = [];
+        let earlierOutstandingFees = [];
         if (effectiveYear !== null) {
-          feesData = await sql`
+          currentFeesData = await sql`
                         SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items, 
                                previous_balance, total_amount, discount, paid_amount, status, 
                                paid_date, fine_amount, payment_history, created_at
@@ -35545,8 +39303,19 @@ async function handler6(req, res) {
                         WHERE student_id = ANY(${targetStudentIds}) AND year = ${effectiveYear}
                         ORDER BY year DESC, month DESC
                     `;
+          earlierOutstandingFees = await sql`
+                        SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items,
+                               previous_balance, total_amount, discount, paid_amount, status,
+                               paid_date, fine_amount, payment_history, created_at
+                        FROM fee_challans
+                        WHERE student_id = ANY(${targetStudentIds})
+                          AND year < ${effectiveYear}
+                          AND status <> 'Cancelled'
+                          AND (paid_amount + discount) < total_amount
+                        ORDER BY year DESC, month DESC
+                    `;
         } else {
-          feesData = await sql`
+          currentFeesData = await sql`
                         SELECT id, challan_number, student_id, class_id, month, year, due_date, fee_items, 
                                previous_balance, total_amount, discount, paid_amount, status, 
                                paid_date, fine_amount, payment_history, created_at
@@ -35555,19 +39324,54 @@ async function handler6(req, res) {
                         ORDER BY year DESC, month DESC
                     `;
         }
+        const feeMap = /* @__PURE__ */ new Map();
+        for (const f of [...currentFeesData, ...earlierOutstandingFees]) {
+          feeMap.set(f.id, f);
+        }
+        feesData = Array.from(feeMap.values());
+      }
+      if (!isTeacher && targetStudentIds.length > 0) {
+        ledgerRows = await sql`
+                    WITH charged AS (
+                      SELECT student_id,
+                        COALESCE(SUM(
+                          COALESCE((SELECT SUM((item->>'amount')::numeric)
+                                    FROM jsonb_array_elements(
+                                      CASE WHEN jsonb_typeof(fee_items) = 'array' THEN fee_items ELSE '[]'::jsonb END
+                                    ) AS item), 0)
+                          + COALESCE(fine_amount, 0)
+                        ), 0) AS total_charged,
+                        COALESCE(SUM(paid_amount), 0) AS total_paid,
+                        COALESCE(SUM(discount), 0) AS total_discount
+                      FROM fee_challans
+                      WHERE student_id = ANY(${targetStudentIds})
+                        AND status <> 'Cancelled'
+                      GROUP BY student_id
+                    )
+                    SELECT
+                      s.id AS student_id,
+                      COALESCE(c.total_charged, 0) AS total_charged,
+                      COALESCE(c.total_paid, 0) AS total_paid,
+                      COALESCE(c.total_discount, 0) AS total_discount,
+                      COALESCE(s.opening_balance, 0) AS opening_balance,
+                      COALESCE(s.opening_balance, 0) + COALESCE(c.total_charged, 0) - COALESCE(c.total_paid, 0) - COALESCE(c.total_discount, 0) AS balance
+                    FROM students s
+                    LEFT JOIN charged c ON c.student_id = s.id
+                    WHERE s.id = ANY(${targetStudentIds})
+                `;
       }
       const attendanceFrom = req.query?.attendanceFrom;
       const attendanceTo = req.query?.attendanceTo;
       let attQuery;
       if (attendanceFrom === "all") {
-        attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds})`;
+        attQuery = sql`SELECT id, student_id, date, status FROM attendance WHERE student_id = ANY(${targetStudentIds})`;
       } else if (attendanceFrom && attendanceTo) {
-        attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom} AND date <= ${attendanceTo}`;
+        attQuery = sql`SELECT id, student_id, date, status FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom} AND date <= ${attendanceTo}`;
       } else if (attendanceFrom) {
-        attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom}`;
+        attQuery = sql`SELECT id, student_id, date, status FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${attendanceFrom}`;
       } else {
         const defaultAttendanceFrom = getKarachiDateOffset(-45);
-        attQuery = sql`SELECT id, student_id, date, status, school_id FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${defaultAttendanceFrom}`;
+        attQuery = sql`SELECT id, student_id, date, status FROM attendance WHERE student_id = ANY(${targetStudentIds}) AND date >= ${defaultAttendanceFrom}`;
       }
       const resQuery = sql`SELECT id, student_id, exam, subject, marks, total_marks, school_id FROM results WHERE student_id = ANY(${targetStudentIds})`;
       [attData, resData] = await Promise.all([attQuery, resQuery]);
@@ -35580,6 +39384,7 @@ async function handler6(req, res) {
     }
     const transformedSchools = toCamelCase(schoolsData);
     const transformedClasses = toCamelCase(classesData);
+    const transformedBranches = toCamelCase(branchesData);
     const transformedSubjects = toCamelCase(subjectsData);
     const transformedExams = toCamelCase(examsData);
     const transformedEvents = toCamelCase(eventsData);
@@ -35587,9 +39392,13 @@ async function handler6(req, res) {
       ...fh,
       defaultAmount: Number(fh.defaultAmount || 0)
     }));
-    const transformedUsers = toCamelCase(usersData);
+    const transformedUsers = toCamelCase(usersData).map((u) => ({
+      ...u,
+      avatarUrl: u.hasAvatar ? `/api/photo?kind=user&id=${u.id}&v=${u.avatarLen || 0}` : null
+    }));
     const transformedStudents = toCamelCase(studentsData).map((s) => ({
       ...s,
+      avatarUrl: s.hasAvatar ? `/api/photo?kind=student&id=${s.id}&v=${s.avatarLen || 0}` : null,
       openingBalance: Number(s.openingBalance || 0),
       feeStructure: (s.feeStructure || []).map((item) => ({
         ...item,
@@ -35626,9 +39435,18 @@ async function handler6(req, res) {
       totalMarks: Number(r.totalMarks || 100)
     }));
     const transformedLogs = toCamelCase(logsData);
-    return res.status(200).json({
+    const transformedLedger = isTeacher ? [] : toCamelCase(ledgerRows).map((l) => ({
+      studentId: l.studentId,
+      totalCharged: Number(l.totalCharged || 0),
+      totalPaid: Number(l.totalPaid || 0),
+      totalDiscount: Number(l.totalDiscount || 0),
+      openingBalance: Number(l.openingBalance || 0),
+      balance: Number(l.balance || 0)
+    }));
+    const payload = {
       schools: transformedSchools,
       classes: transformedClasses,
+      branches: transformedBranches,
       subjects: transformedSubjects,
       exams: transformedExams,
       feeHeads: transformedFeeHeads,
@@ -35638,8 +39456,17 @@ async function handler6(req, res) {
       fees: transformedFees,
       attendance: transformedAttendance,
       results: transformedResults,
-      logs: transformedLogs
-    });
+      logs: transformedLogs,
+      ledger: transformedLedger
+    };
+    const jsonString = JSON.stringify(payload);
+    const payloadBytes = Buffer.byteLength(jsonString, "utf8");
+    res.setHeader("X-Payload-Bytes", payloadBytes.toString());
+    if (payloadBytes > 3 * 1024 * 1024) {
+      console.warn(`[WARN] /api/data uncompressed payload exceeded 3 MB: ${(payloadBytes / (1024 * 1024)).toFixed(2)} MB (${payloadBytes} bytes)`);
+    }
+    res.setHeader("Content-Type", "application/json");
+    return res.status(200).send(jsonString);
   } catch (err) {
     console.error("Data read API error:", err);
     return res.status(500).json({ error: "Failed to read school records from database." });
@@ -35653,7 +39480,7 @@ async function handler7(req, res) {
     return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
   try {
-    const session = authenticateRequest(req);
+    const session = await getSessionUser(req, res);
     if (!session) {
       return res.status(401).json({ error: "Unauthorized: Session invalid or expired" });
     }
@@ -35663,10 +39490,31 @@ async function handler7(req, res) {
     const effectiveSchoolId = role === "Owner" ? requestedSchoolId || null : schoolId;
     let students = [];
     if (role === "Owner" || role === "Admin" || role === "Accountant" || role === "Teacher") {
-      students = effectiveSchoolId ? await sql`SELECT * FROM students WHERE school_id = ${effectiveSchoolId} ORDER BY roll_number ASC, name ASC` : await sql`SELECT * FROM students ORDER BY roll_number ASC, name ASC`;
+      students = effectiveSchoolId ? await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    WHERE school_id = ${effectiveSchoolId} 
+                    ORDER BY roll_number ASC, name ASC
+                  ` : await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    ORDER BY roll_number ASC, name ASC
+                  `;
       if (role === "Teacher") {
         students = students.map((s) => {
-          const { cnic: _c, parent_cnic: _pc, ...safeStudent } = s;
+          const { father_cnic: _fc, ...safeStudent } = s;
           return safeStudent;
         });
       }
@@ -35684,12 +39532,35 @@ async function handler7(req, res) {
           }
         }
       }
-      students = childIds.length > 0 ? await sql`SELECT * FROM students WHERE id = ANY(${childIds}) ORDER BY name ASC` : [];
+      students = childIds.length > 0 ? await sql`
+                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                           secondary_contact_number, address, status, gender, date_of_leaving,
+                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                           fee_structure, admitted_class, caste, last_school_attended,
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                           length(avatar_url) AS avatar_len
+                    FROM students 
+                    WHERE id = ANY(${childIds}) 
+                    ORDER BY name ASC
+                  ` : [];
     } else if (role === "Student") {
-      students = await sql`SELECT * FROM students WHERE user_id = ${userId} LIMIT 1`;
+      students = await sql`
+                SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                       father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                       secondary_contact_number, address, status, gender, date_of_leaving,
+                       reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                       fee_structure, admitted_class, caste, last_school_attended,
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                       length(avatar_url) AS avatar_len
+                FROM students 
+                WHERE user_id = ${userId} 
+                LIMIT 1
+            `;
     }
     const transformed = toCamelCase(students).map((s) => ({
       ...s,
+      avatarUrl: s.hasAvatar ? `/api/photo?kind=student&id=${s.id}&v=${s.avatarLen || 0}` : null,
       openingBalance: Number(s.openingBalance || 0),
       feeStructure: (s.feeStructure || []).map((item) => ({
         ...item,
@@ -35710,7 +39581,7 @@ async function handler8(req, res) {
     return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
   try {
-    const session = authenticateRequest(req);
+    const session = await getSessionUser(req, res);
     if (!session) {
       return res.status(401).json({ error: "Unauthorized: Session invalid or expired" });
     }
@@ -35797,7 +39668,7 @@ async function handler9(req, res) {
     return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
   try {
-    const session = authenticateRequest(req);
+    const session = await getSessionUser(req, res);
     if (!session) {
       return res.status(401).json({ error: "Unauthorized: Session invalid or expired" });
     }
@@ -35811,31 +39682,46 @@ async function handler9(req, res) {
     if (role === "Owner") {
       const effectiveSchoolId = requestedSchoolId || null;
       users = effectiveSchoolId ? await sql`
-                    SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    SELECT id, school_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                     FROM profiles 
                     WHERE school_id = ${effectiveSchoolId} OR school_id IS NULL
                     ORDER BY name ASC
                   ` : await sql`
-                    SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    SELECT id, school_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                     FROM profiles 
                     ORDER BY name ASC
                   `;
     } else if (role === "Admin" || role === "Accountant") {
       users = await sql`
-                SELECT id, school_id, name, email, role, status, avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                SELECT id, school_id, name, email, role, status, 
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                       length(avatar_url) AS avatar_len, 
+                       child_student_ids, disabled_nav_links, permissions_overrides, last_login 
                 FROM profiles 
                 WHERE (school_id = ${schoolId} OR school_id IS NULL) AND role != 'Owner'
                 ORDER BY name ASC
             `;
     } else if (role === "Teacher") {
       users = await sql`
-                SELECT id, school_id, name, email, role, status, avatar_url, last_login 
+                SELECT id, school_id, name, email, role, status, 
+                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                       length(avatar_url) AS avatar_len, 
+                       last_login 
                 FROM profiles 
                 WHERE school_id = ${schoolId} AND role IN ('Admin', 'Accountant', 'Teacher')
                 ORDER BY name ASC
             `;
     }
-    const transformed = toCamelCase(users);
+    const transformed = toCamelCase(users).map((u) => ({
+      ...u,
+      avatarUrl: u.hasAvatar ? `/api/photo?kind=user&id=${u.id}&v=${u.avatarLen || 0}` : null
+    }));
     return res.status(200).json({ users: transformed });
   } catch (err) {
     console.error("Users read API error:", err);
@@ -35850,7 +39736,7 @@ async function handler10(req, res) {
     return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
   try {
-    const session = authenticateRequest(req);
+    const session = await getSessionUser(req, res);
     if (!session) {
       return res.status(401).json({ error: "Unauthorized: Session invalid or expired" });
     }
@@ -35954,8 +39840,45 @@ async function handler11(req, res) {
                     END,
                     payment_history = COALESCE(payment_history, '[]'::jsonb) || ${JSON.stringify([newRecord])}::jsonb
                 WHERE id = ${challanId}
+                AND status <> 'Cancelled'
+                AND (${allowOverpayment === true}::boolean OR (paid_amount + ${numAmount}) <= (total_amount - ${currentDiscount}))
+                AND (${!idempotencyKey}::boolean OR NOT (COALESCE(payment_history, '[]'::jsonb) @> ${JSON.stringify([{ idempotencyKey }])}::jsonb))
                 RETURNING *
             `;
+      if (updateResult.length === 0) {
+        const freshRows = await sql`
+                    SELECT fc.*, s.school_id, s.name as student_name, s.roll_number
+                    FROM fee_challans fc
+                    JOIN students s ON s.id = fc.student_id
+                    WHERE fc.id = ${challanId}
+                    LIMIT 1
+                `;
+        if (freshRows.length === 0) {
+          return res.status(404).json({ error: "Challan not found." });
+        }
+        const freshChallan = freshRows[0];
+        if (freshChallan.status === "Cancelled") {
+          return res.status(409).json({ error: "Cannot record payment: Challan has been cancelled." });
+        }
+        let freshHistory = freshChallan.payment_history || [];
+        if (typeof freshHistory === "string") {
+          try {
+            freshHistory = JSON.parse(freshHistory);
+          } catch {
+            freshHistory = [];
+          }
+        }
+        if (Array.isArray(freshHistory) && idempotencyKey && freshHistory.some((entry) => entry.idempotencyKey === idempotencyKey)) {
+          return res.status(200).json({ success: true, challan: freshChallan, duplicatePrevented: true });
+        }
+        const freshDiscount = numDiscount > 0 ? numDiscount : Number(freshChallan.discount || 0);
+        const freshRemaining = Math.max(0, Number(freshChallan.total_amount) - freshDiscount - Number(freshChallan.paid_amount || 0));
+        return res.status(409).json({
+          error: `Payment rejected: The remaining balance is now Rs. ${freshRemaining.toLocaleString()} (was Rs. ${remainingBalance.toLocaleString()}). Another payment was recorded concurrently.`,
+          requiresOverpaymentConfirmation: true,
+          remainingBalance: freshRemaining
+        });
+      }
       await writeServerAuditLog(
         sql,
         session,
@@ -35990,7 +39913,10 @@ async function handler11(req, res) {
       if (challan.status === "Cancelled") {
         return res.status(400).json({ error: "Cannot update payments on a cancelled challan." });
       }
-      const historyToSave = Array.isArray(paymentHistory) ? paymentHistory : [];
+      if (!Array.isArray(paymentHistory)) {
+        return res.status(400).json({ error: "paymentHistory must be an array. Refusing to update a payment with an empty or malformed history." });
+      }
+      const historyToSave = paymentHistory;
       let recomputedPaidAmount = 0;
       for (const item of historyToSave) {
         const itemAmt = Number(item?.amount) || 0;
@@ -35998,6 +39924,12 @@ async function handler11(req, res) {
           return res.status(400).json({ error: "Payment history contains an invalid negative amount." });
         }
         recomputedPaidAmount += itemAmt;
+      }
+      if (recomputedPaidAmount > 0 && historyToSave.length === 0) {
+        return res.status(400).json({ error: "paymentHistory cannot be empty when a non-zero amount is being recorded." });
+      }
+      if (recomputedPaidAmount === 0 && Number(challan.paid_amount) > 0) {
+        return res.status(400).json({ error: "Cannot reduce a paid challan to zero by clearing payment history. Use cancel-challan or contact an administrator." });
       }
       const todayStr = getTodayKarachi();
       const validatedPaidDate = paidDate && paidDate > todayStr ? todayStr : paidDate || todayStr;
@@ -36034,6 +39966,9 @@ async function handler11(req, res) {
       );
       return res.status(200).json({ success: true, challan: updateResult[0] });
     } else if (action === "cancel-challan") {
+      if (!isAuthorized(session, ["Owner", "Admin"])) {
+        return res.status(403).json({ error: "Access denied: Only Admins and Owners can cancel fee challans." });
+      }
       const { challanId } = body;
       if (!challanId) {
         return res.status(400).json({ error: "Challan ID is required." });
@@ -36051,6 +39986,22 @@ async function handler11(req, res) {
       const challan = challanRows[0];
       if (session.role !== "Owner" && session.schoolId && challan.school_id !== session.schoolId) {
         return res.status(403).json({ error: "Unauthorized: This challan belongs to another school." });
+      }
+      let history = challan.payment_history || [];
+      if (typeof history === "string") {
+        try {
+          history = JSON.parse(history);
+        } catch {
+          history = [];
+        }
+      }
+      const hasHistory = Array.isArray(history) && history.length > 0;
+      const paidAmt = Number(challan.paid_amount) || 0;
+      const discountAmt = Number(challan.discount) || 0;
+      if (paidAmt > 0 || discountAmt > 0 || hasHistory) {
+        return res.status(409).json({
+          error: "Cannot cancel a challan that has payments or discounts. Remove the payments first or contact the owner."
+        });
       }
       await sql`UPDATE fee_challans SET status = 'Cancelled' WHERE id = ${challanId}`;
       await writeServerAuditLog(
@@ -36078,39 +40029,46 @@ async function handler11(req, res) {
         return res.status(400).json({ error: "Tuition Fee head not configured." });
       }
       const tuitionHead = headRows[0];
-      for (const sId of studentIds) {
-        const sRows = await sql`SELECT id, school_id, fee_structure FROM students WHERE id = ${sId}`;
-        if (sRows.length > 0) {
-          const student = sRows[0];
-          if (session.role !== "Owner" && session.schoolId && student.school_id !== session.schoolId) {
-            continue;
+      const students = await sql`
+                SELECT id, school_id, fee_structure 
+                FROM students 
+                WHERE id = ANY(${studentIds})
+                AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
+            `;
+      const updateQueries = [];
+      for (const student of students) {
+        let structure = student.fee_structure || [];
+        if (typeof structure === "string") {
+          try {
+            structure = JSON.parse(structure);
+          } catch {
+            structure = [];
           }
-          let structure = student.fee_structure || [];
-          if (typeof structure === "string") {
-            try {
-              structure = JSON.parse(structure);
-            } catch {
-              structure = [];
-            }
-          }
-          if (!Array.isArray(structure)) structure = [];
-          const idx = structure.findIndex((item) => item.feeHeadId === tuitionHead.id);
-          if (idx !== -1) {
-            structure[idx].amount = (Number(structure[idx].amount) || 0) + incAmount;
-          } else {
-            structure.push({ feeHeadId: tuitionHead.id, amount: Number(tuitionHead.default_amount) + incAmount });
-          }
-          await sql`UPDATE students SET fee_structure = ${JSON.stringify(structure)} WHERE id = ${sId}`;
         }
+        if (!Array.isArray(structure)) structure = [];
+        const idx = structure.findIndex((item) => item.feeHeadId === tuitionHead.id);
+        if (idx !== -1) {
+          structure[idx].amount = (Number(structure[idx].amount) || 0) + incAmount;
+        } else {
+          structure.push({ feeHeadId: tuitionHead.id, amount: Number(tuitionHead.default_amount) + incAmount });
+        }
+        updateQueries.push(sql`
+                    UPDATE students 
+                    SET fee_structure = ${JSON.stringify(structure)}::jsonb 
+                    WHERE id = ${student.id}
+                `);
+      }
+      if (updateQueries.length > 0) {
+        await sql.transaction(updateQueries);
       }
       await writeServerAuditLog(
         sql,
         session,
         "Fee Adjustment",
-        `Adjusted tuition fee by Rs. ${incAmount.toLocaleString()} for ${studentIds.length} student(s)`,
+        `Adjusted tuition fee by Rs. ${incAmount.toLocaleString()} for ${students.length} student(s)`,
         effectiveSchoolId
       );
-      return res.status(200).json({ success: true, count: studentIds.length });
+      return res.status(200).json({ success: true, count: students.length });
     } else {
       return res.status(400).json({ error: `Unknown action: ${action}` });
     }
@@ -36167,7 +40125,11 @@ async function handler12(req, res) {
       if (students.length === 0) {
         return res.status(400).json({ error: "No active students found for challan generation." });
       }
-      const feeHeads = await sql`SELECT id, name, default_amount FROM fee_heads`;
+      const feeHeads = await sql`
+                SELECT id, name, default_amount 
+                FROM fee_heads 
+                WHERE (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
+            `;
       const feeHeadMap = new Map(feeHeads.map((fh) => [fh.id, fh.name]));
       const monthIndex = MONTH_NAMES.indexOf(month) + 1;
       const monthStr = String(monthIndex).padStart(2, "0");
@@ -36187,6 +40149,13 @@ async function handler12(req, res) {
                 FROM fee_challans
                 WHERE student_id = ANY(${studentIdsToQuery})
                 AND status <> 'Cancelled'
+                AND (
+                    year < ${targetYear}
+                    OR (
+                        year = ${targetYear}
+                        AND array_position(ARRAY['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']::text[], month) < ${monthIndex}
+                    )
+                )
                 GROUP BY student_id
             `;
       const arrearsMap = /* @__PURE__ */ new Map();
@@ -36195,8 +40164,27 @@ async function handler12(req, res) {
         const collected = Number(row.total_collected) || 0;
         arrearsMap.set(row.student_id, Math.max(0, charged - collected));
       }
+      const laterChallans = await sql`
+                SELECT DISTINCT student_id 
+                FROM fee_challans 
+                WHERE student_id = ANY(${studentIdsToQuery})
+                AND status <> 'Cancelled'
+                AND (
+                    year > ${targetYear}
+                    OR (
+                        year = ${targetYear}
+                        AND array_position(ARRAY['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']::text[], month) > ${monthIndex}
+                    )
+                )
+            `;
+      const laterStudentIdSet = new Set(laterChallans.map((r) => r.student_id));
+      let skippedBackdated = 0;
       const challanRowsToInsert = [];
       for (const student of students) {
+        if (laterStudentIdSet.has(student.id)) {
+          skippedBackdated++;
+          continue;
+        }
         const historicalDues = arrearsMap.get(student.id) ?? 0;
         const totalArrears = Math.max(0, (Number(student.opening_balance) || 0) + historicalDues);
         let studentStructure = student.fee_structure || [];
@@ -36236,6 +40224,7 @@ async function handler12(req, res) {
       let generatedCount = 0;
       let skippedDuplicates = 0;
       const CHUNK_SIZE = 100;
+      const chunkQueries = [];
       for (let i = 0; i < challanRowsToInsert.length; i += CHUNK_SIZE) {
         const chunk = challanRowsToInsert.slice(i, i + CHUNK_SIZE);
         const valuePlaceholders = [];
@@ -36269,22 +40258,30 @@ async function handler12(req, res) {
                     ON CONFLICT (student_id, month, year) WHERE status <> 'Cancelled' DO NOTHING
                     RETURNING id
                 `;
-        const insertedRows = await sql(insertQuery, params);
-        const count = insertedRows ? insertedRows.length : 0;
-        generatedCount += count;
-        skippedDuplicates += chunk.length - count;
+        chunkQueries.push(sql(insertQuery, params));
+      }
+      if (chunkQueries.length > 0) {
+        const results = await sql.transaction(chunkQueries);
+        for (let i = 0; i < results.length; i++) {
+          const chunkLength = Math.min(CHUNK_SIZE, challanRowsToInsert.length - i * CHUNK_SIZE);
+          const insertedRows = results[i] || [];
+          const count = insertedRows.length;
+          generatedCount += count;
+          skippedDuplicates += chunkLength - count;
+        }
       }
       await writeServerAuditLog(
         sql,
         session,
         "Generate Challans",
-        `Generated ${generatedCount} fee challans for ${month} ${targetYear} (Skipped ${skippedDuplicates} duplicates)`,
+        `Generated ${generatedCount} fee challans for ${month} ${targetYear} (Skipped ${skippedDuplicates} duplicates, ${skippedBackdated} backdated)`,
         effectiveSchoolId
       );
       return res.status(200).json({
         success: true,
         count: generatedCount,
-        skippedDuplicates
+        skippedDuplicates,
+        skippedBackdated
       });
     } else if (action === "delete-unpaid") {
       const { month, year, schoolId } = body;
@@ -36455,19 +40452,29 @@ async function handler14(req, res) {
   const auth = await verifySession(req, res);
   if (!auth) return;
   const { session, sql } = auth;
-  if (!isAuthorized(session, ["Owner", "Admin"])) {
-    return res.status(403).json({ error: "Access denied: Only Admins and Owners can modify student records." });
+  if (!isAuthorized(session, ["Owner", "Admin", "Accountant"])) {
+    return res.status(403).json({ error: "Access denied: Insufficient permissions to modify student records." });
   }
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
     const { action } = body;
+    if (action !== "update-fee-structure" && !isAuthorized(session, ["Owner", "Admin"])) {
+      return res.status(403).json({ error: "Access denied: Only Admins and Owners can modify student profile records." });
+    }
     if (action === "add-student") {
       const { student } = body;
       if (!student || !student.name || !student.rollNumber) {
         return res.status(400).json({ error: "Student name and roll number are required." });
       }
+      if (student.avatarUrl) {
+        const avatarCheck = validateAvatarDataUrl(student.avatarUrl);
+        if (!avatarCheck.valid) {
+          return res.status(400).json({ error: avatarCheck.error });
+        }
+      }
       const effectiveSchoolId = session.role === "Owner" && student.schoolId ? student.schoolId : session.schoolId;
       const id = import_crypto6.default.randomUUID();
+      const avatarUrlToInsert = student.avatarUrl && typeof student.avatarUrl === "string" && student.avatarUrl.startsWith("data:") ? student.avatarUrl : null;
       try {
         await sql`
                     INSERT INTO students (
@@ -36485,7 +40492,7 @@ async function handler14(req, res) {
                         ${student.religion || null}, ${student.caste || null}, 
                         ${student.lastSchoolAttended || null}, ${Number(student.openingBalance) || 0}, 
                         ${student.userId || null}, ${JSON.stringify(student.feeStructure || [])},
-                        ${student.avatarUrl || null}
+                        ${avatarUrlToInsert}
                     )
                 `;
       } catch (err) {
@@ -36515,6 +40522,12 @@ async function handler14(req, res) {
       if (session.role !== "Owner" && session.schoolId && existing.school_id !== session.schoolId) {
         return res.status(403).json({ error: "Unauthorized: Student belongs to another school." });
       }
+      if (student.avatarUrl) {
+        const avatarCheck = validateAvatarDataUrl(student.avatarUrl);
+        if (!avatarCheck.valid) {
+          return res.status(400).json({ error: avatarCheck.error });
+        }
+      }
       try {
         await sql`
                     UPDATE students SET
@@ -36530,15 +40543,19 @@ async function handler14(req, res) {
                         address = ${student.address || null},
                         status = ${student.status || "Active"},
                         gender = ${student.gender || "Male"},
-                        avatar_url = ${student.avatarUrl || null},
+                        avatar_url = CASE 
+                            WHEN ${Boolean(student.avatarUrl && typeof student.avatarUrl === "string" && student.avatarUrl.startsWith("/api/photo"))} THEN avatar_url
+                            WHEN ${Boolean(student.avatarUrl && typeof student.avatarUrl === "string" && student.avatarUrl.startsWith("data:"))} THEN ${student.avatarUrl}
+                            WHEN ${student.avatarUrl === null || student.avatarUrl === ""} THEN NULL
+                            ELSE avatar_url
+                        END,
                         admitted_class = ${student.admittedClass || null},
                         gr_number = ${student.grNumber || null},
                         religion = ${student.religion || null},
                         caste = ${student.caste || null},
                         last_school_attended = ${student.lastSchoolAttended || null},
                         opening_balance = ${Number(student.openingBalance) || 0},
-                        user_id = ${student.userId || null},
-                        fee_structure = ${JSON.stringify(student.feeStructure || [])}
+                        user_id = ${student.userId || null}
                     WHERE id = ${student.id}
                 `;
       } catch (err) {
@@ -36583,31 +40600,47 @@ async function handler14(req, res) {
         return res.status(400).json({ error: "Students array is required." });
       }
       const effectiveSchoolId = session.role === "Owner" && schoolId ? schoolId : session.schoolId;
-      try {
-        const BATCH_SIZE = 25;
-        for (let i = 0; i < students.length; i += BATCH_SIZE) {
-          const batch = students.slice(i, i + BATCH_SIZE);
-          await Promise.all(batch.map((s) => {
-            const id = import_crypto6.default.randomUUID();
-            return sql`
-                            INSERT INTO students (
-                                id, name, roll_number, class_id, school_id, father_name, father_cnic, 
-                                date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
-                                address, status, gender, admitted_class, gr_number, religion, caste, 
-                                last_school_attended, opening_balance, user_id, fee_structure
-                            ) VALUES (
-                                ${id}, ${s.name}, ${s.rollNumber || s.roll_number}, ${s.classId || s.class_id || null}, 
-                                ${effectiveSchoolId}, ${s.fatherName || s.father_name || null}, ${s.fatherCnic || s.father_cnic || null}, 
-                                ${s.dateOfBirth || s.date_of_birth || null}, ${s.dateOfAdmission || s.date_of_admission || null}, 
-                                ${s.contactNumber || s.contact_number || null}, ${s.secondaryContactNumber || s.secondary_contact_number || null}, 
-                                ${s.address || null}, 'Active', ${s.gender || "Male"}, ${s.admittedClass || s.admitted_class || null}, 
-                                ${s.grNumber || s.gr_number || null}, ${s.religion || null}, ${s.caste || null}, 
-                                ${s.lastSchoolAttended || s.last_school_attended || null}, ${Number(s.openingBalance || s.opening_balance) || 0}, 
-                                ${s.userId || s.user_id || null}, ${JSON.stringify(s.feeStructure || s.fee_structure || [])}
-                            )
-                        `;
-          }));
+      const seenRollNumbers = /* @__PURE__ */ new Set();
+      const fileDuplicates = [];
+      for (let i = 0; i < students.length; i++) {
+        const s = students[i];
+        const name = (s.name || "").toString().trim();
+        const roll = (s.rollNumber || s.roll_number || "").toString().trim();
+        if (!name || !roll) {
+          return res.status(400).json({ error: `Student name and roll number are required for all rows (row ${i + 1} is missing required fields).` });
         }
+        if (seenRollNumbers.has(roll)) {
+          fileDuplicates.push(roll);
+        }
+        seenRollNumbers.add(roll);
+      }
+      if (fileDuplicates.length > 0) {
+        const uniqueDupes = Array.from(new Set(fileDuplicates));
+        return res.status(400).json({ error: `Duplicate roll number(s) found in file: ${uniqueDupes.join(", ")}` });
+      }
+      try {
+        const queries = students.map((s) => {
+          const id = import_crypto6.default.randomUUID();
+          const roll = (s.rollNumber || s.roll_number).toString().trim();
+          return sql`
+                        INSERT INTO students (
+                            id, name, roll_number, class_id, school_id, father_name, father_cnic, 
+                            date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
+                            address, status, gender, admitted_class, gr_number, religion, caste, 
+                            last_school_attended, opening_balance, user_id, fee_structure
+                        ) VALUES (
+                            ${id}, ${s.name.trim()}, ${roll}, ${s.classId || s.class_id || null}, 
+                            ${effectiveSchoolId}, ${s.fatherName || s.father_name || null}, ${s.fatherCnic || s.father_cnic || null}, 
+                            ${s.dateOfBirth || s.date_of_birth || null}, ${s.dateOfAdmission || s.date_of_admission || null}, 
+                            ${s.contactNumber || s.contact_number || null}, ${s.secondaryContactNumber || s.secondary_contact_number || null}, 
+                            ${s.address || null}, 'Active', ${s.gender || "Male"}, ${s.admittedClass || s.admitted_class || null}, 
+                            ${s.grNumber || s.gr_number || null}, ${s.religion || null}, ${s.caste || null}, 
+                            ${s.lastSchoolAttended || s.last_school_attended || null}, ${Number(s.openingBalance || s.opening_balance) || 0}, 
+                            ${s.userId || s.user_id || null}, ${JSON.stringify(s.feeStructure || s.fee_structure || [])}::jsonb
+                        )
+                    `;
+        });
+        await sql.transaction(queries);
         await writeServerAuditLog(
           sql,
           session,
@@ -36660,16 +40693,17 @@ async function handler14(req, res) {
       const { graduations, promotions, schoolId } = body;
       const effectiveSchoolId = session.role === "Owner" && schoolId ? schoolId : session.schoolId;
       let updatedCount = 0;
+      const queries = [];
       if (Array.isArray(graduations) && graduations.length > 0) {
         const CHUNK = 50;
         for (let i = 0; i < graduations.length; i += CHUNK) {
           const chunk = graduations.slice(i, i + CHUNK);
-          await sql`
+          queries.push(sql`
                         UPDATE students 
                         SET status = 'Graduated' 
                         WHERE id = ANY(${chunk})
                         AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
-                    `;
+                    `);
         }
         updatedCount += graduations.length;
       }
@@ -36679,16 +40713,19 @@ async function handler14(req, res) {
             const CHUNK = 50;
             for (let i = 0; i < stdIds.length; i += CHUNK) {
               const chunk = stdIds.slice(i, i + CHUNK);
-              await sql`
+              queries.push(sql`
                                 UPDATE students 
                                 SET class_id = ${targetClassId}, status = 'Active' 
                                 WHERE id = ANY(${chunk})
                                 AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
-                            `;
+                            `);
             }
             updatedCount += stdIds.length;
           }
         }
+      }
+      if (queries.length > 0) {
+        await sql.transaction(queries);
       }
       await writeServerAuditLog(
         sql,
@@ -36704,24 +40741,28 @@ async function handler14(req, res) {
       if (!Array.isArray(studentIds) || studentIds.length === 0) {
         return res.status(400).json({ error: "studentIds array is required." });
       }
+      const queries = [];
       const CHUNK = 50;
       for (let i = 0; i < studentIds.length; i += CHUNK) {
         const chunk = studentIds.slice(i, i + CHUNK);
         if (targetClassId) {
-          await sql`
+          queries.push(sql`
                         UPDATE students 
                         SET status = 'Active', class_id = ${targetClassId} 
                         WHERE id = ANY(${chunk})
                         AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
-                    `;
+                    `);
         } else {
-          await sql`
+          queries.push(sql`
                         UPDATE students 
                         SET status = 'Active' 
                         WHERE id = ANY(${chunk})
                         AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
-                    `;
+                    `);
         }
+      }
+      if (queries.length > 0) {
+        await sql.transaction(queries);
       }
       await writeServerAuditLog(
         sql,
@@ -36738,6 +40779,7 @@ async function handler14(req, res) {
         return res.status(400).json({ error: "Groups object is required." });
       }
       let revertedCount = 0;
+      const queries = [];
       for (const [key, ids] of Object.entries(groups)) {
         const [classId, status] = key.split("__");
         const idList = ids;
@@ -36745,15 +40787,18 @@ async function handler14(req, res) {
           const CHUNK = 50;
           for (let i = 0; i < idList.length; i += CHUNK) {
             const chunk = idList.slice(i, i + CHUNK);
-            await sql`
+            queries.push(sql`
                             UPDATE students 
                             SET class_id = ${classId}, status = ${status} 
                             WHERE id = ANY(${chunk})
                             AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
-                        `;
+                        `);
           }
           revertedCount += idList.length;
         }
+      }
+      if (queries.length > 0) {
+        await sql.transaction(queries);
       }
       await writeServerAuditLog(
         sql,
@@ -36763,6 +40808,37 @@ async function handler14(req, res) {
         effectiveSchoolId
       );
       return res.status(200).json({ success: true, count: revertedCount });
+    } else if (action === "update-fee-structure") {
+      const { studentId, feeStructure } = body;
+      if (!studentId || !Array.isArray(feeStructure)) {
+        return res.status(400).json({ error: "studentId and feeStructure array are required." });
+      }
+      for (const item of feeStructure) {
+        if (!item.feeHeadId || typeof item.amount !== "number" || item.amount < 0) {
+          return res.status(400).json({ error: "Invalid fee structure item: feeHeadId and valid amount are required." });
+        }
+      }
+      const existingRows = await sql`SELECT id, school_id, name, roll_number FROM students WHERE id = ${studentId}`;
+      if (existingRows.length === 0) {
+        return res.status(404).json({ error: "Student not found." });
+      }
+      const existing = existingRows[0];
+      if (session.role !== "Owner" && session.schoolId && existing.school_id !== session.schoolId) {
+        return res.status(403).json({ error: "Unauthorized: Student belongs to another school." });
+      }
+      await sql`
+                UPDATE students 
+                SET fee_structure = ${JSON.stringify(feeStructure)}::jsonb 
+                WHERE id = ${studentId}
+            `;
+      await writeServerAuditLog(
+        sql,
+        session,
+        "Update Fee Structure",
+        `Updated fee structure for ${existing.name} (Roll #${existing.roll_number})`,
+        existing.school_id
+      );
+      return res.status(200).json({ success: true });
     } else {
       return res.status(400).json({ error: `Unknown action: ${action}` });
     }
@@ -36789,23 +40865,23 @@ async function handler15(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
     const { action } = body;
     if (action === "add-class") {
-      const { name, section, teacherId, sortOrder, schoolId } = body;
+      const { name, section, teacherId, branchId, sortOrder, schoolId } = body;
       const effectiveSchoolId = session.role === "Owner" && schoolId ? schoolId : session.schoolId;
       const id = import_crypto7.default.randomUUID();
       await sql`
-                INSERT INTO classes (id, name, section, teacher_id, school_id, sort_order)
-                VALUES (${id}, ${name}, ${section || null}, ${teacherId || null}, ${effectiveSchoolId}, ${sortOrder || 0})
+                INSERT INTO classes (id, name, section, teacher_id, school_id, branch_id, sort_order)
+                VALUES (${id}, ${name}, ${section || null}, ${teacherId || null}, ${effectiveSchoolId}, ${branchId || null}, ${sortOrder || 0})
             `;
       await writeServerAuditLog(sql, session, "Add Class", `Added class: ${name} ${section || ""}`, effectiveSchoolId);
       return res.status(200).json({ success: true, id });
     } else if (action === "update-class") {
-      const { id, name, section, teacherId, sortOrder } = body;
+      const { id, name, section, teacherId, branchId, sortOrder } = body;
       const records = await sql`SELECT school_id FROM classes WHERE id = ${id} LIMIT 1`;
       if (!records || records.length === 0) return res.status(404).json({ error: "Class not found." });
       if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: "Access denied." });
       await sql`
                 UPDATE classes 
-                SET name = ${name}, section = ${section || null}, teacher_id = ${teacherId || null}, sort_order = ${sortOrder || 0}
+                SET name = ${name}, section = ${section || null}, teacher_id = ${teacherId || null}, branch_id = ${branchId || null}, sort_order = ${sortOrder || 0}
                 WHERE id = ${id}
             `;
       return res.status(200).json({ success: true });
@@ -36815,6 +40891,60 @@ async function handler15(req, res) {
       if (!records || records.length === 0) return res.status(404).json({ error: "Class not found." });
       if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: "Access denied." });
       await sql`DELETE FROM classes WHERE id = ${id}`;
+      return res.status(200).json({ success: true });
+    } else if (action === "add-branch") {
+      const { name, address, schoolId } = body;
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "Branch name is required." });
+      }
+      const effectiveSchoolId = session.role === "Owner" && schoolId ? schoolId : session.schoolId;
+      const id = import_crypto7.default.randomUUID();
+      try {
+        await sql`
+                    INSERT INTO branches (id, name, address, school_id)
+                    VALUES (${id}, ${name.trim()}, ${address || null}, ${effectiveSchoolId})
+                `;
+      } catch (err) {
+        if (err?.code === "23505" || err?.message?.includes("23505")) {
+          return res.status(409).json({ error: `A branch named "${name}" already exists.` });
+        }
+        throw err;
+      }
+      await writeServerAuditLog(sql, session, "Add Branch", `Added branch: ${name}`, effectiveSchoolId);
+      return res.status(200).json({ success: true, id });
+    } else if (action === "update-branch") {
+      const { id, name, address } = body;
+      if (!id || !name || !name.trim()) {
+        return res.status(400).json({ error: "Branch ID and name are required." });
+      }
+      const records = await sql`SELECT school_id FROM branches WHERE id = ${id} LIMIT 1`;
+      if (!records || records.length === 0) return res.status(404).json({ error: "Branch not found." });
+      if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: "Access denied." });
+      try {
+        await sql`
+                    UPDATE branches
+                    SET name = ${name.trim()}, address = ${address || null}
+                    WHERE id = ${id}
+                `;
+      } catch (err) {
+        if (err?.code === "23505" || err?.message?.includes("23505")) {
+          return res.status(409).json({ error: `A branch named "${name}" already exists.` });
+        }
+        throw err;
+      }
+      return res.status(200).json({ success: true });
+    } else if (action === "delete-branch") {
+      const { id } = body;
+      if (!id) return res.status(400).json({ error: "Branch ID is required." });
+      const records = await sql`SELECT school_id FROM branches WHERE id = ${id} LIMIT 1`;
+      if (!records || records.length === 0) return res.status(404).json({ error: "Branch not found." });
+      if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: "Access denied." });
+      const classCount = await sql`SELECT COUNT(*)::int as count FROM classes WHERE branch_id = ${id}`;
+      if (classCount[0]?.count > 0) {
+        return res.status(409).json({ error: `Cannot delete branch: ${classCount[0].count} class(es) are currently assigned to this branch.` });
+      }
+      await sql`DELETE FROM branches WHERE id = ${id}`;
+      await writeServerAuditLog(sql, session, "Delete Branch", `Deleted branch ID ${id}`, records[0].school_id);
       return res.status(200).json({ success: true });
     } else if (action === "bulk-add-classes") {
       const { classes, schoolId } = body;
@@ -36826,10 +40956,26 @@ async function handler15(req, res) {
       return res.status(200).json({ success: true, count: classes.length });
     } else if (action === "bulk-update-order") {
       const { updates } = body;
-      for (const u of updates) {
-        await sql`UPDATE classes SET sort_order = ${u.sortOrder} WHERE id = ${u.id}`;
+      if (!Array.isArray(updates) || updates.length === 0) {
+        return res.status(200).json({ success: true, count: 0 });
       }
-      return res.status(200).json({ success: true });
+      const ids = updates.map((u) => u.id);
+      const isOwnerGlobal = session.role === "Owner";
+      const effectiveSchoolId = session.schoolId;
+      const valid = await sql`
+                SELECT id FROM classes
+                WHERE id = ANY(${ids})
+                AND (${isOwnerGlobal}::boolean OR school_id = ${effectiveSchoolId}::uuid)
+            `;
+      const validIds = new Set(valid.map((c) => c.id));
+      let updatedCount = 0;
+      for (const u of updates) {
+        if (validIds.has(u.id)) {
+          await sql`UPDATE classes SET sort_order = ${u.sortOrder} WHERE id = ${u.id}`;
+          updatedCount++;
+        }
+      }
+      return res.status(200).json({ success: true, count: updatedCount });
     } else if (action === "add-subject") {
       const { name, schoolId } = body;
       const effectiveSchoolId = session.role === "Owner" && schoolId ? schoolId : session.schoolId;
@@ -36955,6 +41101,15 @@ async function handler16(req, res) {
       if (!name || !email || !password || !role) {
         return res.status(400).json({ error: "Name, email, password, and role are required." });
       }
+      if (password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters long." });
+      }
+      if (avatarUrl) {
+        const avatarCheck = validateAvatarDataUrl(avatarUrl);
+        if (!avatarCheck.valid) {
+          return res.status(400).json({ error: avatarCheck.error });
+        }
+      }
       if (session.role === "Admin") {
         if (!["Accountant", "Teacher", "Parent", "Student"].includes(role)) {
           return res.status(403).json({ error: "Admin may create only Accountant, Teacher, Parent, or Student accounts." });
@@ -36968,10 +41123,18 @@ async function handler16(req, res) {
       const saltRounds = 10;
       const hashedPassword = await bcryptjs_default.hash(password, saltRounds);
       const id = import_crypto8.default.randomUUID();
-      await sql`
-                INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url)
-                VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, 'Active', ${avatarUrl || null})
-            `;
+      const avatarUrlToInsert = avatarUrl && typeof avatarUrl === "string" && avatarUrl.startsWith("data:") ? avatarUrl : null;
+      try {
+        await sql`
+                    INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url)
+                    VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, 'Active', ${avatarUrlToInsert})
+                `;
+      } catch (err) {
+        if (err?.code === "23505" || err?.message?.includes("23505") || err?.message?.includes("profiles_email_key")) {
+          return res.status(409).json({ error: "Email already exists", message: `A user with email "${email}" already exists.` });
+        }
+        throw err;
+      }
       await writeServerAuditLog(
         sql,
         session,
@@ -36999,9 +41162,22 @@ async function handler16(req, res) {
       if (!requireSameSchool(session, targetUser.school_id)) {
         return res.status(403).json({ error: "Access denied: Cannot update user from another school." });
       }
+      if (avatarUrl) {
+        const avatarCheck = validateAvatarDataUrl(avatarUrl);
+        if (!avatarCheck.valid) {
+          return res.status(400).json({ error: avatarCheck.error });
+        }
+      }
       await sql`
                 UPDATE profiles 
-                SET name = ${name}, avatar_url = ${avatarUrl || null}, status = ${status || "Active"}
+                SET name = ${name}, 
+                    avatar_url = CASE 
+                        WHEN ${Boolean(avatarUrl && typeof avatarUrl === "string" && avatarUrl.startsWith("/api/photo"))} THEN avatar_url
+                        WHEN ${Boolean(avatarUrl && typeof avatarUrl === "string" && avatarUrl.startsWith("data:"))} THEN ${avatarUrl}
+                        WHEN ${avatarUrl === null || avatarUrl === ""} THEN NULL
+                        ELSE avatar_url
+                    END,
+                    status = ${status || "Active"}
                 WHERE id = ${id}
             `;
       return res.status(200).json({ success: true });
@@ -37043,45 +41219,93 @@ async function handler16(req, res) {
         return res.status(400).json({ error: "Users array is required." });
       }
       const effectiveSchoolId = session.role === "Admin" ? session.schoolId : session.role === "Owner" && schoolId ? schoolId : session.schoolId;
+      const seenEmails = /* @__PURE__ */ new Set();
+      const duplicateEmailsInFile = [];
       for (const u of users) {
-        if (!u.password) {
-          return res.status(400).json({ error: `Password is required for user ${u.email || u.name || "unknown"}.` });
+        const cleanEmail = (u.email || "").toLowerCase().trim();
+        if (cleanEmail) {
+          if (seenEmails.has(cleanEmail)) {
+            duplicateEmailsInFile.push(cleanEmail);
+          }
+          seenEmails.add(cleanEmail);
         }
-        if (!u.role) {
-          return res.status(400).json({ error: `Role is required for user ${u.email || u.name || "unknown"}.` });
+      }
+      if (duplicateEmailsInFile.length > 0) {
+        const uniqueDupes = Array.from(new Set(duplicateEmailsInFile));
+        return res.status(400).json({ error: `Duplicate email(s) found in payload: ${uniqueDupes.join(", ")}` });
+      }
+      const preparedUsers = [];
+      for (let i = 0; i < users.length; i++) {
+        const u = users[i];
+        if (!u.name || !u.email || !u.password || !u.role) {
+          return res.status(400).json({ error: `Name, email, password, and role are required for all users (row ${i + 1} is missing required fields).` });
+        }
+        if (typeof u.password !== "string" || u.password.length < 8) {
+          return res.status(400).json({ error: `Password for user '${u.email}' (row ${i + 1}) must be at least 8 characters long.` });
+        }
+        const avUrl = u.avatarUrl || u.avatar_url;
+        if (avUrl) {
+          const avatarCheck = validateAvatarDataUrl(avUrl);
+          if (!avatarCheck.valid) {
+            return res.status(400).json({ error: `User '${u.email}' (row ${i + 1}): ${avatarCheck.error}` });
+          }
         }
         if (session.role === "Admin") {
           if (!["Accountant", "Teacher", "Parent", "Student"].includes(u.role)) {
-            return res.status(403).json({ error: "Admin may create only Accountant, Teacher, Parent, or Student accounts." });
+            return res.status(403).json({ error: `Admin may create only Accountant, Teacher, Parent, or Student accounts (found '${u.role}' at row ${i + 1}).` });
           }
         } else if (session.role === "Owner") {
           if (!["Owner", "Admin", "Accountant", "Teacher", "Parent", "Student"].includes(u.role)) {
-            return res.status(400).json({ error: `Invalid role specified for user ${u.email || u.name || "unknown"}.` });
+            return res.status(400).json({ error: `Invalid role specified for user '${u.email}' at row ${i + 1}.` });
           }
         }
-        const id = import_crypto8.default.randomUUID();
         const hashedPassword = await bcryptjs_default.hash(u.password, 10);
-        await sql`
-                    INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url)
-                    VALUES (${id}, ${u.name}, ${u.email.toLowerCase().trim()}, ${hashedPassword}, ${u.role}, ${effectiveSchoolId}, 'Active', ${u.avatarUrl || u.avatar_url || null})
-                `;
+        preparedUsers.push({
+          id: import_crypto8.default.randomUUID(),
+          name: u.name.trim(),
+          email: u.email.toLowerCase().trim(),
+          password: hashedPassword,
+          role: u.role,
+          avatarUrl: u.avatarUrl || u.avatar_url || null
+        });
       }
-      return res.status(200).json({ success: true, count: users.length });
+      const queries = preparedUsers.map((u) => sql`
+                INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url)
+                VALUES (${u.id}, ${u.name}, ${u.email}, ${u.password}, ${u.role}, ${effectiveSchoolId}, 'Active', ${u.avatarUrl})
+            `);
+      try {
+        await sql.transaction(queries);
+      } catch (err) {
+        if (err?.code === "23505" || err?.message?.includes("23505") || err?.message?.includes("profiles_email_key")) {
+          const match = err?.detail?.match(/Key \(email\)=\(([^)]+)\)/);
+          const conflictedEmail = match ? match[1] : "duplicate email";
+          return res.status(409).json({ error: `Email "${conflictedEmail}" already exists. No users were created.`, email: conflictedEmail });
+        }
+        throw err;
+      }
+      await writeServerAuditLog(
+        sql,
+        session,
+        "Bulk Import Users",
+        `Bulk created ${preparedUsers.length} user accounts`,
+        effectiveSchoolId
+      );
+      return res.status(200).json({ success: true, count: preparedUsers.length });
     } else if (action === "add-school") {
-      if (session.role !== "Owner") {
-        return res.status(403).json({ error: "Only Owner can create schools." });
-      }
-      const { name, address, logoUrl } = body;
-      const id = import_crypto8.default.randomUUID();
-      await sql`INSERT INTO schools (id, name, address, logo_url) VALUES (${id}, ${name}, ${address || ""}, ${logoUrl || null})`;
-      return res.status(200).json({ success: true, id });
+      return res.status(403).json({ error: "Single-school installation: Adding additional schools is disabled." });
     } else if (action === "update-school") {
-      if (session.role !== "Owner") {
-        return res.status(403).json({ error: "Only Owner can edit schools." });
+      if (!isAuthorized(session, ["Owner", "Admin"])) {
+        return res.status(403).json({ error: "Access denied: Only Owner or Admin can update institution profile." });
       }
       const { id, name, address, logoUrl } = body;
       if (!id) {
         return res.status(400).json({ error: "School ID is required." });
+      }
+      if (logoUrl) {
+        const logoCheck = validateAvatarDataUrl(logoUrl);
+        if (!logoCheck.valid) {
+          return res.status(400).json({ error: logoCheck.error });
+        }
       }
       const schools = await sql`SELECT id FROM schools WHERE id = ${id} LIMIT 1`;
       if (!schools || schools.length === 0) {
@@ -37091,14 +41315,10 @@ async function handler16(req, res) {
         return res.status(403).json({ error: "Access denied: Cannot update school outside jurisdiction." });
       }
       await sql`UPDATE schools SET name = ${name}, address = ${address || ""}, logo_url = ${logoUrl || null} WHERE id = ${id}`;
+      await writeServerAuditLog(sql, session, "Update School", `Updated institution profile: ${name}`, id);
       return res.status(200).json({ success: true });
     } else if (action === "delete-school") {
-      if (session.role !== "Owner") {
-        return res.status(403).json({ error: "Only Owner can delete schools." });
-      }
-      const { id } = body;
-      await sql`DELETE FROM schools WHERE id = ${id}`;
-      return res.status(200).json({ success: true });
+      return res.status(403).json({ error: "Single-school installation: Deleting the school institution is disabled." });
     } else if (action === "add-log") {
       if (!isAuthorized(session, ["Owner", "Admin", "Accountant"])) {
         return res.status(403).json({ error: "Access denied: Cannot add system logs." });
@@ -37117,7 +41337,23 @@ async function handler16(req, res) {
 }
 
 // src/server/handlers/write/restore.ts
-var import_crypto9 = __toESM(require("crypto"), 1);
+var import_jsonwebtoken2 = __toESM(require_jsonwebtoken(), 1);
+var RESTORE_TABLE_ORDER = [
+  "schools",
+  "branches",
+  "profiles",
+  "classes",
+  "subjects",
+  "exams",
+  "fee_heads",
+  "students",
+  "fee_challans",
+  "attendance",
+  "results",
+  "activity_logs",
+  "school_events",
+  "notifications"
+];
 async function handler17(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
@@ -37126,200 +41362,169 @@ async function handler17(req, res) {
   const auth = await verifySession(req, res);
   if (!auth) return;
   const { session, sql } = auth;
-  if (!isAuthorized(session, ["Owner", "Admin"])) {
-    return res.status(403).json({ error: "Access denied: Only Admins and Owners can perform data restore." });
+  if (session.role !== "Owner") {
+    return res.status(403).json({ error: "Access denied: Only Institutional Owners can restore the database." });
   }
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-    const { backupData, targetSchoolId } = body;
-    if (!backupData || typeof backupData !== "object") {
-      return res.status(400).json({ error: "Valid backupData payload is required." });
-    }
-    const isOwnerGlobal = session.role === "Owner" && !targetSchoolId;
-    const effectiveSchoolId = session.role === "Owner" && targetSchoolId ? targetSchoolId : session.schoolId;
-    if (!isOwnerGlobal && !effectiveSchoolId) {
-      return res.status(400).json({ error: "A specific target school ID is required for school restore." });
-    }
-    await sql`BEGIN`;
-    try {
-      if (isOwnerGlobal) {
-        await sql`DELETE FROM results`;
-        await sql`DELETE FROM attendance`;
-        await sql`DELETE FROM fee_challans`;
-        await sql`DELETE FROM students`;
-        await sql`DELETE FROM classes`;
-        await sql`DELETE FROM fee_heads`;
-        await sql`DELETE FROM school_events`;
-        await sql`DELETE FROM subjects`;
-        await sql`DELETE FROM exams`;
-        if (backupData.schools?.length) {
-          for (const s of backupData.schools) {
-            await sql`
-                            INSERT INTO schools (id, name, address, logo_url)
-                            VALUES (${s.id}, ${s.name}, ${s.address || ""}, ${s.logoUrl || s.logo_url || null})
-                            ON CONFLICT (id) DO UPDATE 
-                            SET name = EXCLUDED.name, address = EXCLUDED.address, logo_url = EXCLUDED.logo_url
-                        `;
+    const { action } = body;
+    if (action === "init") {
+      const { password } = body;
+      if (!password || typeof password !== "string") {
+        return res.status(400).json({ error: "Owner account password is required to initiate database restore." });
+      }
+      const ownerRows = await sql`
+                SELECT password FROM profiles 
+                WHERE id = ${session.userId} 
+                LIMIT 1
+            `;
+      if (!ownerRows || ownerRows.length === 0) {
+        return res.status(404).json({ error: "Owner profile not found in active database." });
+      }
+      const storedPassword = ownerRows[0].password || "";
+      const isMatch = await bcryptjs_default.compare(password, storedPassword);
+      if (!isMatch) {
+        return res.status(401).json({ error: "Incorrect Owner password. Database restore aborted." });
+      }
+      for (const tbl of RESTORE_TABLE_ORDER) {
+        const quotedLive = `"${tbl.replace(/"/g, '""')}"`;
+        const stagingTable = `"staging_${tbl.replace(/"/g, '""')}"`;
+        await sql(`CREATE TABLE IF NOT EXISTS ${stagingTable} (LIKE ${quotedLive} INCLUDING DEFAULTS)`);
+        await sql(`TRUNCATE TABLE ${stagingTable}`);
+      }
+      const restoreToken = import_jsonwebtoken2.default.sign(
+        { userId: session.userId, role: "Owner", type: "db_restore" },
+        SESSION_SECRET,
+        { expiresIn: "30m" }
+      );
+      return res.status(200).json({
+        success: true,
+        restoreToken,
+        message: "Staging environment initialized and verified."
+      });
+    } else if (action === "upload-chunk") {
+      const { restoreToken, table, rows } = body;
+      if (!restoreToken || !table) {
+        return res.status(400).json({ error: "Missing restoreToken or table name." });
+      }
+      try {
+        const decoded = import_jsonwebtoken2.default.verify(restoreToken, SESSION_SECRET);
+        if (decoded.role !== "Owner" || decoded.type !== "db_restore") {
+          return res.status(403).json({ error: "Invalid restore authorization token." });
+        }
+      } catch {
+        return res.status(401).json({ error: "Restore session has expired. Please re-enter your password." });
+      }
+      if (!RESTORE_TABLE_ORDER.includes(table)) {
+        return res.status(400).json({ error: `Table "${table}" is not an allowed institutional table.` });
+      }
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(200).json({ success: true, count: 0 });
+      }
+      const stagingTable = `"staging_${table.replace(/"/g, '""')}"`;
+      const colRes = await sql`
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' AND table_name = ${"staging_" + table}
+            `;
+      const colTypes = {};
+      for (const r of colRes) {
+        colTypes[r.column_name] = r.data_type;
+      }
+      const queries = [];
+      for (const row of rows) {
+        const cols = Object.keys(row).filter((c) => colTypes[c] !== void 0);
+        if (cols.length === 0) continue;
+        const values = cols.map((c) => {
+          const val = row[c];
+          if (val === null || val === void 0) return null;
+          const dType = colTypes[c];
+          if (dType === "jsonb" || dType === "json") {
+            return typeof val === "string" ? val : JSON.stringify(val);
           }
-        }
-      } else {
-        await sql`DELETE FROM results WHERE student_id IN (SELECT id FROM students WHERE school_id = ${effectiveSchoolId})`;
-        await sql`DELETE FROM attendance WHERE student_id IN (SELECT id FROM students WHERE school_id = ${effectiveSchoolId})`;
-        await sql`DELETE FROM fee_challans WHERE student_id IN (SELECT id FROM students WHERE school_id = ${effectiveSchoolId})`;
-        await sql`DELETE FROM students WHERE school_id = ${effectiveSchoolId}`;
-        await sql`DELETE FROM classes WHERE school_id = ${effectiveSchoolId}`;
-        await sql`DELETE FROM fee_heads WHERE school_id = ${effectiveSchoolId}`;
-        await sql`DELETE FROM school_events WHERE school_id = ${effectiveSchoolId}`;
-        await sql`DELETE FROM subjects WHERE school_id = ${effectiveSchoolId}`;
-        await sql`DELETE FROM exams WHERE school_id = ${effectiveSchoolId}`;
+          return val;
+        });
+        const quotedCols = cols.map((c) => `"${c.replace(/"/g, '""')}"`).join(", ");
+        const placeholders = values.map((_2, i) => `$${i + 1}`).join(", ");
+        queries.push(sql(
+          `INSERT INTO ${stagingTable} (${quotedCols}) VALUES (${placeholders})`,
+          values
+        ));
       }
-      if (Array.isArray(backupData.classes) && backupData.classes.length > 0) {
-        for (const c of backupData.classes) {
-          const sid = isOwnerGlobal ? c.schoolId || c.school_id : effectiveSchoolId;
-          await sql`
-                        INSERT INTO classes (id, name, section, teacher_id, school_id, sort_order)
-                        VALUES (${c.id || import_crypto9.default.randomUUID()}, ${c.name}, ${c.section || null}, ${c.teacherId || c.teacher_id || null}, ${sid}, ${c.sortOrder || c.sort_order || 0})
-                    `;
-        }
+      if (queries.length > 0) {
+        await sql.transaction(queries);
       }
-      if (Array.isArray(backupData.feeHeads) && backupData.feeHeads.length > 0) {
-        for (const fh of backupData.feeHeads) {
-          const sid = isOwnerGlobal ? fh.schoolId || fh.school_id : effectiveSchoolId;
-          await sql`
-                        INSERT INTO fee_heads (id, name, default_amount, school_id)
-                        VALUES (${fh.id || import_crypto9.default.randomUUID()}, ${fh.name}, ${Number(fh.defaultAmount || fh.default_amount) || 0}, ${sid})
-                    `;
-        }
+      return res.status(200).json({ success: true, count: rows.length });
+    } else if (action === "finalize") {
+      const { restoreToken, expectedCounts } = body;
+      if (!restoreToken || !expectedCounts) {
+        return res.status(400).json({ error: "Missing restoreToken or expectedCounts." });
       }
-      if (Array.isArray(backupData.subjects) && backupData.subjects.length > 0) {
-        for (const s of backupData.subjects) {
-          const sid = isOwnerGlobal ? s.schoolId || s.school_id : effectiveSchoolId;
-          await sql`
-                        INSERT INTO subjects (id, name, school_id)
-                        VALUES (${s.id || import_crypto9.default.randomUUID()}, ${s.name}, ${sid})
-                    `;
+      try {
+        const decoded = import_jsonwebtoken2.default.verify(restoreToken, SESSION_SECRET);
+        if (decoded.role !== "Owner" || decoded.type !== "db_restore") {
+          return res.status(403).json({ error: "Invalid restore authorization token." });
         }
+      } catch {
+        return res.status(401).json({ error: "Restore session has expired. Please re-enter your password." });
       }
-      if (Array.isArray(backupData.exams) && backupData.exams.length > 0) {
-        for (const e of backupData.exams) {
-          const sid = isOwnerGlobal ? e.schoolId || e.school_id : effectiveSchoolId;
-          await sql`
-                        INSERT INTO exams (id, name, school_id)
-                        VALUES (${e.id || import_crypto9.default.randomUUID()}, ${e.name}, ${sid})
-                    `;
+      const actualCounts = {};
+      for (const tbl of RESTORE_TABLE_ORDER) {
+        const exp = Number(expectedCounts[tbl] || 0);
+        const stagingTable = `"staging_${tbl.replace(/"/g, '""')}"`;
+        const countRes = await sql(`SELECT count(*)::int as count FROM ${stagingTable}`);
+        const actual = Number(countRes[0]?.count || 0);
+        actualCounts[tbl] = actual;
+        if (actual !== exp) {
+          return res.status(400).json({
+            error: `Integrity check failed: Table "${tbl}" has ${actual} rows in staging, but backup contains ${exp} rows. Production database was not modified.`
+          });
         }
       }
-      if (Array.isArray(backupData.events) && backupData.events.length > 0) {
-        for (const ev of backupData.events) {
-          const sid = isOwnerGlobal ? ev.schoolId || ev.school_id : effectiveSchoolId;
-          await sql`
-                        INSERT INTO school_events (id, title, date, category, description, school_id)
-                        VALUES (${ev.id || import_crypto9.default.randomUUID()}, ${ev.title}, ${ev.date}, ${ev.category || "general"}, ${ev.description || ""}, ${sid})
-                    `;
-        }
+      const swapQueries = [];
+      const quotedLiveTables = RESTORE_TABLE_ORDER.map((t) => `"${t.replace(/"/g, '""')}"`).join(", ");
+      swapQueries.push(sql(`TRUNCATE TABLE ${quotedLiveTables} CASCADE`));
+      for (const tbl of RESTORE_TABLE_ORDER) {
+        const liveTbl = `"${tbl.replace(/"/g, '""')}"`;
+        const stagingTbl = `"staging_${tbl.replace(/"/g, '""')}"`;
+        swapQueries.push(sql(`INSERT INTO ${liveTbl} SELECT * FROM ${stagingTbl}`));
       }
-      if (Array.isArray(backupData.students) && backupData.students.length > 0) {
-        for (const st of backupData.students) {
-          const sid = isOwnerGlobal ? st.schoolId || st.school_id : effectiveSchoolId;
-          const feeStructure = st.feeStructure || st.fee_structure || [];
-          await sql`
-                        INSERT INTO students (
-                            id, name, roll_number, class_id, school_id, father_name, father_cnic, 
-                            date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
-                            address, status, gender, admitted_class, gr_number, religion, caste, 
-                            last_school_attended, opening_balance, user_id, fee_structure, avatar_url
-                        ) VALUES (
-                            ${st.id || import_crypto9.default.randomUUID()}, ${st.name}, ${st.rollNumber || st.roll_number}, 
-                            ${st.classId || st.class_id || null}, ${sid}, 
-                            ${st.fatherName || st.father_name || null}, ${st.fatherCnic || st.father_cnic || null}, 
-                            ${st.dateOfBirth || st.date_of_birth || null}, ${st.dateOfAdmission || st.date_of_admission || null}, 
-                            ${st.contactNumber || st.contact_number || null}, ${st.secondaryContactNumber || st.secondary_contact_number || null}, 
-                            ${st.address || null}, ${st.status || "Active"}, ${st.gender || "Male"}, 
-                            ${st.admittedClass || st.admitted_class || null}, ${st.grNumber || st.gr_number || null}, 
-                            ${st.religion || null}, ${st.caste || null}, ${st.lastSchoolAttended || st.last_school_attended || null}, 
-                            ${Number(st.openingBalance || st.opening_balance) || 0}, ${st.userId || st.user_id || null}, 
-                            ${JSON.stringify(feeStructure)}, ${st.avatarUrl || st.avatar_url || null}
-                        )
-                    `;
-        }
-      }
-      if (Array.isArray(backupData.fees) && backupData.fees.length > 0) {
-        for (const f of backupData.fees) {
-          let history = f.paymentHistory || f.payment_history || [];
-          if (typeof history === "string") {
-            try {
-              history = JSON.parse(history);
-            } catch {
-              history = [];
-            }
-          }
-          const feeItems = f.feeItems || f.fee_items || [];
-          await sql`
-                        INSERT INTO fee_challans (
-                            id, challan_number, student_id, class_id, month, year, 
-                            due_date, status, fee_items, previous_balance, total_amount, 
-                            discount, paid_amount, fine_amount, paid_date, payment_history
-                        ) VALUES (
-                            ${f.id || import_crypto9.default.randomUUID()}, ${f.challanNumber || f.challan_number}, 
-                            ${f.studentId || f.student_id}, ${f.classId || f.class_id || null}, 
-                            ${f.month}, ${Number(f.year)}, ${f.dueDate || f.due_date || null}, 
-                            ${f.status || "Unpaid"}, ${JSON.stringify(feeItems)}, 
-                            ${Number(f.previousBalance || f.previous_balance) || 0}, 
-                            ${Number(f.totalAmount || f.total_amount) || 0}, 
-                            ${Number(f.discount) || 0}, ${Number(f.paidAmount || f.paid_amount) || 0}, 
-                            ${Number(f.fineAmount || f.fine_amount) || 0}, 
-                            ${f.paidDate || f.paid_date || null}, ${JSON.stringify(history)}
-                        )
-                    `;
-        }
-      }
-      if (Array.isArray(backupData.attendance) && backupData.attendance.length > 0) {
-        for (const a2 of backupData.attendance) {
-          const sid = isOwnerGlobal ? a2.schoolId || a2.school_id : effectiveSchoolId;
-          await sql`
-                        INSERT INTO attendance (id, student_id, date, status, school_id)
-                        VALUES (${a2.id || import_crypto9.default.randomUUID()}, ${a2.studentId || a2.student_id}, ${a2.date}, ${a2.status}, ${sid || null})
-                    `;
-        }
-      }
-      if (Array.isArray(backupData.results) && backupData.results.length > 0) {
-        for (const r of backupData.results) {
-          const sid = isOwnerGlobal ? r.schoolId || r.school_id : effectiveSchoolId;
-          await sql`
-                        INSERT INTO results (id, student_id, class_id, exam, subject, marks, total_marks, school_id)
-                        VALUES (
-                            ${r.id || import_crypto9.default.randomUUID()}, ${r.studentId || r.student_id}, 
-                            ${r.classId || r.class_id}, ${r.exam}, ${r.subject}, 
-                            ${Number(r.marks) || 0}, ${Number(r.totalMarks || r.total_marks) || 100}, 
-                            ${sid || null}
-                        )
-                    `;
-        }
-      }
-      await sql`COMMIT`;
+      const quotedStagingTables = RESTORE_TABLE_ORDER.map((t) => `"staging_${t.replace(/"/g, '""')}"`).join(", ");
+      swapQueries.push(sql(`TRUNCATE TABLE ${quotedStagingTables}`));
+      await sql.transaction(swapQueries);
       await writeServerAuditLog(
         sql,
         session,
         "Restore Database",
-        `Successfully restored database backup (${isOwnerGlobal ? "Full Global Restore" : `School ID: ${effectiveSchoolId}`})`,
-        effectiveSchoolId
+        `Restored complete institutional database from backup archive via browser disaster recovery modal.`
       );
-      return res.status(200).json({ success: true, message: "Restore completed successfully." });
-    } catch (txnError) {
-      await sql`ROLLBACK`;
-      console.error("Restore transaction failed, rolled back:", txnError);
-      return res.status(500).json({ error: `Restore failed and was rolled back: ${txnError.message || txnError}` });
+      return res.status(200).json({
+        success: true,
+        message: "Database restored and verified successfully.",
+        restoredCounts: actualCounts
+      });
+    } else if (action === "cancel") {
+      for (const tbl of RESTORE_TABLE_ORDER) {
+        const stagingTable = `"staging_${tbl.replace(/"/g, '""')}"`;
+        try {
+          await sql(`TRUNCATE TABLE ${stagingTable}`);
+        } catch {
+        }
+      }
+      return res.status(200).json({ success: true, message: "Staging environment cleared." });
+    } else {
+      return res.status(400).json({ error: `Unknown action: ${action}` });
     }
   } catch (err) {
-    console.error("Restore API fatal error:", err);
-    return res.status(500).json({ error: err.message || "Fatal error during restore operation." });
+    console.error("Restore API handler error:", err);
+    return res.status(500).json({ error: err.message || "Server error processing restore operation." });
   }
 }
 
 // src/server/handlers/notifications/index.ts
-var import_crypto10 = __toESM(require("crypto"), 1);
+var import_crypto9 = __toESM(require("crypto"), 1);
 async function handler18(req, res) {
-  const session = authenticateRequest(req);
+  const session = await getSessionUser(req, res);
   if (!session) {
     return res.status(401).json({ error: "Unauthorized: Valid session required." });
   }
@@ -37373,17 +41578,30 @@ async function handler18(req, res) {
           return res.status(403).json({ error: "Forbidden: Insufficient permissions to send notifications" });
         }
         const uniqueUserIds = Array.from(new Set(userIds));
+        const recipientRows = await sql`
+                    SELECT id FROM profiles
+                    WHERE id = ANY(${uniqueUserIds})
+                      AND (${session.role === "Owner"}::boolean OR school_id = ${session.schoolId || null}::uuid)
+                `;
+        const scopedUserIds = recipientRows.map((r) => r.id);
+        if (scopedUserIds.length === 0) {
+          return res.status(403).json({ error: "Forbidden: No valid recipient user IDs belong to your school." });
+        }
         const CHUNK_SIZE = 25;
-        for (let i = 0; i < uniqueUserIds.length; i += CHUNK_SIZE) {
-          const chunk = uniqueUserIds.slice(i, i + CHUNK_SIZE);
+        for (let i = 0; i < scopedUserIds.length; i += CHUNK_SIZE) {
+          const chunk = scopedUserIds.slice(i, i + CHUNK_SIZE);
           await Promise.all(chunk.map(
             (targetUserId) => sql`
                             INSERT INTO notifications (id, user_id, title, message, link, is_read, timestamp)
-                            VALUES (${import_crypto10.default.randomUUID()}, ${targetUserId}, ${title}, ${message}, ${link || null}, false, NOW())
+                            VALUES (${import_crypto9.default.randomUUID()}, ${targetUserId}, ${title}, ${message}, ${link || null}, false, NOW())
                         `
           ));
         }
-        return res.status(200).json({ success: true, count: uniqueUserIds.length });
+        return res.status(200).json({
+          success: true,
+          count: scopedUserIds.length,
+          skipped: uniqueUserIds.length - scopedUserIds.length
+        });
       }
       return res.status(400).json({ error: "Unknown action specified" });
     } catch (error) {
@@ -37392,6 +41610,301 @@ async function handler18(req, res) {
     }
   }
   return res.status(405).json({ error: "Method not allowed" });
+}
+
+// src/server/handlers/photo.ts
+var import_crypto10 = __toESM(require("crypto"), 1);
+async function handler19(req, res) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", ["GET"]);
+    return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+  }
+  try {
+    const session = await getSessionUser(req, res);
+    if (!session) {
+      return res.status(401).json({ error: "Unauthorized: Session required" });
+    }
+    const { kind, id } = req.query || {};
+    if (!kind || !id || typeof id !== "string") {
+      return res.status(400).json({ error: 'Parameters "kind" (student|user) and "id" are required.' });
+    }
+    if (kind !== "student" && kind !== "user") {
+      return res.status(400).json({ error: 'Parameter "kind" must be "student" or "user".' });
+    }
+    const sql = getDb();
+    const { role, userId, schoolId } = session;
+    let rawAvatar = null;
+    if (kind === "user") {
+      if (userId === id) {
+        const rows = await sql`SELECT avatar_url FROM profiles WHERE id = ${id} LIMIT 1`;
+        if (rows.length === 0) return res.status(404).json({ error: "User not found" });
+        rawAvatar = rows[0].avatar_url;
+      } else if (role === "Owner") {
+        const rows = await sql`SELECT avatar_url FROM profiles WHERE id = ${id} LIMIT 1`;
+        if (rows.length === 0) return res.status(404).json({ error: "User not found" });
+        rawAvatar = rows[0].avatar_url;
+      } else if (role === "Admin" || role === "Accountant" || role === "Teacher") {
+        const rows = await sql`SELECT school_id, avatar_url FROM profiles WHERE id = ${id} LIMIT 1`;
+        if (rows.length === 0) return res.status(404).json({ error: "User not found" });
+        if (rows[0].school_id && rows[0].school_id !== schoolId) {
+          return res.status(403).json({ error: "Forbidden: User belongs to another institution" });
+        }
+        rawAvatar = rows[0].avatar_url;
+      } else {
+        return res.status(403).json({ error: "Forbidden: Insufficient permissions" });
+      }
+    } else if (kind === "student") {
+      if (role === "Owner") {
+        const rows = await sql`SELECT avatar_url FROM students WHERE id = ${id} LIMIT 1`;
+        if (rows.length === 0) return res.status(404).json({ error: "Student not found" });
+        rawAvatar = rows[0].avatar_url;
+      } else if (role === "Admin" || role === "Accountant" || role === "Teacher") {
+        const rows = await sql`SELECT school_id, avatar_url FROM students WHERE id = ${id} LIMIT 1`;
+        if (rows.length === 0) return res.status(404).json({ error: "Student not found" });
+        if (rows[0].school_id !== schoolId) {
+          return res.status(403).json({ error: "Forbidden: Student belongs to another institution" });
+        }
+        rawAvatar = rows[0].avatar_url;
+      } else if (role === "Student") {
+        const rows = await sql`SELECT user_id, avatar_url FROM students WHERE id = ${id} LIMIT 1`;
+        if (rows.length === 0) return res.status(404).json({ error: "Student not found" });
+        if (rows[0].user_id !== userId) {
+          return res.status(403).json({ error: "Forbidden: Students may only view their own avatar" });
+        }
+        rawAvatar = rows[0].avatar_url;
+      } else if (role === "Parent") {
+        const parentProfile = await sql`SELECT child_student_ids FROM profiles WHERE id = ${userId} LIMIT 1`;
+        let childIds = [];
+        if (parentProfile.length > 0) {
+          const p2 = parentProfile[0];
+          if (Array.isArray(p2.child_student_ids)) childIds = p2.child_student_ids;
+          else if (typeof p2.child_student_ids === "string") {
+            try {
+              childIds = JSON.parse(p2.child_student_ids);
+            } catch {
+              childIds = [];
+            }
+          }
+        }
+        if (!childIds.includes(id)) {
+          return res.status(403).json({ error: "Forbidden: Student is not linked to parent" });
+        }
+        const rows = await sql`SELECT avatar_url FROM students WHERE id = ${id} LIMIT 1`;
+        if (rows.length === 0) return res.status(404).json({ error: "Student not found" });
+        rawAvatar = rows[0].avatar_url;
+      } else {
+        return res.status(403).json({ error: "Forbidden: Insufficient permissions" });
+      }
+    }
+    if (!rawAvatar || typeof rawAvatar !== "string" || rawAvatar.trim() === "") {
+      return res.status(404).json({ error: "No avatar found" });
+    }
+    const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"];
+    let mimeType = "image/jpeg";
+    let buffer;
+    if (rawAvatar.startsWith("data:")) {
+      const commaIndex = rawAvatar.indexOf(",");
+      if (commaIndex === -1) {
+        return res.status(400).json({ error: "Invalid image data" });
+      }
+      const meta = rawAvatar.slice(0, commaIndex);
+      const mimeMatch = meta.match(/data:([^;]+)/);
+      if (mimeMatch && mimeMatch[1]) {
+        mimeType = mimeMatch[1].toLowerCase().trim();
+      }
+      if (!ALLOWED_MIMES.includes(mimeType)) {
+        return res.status(415).json({ error: "Unsupported media type: Avatars must be JPEG, PNG, or WebP." });
+      }
+      const base64Data = rawAvatar.slice(commaIndex + 1);
+      buffer = Buffer.from(base64Data, "base64");
+    } else {
+      buffer = Buffer.from(rawAvatar, "base64");
+    }
+    const hash2 = import_crypto10.default.createHash("md5").update(buffer).digest("hex");
+    const etag = `"${hash2}"`;
+    if (req.headers["if-none-match"] === etag) {
+      return res.status(304).end();
+    }
+    res.setHeader("Content-Type", mimeType);
+    res.setHeader("Content-Length", buffer.length.toString());
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.setHeader("ETag", etag);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'");
+    return res.status(200).send(buffer);
+  } catch (err) {
+    console.error("Photo endpoint error:", err);
+    return res.status(500).json({ error: "Failed to retrieve photo." });
+  }
+}
+
+// src/server/handlers/data/backup.ts
+var ALLOWED_TABLES = [
+  "schools",
+  "branches",
+  "profiles",
+  "classes",
+  "subjects",
+  "exams",
+  "fee_heads",
+  "students",
+  "fee_challans",
+  "attendance",
+  "results",
+  "activity_logs",
+  "school_events",
+  "notifications"
+];
+async function handler20(req, res) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", ["GET"]);
+    return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+  }
+  try {
+    const session = await getSessionUser(req, res);
+    if (!session || session.role !== "Owner") {
+      return res.status(403).json({ error: "Access denied: Owner role required for database backup." });
+    }
+    const table = req.query?.table;
+    const cursor = req.query?.cursor;
+    if (!table || !ALLOWED_TABLES.includes(table)) {
+      return res.status(400).json({
+        error: `Invalid table "${table}". Whitelisted tables: ${ALLOWED_TABLES.join(", ")}`
+      });
+    }
+    const sql = getDb();
+    const CHUNK_QUERY_LIMIT = 500;
+    let queryRows = [];
+    const trimmedCursor = cursor && typeof cursor === "string" && cursor.trim() !== "" ? cursor.trim() : null;
+    if (trimmedCursor) {
+      if (!/^[0-9a-fA-F-]{36}$/.test(trimmedCursor)) {
+        return res.status(400).json({ error: "Invalid cursor format (expected UUID)." });
+      }
+      switch (table) {
+        case "schools":
+          queryRows = await sql`SELECT * FROM schools WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "branches":
+          queryRows = await sql`SELECT * FROM branches WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "profiles":
+          queryRows = await sql`SELECT * FROM profiles WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "classes":
+          queryRows = await sql`SELECT * FROM classes WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "subjects":
+          queryRows = await sql`SELECT * FROM subjects WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "exams":
+          queryRows = await sql`SELECT * FROM exams WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "fee_heads":
+          queryRows = await sql`SELECT * FROM fee_heads WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "students":
+          queryRows = await sql`SELECT * FROM students WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "fee_challans":
+          queryRows = await sql`SELECT * FROM fee_challans WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "attendance":
+          queryRows = await sql`SELECT * FROM attendance WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "results":
+          queryRows = await sql`SELECT * FROM results WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "activity_logs":
+          queryRows = await sql`SELECT * FROM activity_logs WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "school_events":
+          queryRows = await sql`SELECT * FROM school_events WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "notifications":
+          queryRows = await sql`SELECT * FROM notifications WHERE id > ${trimmedCursor}::uuid ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        default:
+          queryRows = [];
+      }
+    } else {
+      switch (table) {
+        case "schools":
+          queryRows = await sql`SELECT * FROM schools ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "branches":
+          queryRows = await sql`SELECT * FROM branches ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "profiles":
+          queryRows = await sql`SELECT * FROM profiles ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "classes":
+          queryRows = await sql`SELECT * FROM classes ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "subjects":
+          queryRows = await sql`SELECT * FROM subjects ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "exams":
+          queryRows = await sql`SELECT * FROM exams ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "fee_heads":
+          queryRows = await sql`SELECT * FROM fee_heads ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "students":
+          queryRows = await sql`SELECT * FROM students ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "fee_challans":
+          queryRows = await sql`SELECT * FROM fee_challans ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "attendance":
+          queryRows = await sql`SELECT * FROM attendance ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "results":
+          queryRows = await sql`SELECT * FROM results ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "activity_logs":
+          queryRows = await sql`SELECT * FROM activity_logs ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "school_events":
+          queryRows = await sql`SELECT * FROM school_events ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        case "notifications":
+          queryRows = await sql`SELECT * FROM notifications ORDER BY id ASC LIMIT ${CHUNK_QUERY_LIMIT}`;
+          break;
+        default:
+          queryRows = [];
+      }
+    }
+    const rows = [];
+    let nextCursor = null;
+    const MAX_BYTES = 3 * 1024 * 1024;
+    let currentBytes = 2;
+    for (let i = 0; i < queryRows.length; i++) {
+      const row = queryRows[i];
+      const rowJson = JSON.stringify(row);
+      const rowBytes = Buffer.byteLength(rowJson, "utf8") + 1;
+      if (rows.length >= 1 && currentBytes + rowBytes > MAX_BYTES) {
+        nextCursor = rows[rows.length - 1].id;
+        break;
+      }
+      rows.push(row);
+      currentBytes += rowBytes;
+    }
+    if (!nextCursor) {
+      if (queryRows.length === CHUNK_QUERY_LIMIT) {
+        nextCursor = queryRows[queryRows.length - 1].id;
+      } else {
+        nextCursor = null;
+      }
+    }
+    return res.status(200).json({
+      table,
+      rows,
+      nextCursor
+    });
+  } catch (err) {
+    console.error("Backup data endpoint error:", err);
+    return res.status(500).json({ error: "Failed to stream backup records." });
+  }
 }
 
 // src/server/apiRouter.ts
@@ -37409,6 +41922,8 @@ apiRouter.all("/data/students", (req, res) => handler7(req, res));
 apiRouter.all("/data/fees", (req, res) => handler8(req, res));
 apiRouter.all("/data/users", (req, res) => handler9(req, res));
 apiRouter.all("/data/schools", (req, res) => handler10(req, res));
+apiRouter.all("/photo", (req, res) => handler19(req, res));
+apiRouter.all("/backup", (req, res) => handler20(req, res));
 apiRouter.all("/write/payments", (req, res) => handler11(req, res));
 apiRouter.all("/write/challans", (req, res) => handler12(req, res));
 apiRouter.all("/write/academic", (req, res) => handler13(req, res));
@@ -37420,6 +41935,7 @@ apiRouter.all("/notifications", (req, res) => handler18(req, res));
 
 // src/server/index.ts
 var app = (0, import_express2.default)();
+app.use((0, import_compression.default)());
 app.use(import_express2.default.json({ limit: "50mb" }));
 app.use("/api", apiRouter);
 app.use("/", apiRouter);
@@ -37430,7 +41946,7 @@ app.use((err, _req, res, _next) => {
   console.error("Server API error:", err);
   res.status(500).json({ error: err?.message || "Internal server error." });
 });
-function handler19(req, res) {
+function handler21(req, res) {
   const matched = req.headers && (req.headers["x-matched-path"] || req.headers["x-forwarded-uri"] || req.headers["x-original-url"] || req.headers["x-real-url"]) || (req.originalUrl && req.originalUrl !== req.url ? req.originalUrl : null);
   if (matched && (req.url === "/api" || req.url === "/api/" || req.url === "/" || req.url.startsWith("/api?"))) {
     if (matched !== "/api" && matched !== "/api/" && matched !== "/") {
@@ -37658,6 +42174,7 @@ negotiator/lib/accept.js:
    *)
 
 negotiator/index.js:
+negotiator/index.js:
   (*!
    * negotiator
    * Copyright(c) 2012 Federico Romero
@@ -37731,6 +42248,40 @@ serve-static/index.js:
 
 safe-buffer/index.js:
   (*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> *)
+
+compressible/index.js:
+  (*!
+   * compressible
+   * Copyright(c) 2013 Jonathan Ong
+   * Copyright(c) 2014 Jeremiah Senkpiel
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+destroy/index.js:
+  (*!
+   * destroy
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2015-2022 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+on-headers/index.js:
+  (*!
+   * on-headers
+   * Copyright(c) 2014 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+compression/index.js:
+  (*!
+   * compression
+   * Copyright(c) 2010 Sencha Inc.
+   * Copyright(c) 2011 TJ Holowaychuk
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2014-2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
 
 @neondatabase/serverless/index.mjs:
   (*! Bundled license information:

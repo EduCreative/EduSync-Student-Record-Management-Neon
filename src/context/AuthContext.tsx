@@ -4,6 +4,7 @@ import { Permission, ROLE_PERMISSIONS } from '../permissions';
 
 interface AuthContextType {
     user: User | null;
+    loading: boolean;
     login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
     logout: () => void;
     register: (name: string, email: string, pass: string, role: UserRole) => Promise<{ success: boolean; error?: string }>;
@@ -218,6 +219,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return (
         <AuthContext.Provider value={{
             user,
+            loading,
             login,
             logout,
             register,

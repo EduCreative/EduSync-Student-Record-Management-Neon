@@ -13,6 +13,7 @@
 
 import pg from 'pg';
 const { Client } = pg;
+pg.types.setTypeParser(1082, (v: string) => v);   // DATE stays 'YYYY-MM-DD'
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';

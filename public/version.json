@@ -1,9 +1,7 @@
 {
-  "version": "3.44.0",
+  "version": "3.45.0",
   "releaseDate": "2026-11-10",
   "changelog": [
-    "High-Resolution PWA Brand Icon Assets: Replaced placeholder blue squares with custom-designed, high-resolution EduSync brand icons featuring the golden academic book and cyan neon glowing graduation cap.",
-    "Comprehensive PWA Compliance: Generated 512x512 and 192x192 launcher icons, dedicated 15% safe-padded maskable icons for Android adaptive launchers, 180x180 Apple touch icons, and multi-size favicons.",
-    "Service Worker & Manifest Synchronization: Updated Web App Manifest with proper display, ID, scope, and separate 'any' and 'maskable' purpose entries, and precached all new icon assets in sw.js."
+    "Branded Startup Splash Screen: Added an instant, centered branded splash screen in index.html and AppLoadingFallback featuring the EduSync academic emblem, neon glow accents, and animated bounce indicators to dramatically improve perceived startup performance."
   ]
 }

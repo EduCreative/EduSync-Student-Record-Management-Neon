@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#1e40af" />
+    <meta name="theme-color" content="#081745" />
     <meta name="description" content="A comprehensive, responsive Student Record Management System for schools. It supports multiple user roles (Owner, Admin, Accountant, Teacher, Parent, Student) with role-based access and features dashboards with data visualization." />
-    <meta property="og:title" content="EduSync-Student Record Management-Neon" />
-    <meta property="og:description" content="A comprehensive, responsive Student Record Management System for schools. It supports multiple user roles (Owner, Admin, Accountant, Teacher, Parent, Student) with role-based access and features dashboards with data visualization." />
+    <meta property="og:title" content="EduSync - Student Record Management System" />
+    <meta property="og:description" content="A comprehensive, responsive Student Record Management System for schools with role-based access." />
     <meta property="og:image" content="/icons/icon-512.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -20,8 +20,33 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
   </head>
-  <body>
-    <div id="root"></div>
+  <body class="bg-secondary-950 text-secondary-100">
+    <div id="root">
+      <div style="position: fixed; inset: 0; background: #081745; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 99999; font-family: system-ui, -apple-system, sans-serif;">
+        <div style="display: flex; flex-direction: column; align-items: center; animation: edusync-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 80px; height: 80px; margin-bottom: 24px; filter: drop-shadow(0 0 20px rgba(0, 243, 255, 0.5));">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2V3z" stroke="#1d4ed8" fill="#fde68a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7V3z" stroke="#1d4ed8" fill="#fde68a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+            <g transform="rotate(-15 12 11)">
+              <path d="M4 10l8-4 8 4-8 4-8-4z" stroke="#00f3ff" fill="#475569" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+              <path d="M8 12v4c2 2 6 2 8 0v-4" stroke="#00f3ff" fill="#475569" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+              <path d="M17.5 10V8" stroke="#00f3ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+            </g>
+          </svg>
+          <h1 style="color: #ffffff; font-size: 32px; font-weight: 800; letter-spacing: -0.025em; margin: 0 0 8px 0;">EduSync</h1>
+          <span style="color: #00f3ff; font-size: 11px; font-weight: 700; letter-spacing: 0.25em; text-transform: uppercase;">Student Record Management System</span>
+        </div>
+        <div style="position: absolute; bottom: 48px; display: flex; align-items: center; gap: 8px;">
+          <div style="width: 8px; height: 8px; background: #00f3ff; border-radius: 50%; animation: edusync-bounce 1s infinite alternate;"></div>
+          <div style="width: 8px; height: 8px; background: #fde68a; border-radius: 50%; animation: edusync-bounce 1s infinite alternate 0.2s;"></div>
+          <div style="width: 8px; height: 8px; background: #3b82f6; border-radius: 50%; animation: edusync-bounce 1s infinite alternate 0.4s;"></div>
+        </div>
+        <style>
+          @keyframes edusync-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.85; transform: scale(0.97); } }
+          @keyframes edusync-bounce { from { transform: translateY(0); opacity: 0.4; } to { transform: translateY(-8px); opacity: 1; } }
+        </style>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

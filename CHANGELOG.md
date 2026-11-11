@@ -1,6 +1,13 @@
 
 # Changelog
 
+## [3.45.0] - 2026-11-10
+
+### Branded Startup Splash Screen
+- **Instant Perceived Performance**:
+  - Added an inline static branded splash screen directly inside `index.html` root so the EduSync academic logo, title, and theme colors render immediately upon page request before JavaScript bundle download/execution.
+  - Implemented seamless React hydration state handling in `AuthLoadingFallback` and `AppContent` via `useAuth().loading` to maintain the branded transition during session verification.
+
 ## [3.44.0] - 2026-11-10
 
 ### High-Resolution PWA Brand Icons & Mobile Polish
