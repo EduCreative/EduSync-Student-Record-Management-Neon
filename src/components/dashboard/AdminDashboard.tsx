@@ -14,6 +14,8 @@ import Avatar from '../common/Avatar';
 import { getClassLevel } from '../../utils/sorting';
 import DivergingBarChart, { DivergingBarChartData } from '../charts/DivergingBarChart';
 import { getTodayKarachi } from '../../utils/dates';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -137,7 +139,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
     const effectiveSchoolId = user.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user.schoolId;
     const school = effectiveSchoolId != null ? getSchoolById(effectiveSchoolId) : null;
     
-    const schoolStudents = useMemo(() => students.filter(s => s.schoolId === effectiveSchoolId && s.status === 'Active'), [students, effectiveSchoolId]);
+    const { filterClasses, filterStudents, filterFees, filterAttendance } = useBranchFilter();
+
+    const branchFilteredStudents = useMemo(() => filterStudents(students), [filterStudents, students]);
+    const branchFilteredClasses = useMemo(() => filterClasses(classes), [filterClasses, classes]);
+    const branchFilteredFees = useMemo(() => filterFees(fees), [filterFees, fees]);
+    const branchFilteredAttendance = useMemo(() => filterAttendance(attendance), [filterAttendance, attendance]);
+
+    const schoolStudents = useMemo(() => branchFilteredStudents.filter(s => s.schoolId === effectiveSchoolId && s.status === 'Active'), [branchFilteredStudents, effectiveSchoolId]);
     const schoolTeachers = useMemo(() => users.filter(u => u.schoolId === effectiveSchoolId && u.role === UserRole.Teacher), [users, effectiveSchoolId]);
     const schoolUsers = useMemo(() => users.filter(u => u.schoolId === effectiveSchoolId && u.id !== user.id), [users, effectiveSchoolId, user.id]);
 
@@ -148,8 +157,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
         const currentMonthIdx = currM - 1;
         const currentMonthName = months[currentMonthIdx];
 
-        const schoolFees = fees.filter(fee => {
-            const student = students.find(s => s.id === fee.studentId);
+        const schoolFees = branchFilteredFees.filter(fee => {
+            const student = branchFilteredStudents.find(s => s.id === fee.studentId);
             return student?.schoolId === effectiveSchoolId;
         });
 
@@ -210,7 +219,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
             totalOutstandingDues: `Rs. ${totalOutstandingDues.toLocaleString()}`,
             unpaidThisMonthCount: unpaidThisMonthCount.toLocaleString(),
         };
-    }, [fees, students, schoolUsers, effectiveSchoolId, getLedgerForStudent]);
+    }, [branchFilteredFees, branchFilteredStudents, schoolStudents, schoolUsers, effectiveSchoolId, getLedgerForStudent]);
 
 
     const feeStatusData = useMemo(() => {
@@ -219,8 +228,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
         const currentYear = now.getFullYear();
 
         // Only show status for the CURRENT MONTH
-        const currentMonthFees = fees.filter(fee => {
-            const student = students.find(s => s.id === fee.studentId);
+        const currentMonthFees = branchFilteredFees.filter(fee => {
+            const student = branchFilteredStudents.find(s => s.id === fee.studentId);
             return student?.schoolId === effectiveSchoolId && fee.month === currentMonthName && fee.year === currentYear;
         });
 
@@ -242,11 +251,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
             color: statusColors[status]
         }));
 
-    }, [fees, students, effectiveSchoolId]);
+    }, [branchFilteredFees, branchFilteredStudents, effectiveSchoolId]);
 
     const attendanceData = useMemo(() => {
         const todayStr = getTodayKarachi();
-        const todaysAttendance = attendance.filter(a => a.date === todayStr);
+        const todaysAttendance = branchFilteredAttendance.filter(a => a.date === todayStr);
         const attendanceMap = new Map(todaysAttendance.map(a => [a.studentId, a.status]));
     
         const statusCounts = { Present: 0, Absent: 0, Leave: 0, Pending: 0 };
@@ -265,10 +274,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
             { label: 'Leave', value: statusCounts.Leave, color: '#f59e0b' },
             { label: 'Pending', value: statusCounts.Pending, color: '#64748b' },
         ];
-    }, [attendance, schoolStudents]);
+    }, [branchFilteredAttendance, schoolStudents]);
 
     const feeCollectionData = useMemo(() => {
-        const schoolFees = fees.filter(fee => students.find(s => s.id === fee.studentId)?.schoolId === effectiveSchoolId);
+        const schoolFees = branchFilteredFees.filter(fee => branchFilteredStudents.find(s => s.id === fee.studentId)?.schoolId === effectiveSchoolId);
         const collectionsByDay: Record<string, number> = {};
 
         // Walk payment history with single-payment fallback on paidDate (P13)
@@ -363,7 +372,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
                 value: collectionsByDay[dateStr] || 0
             };
         });
-    }, [fees, students, effectiveSchoolId, feePeriod]);
+    }, [branchFilteredFees, branchFilteredStudents, effectiveSchoolId, feePeriod]);
     
     const classRecoveryData = useMemo(() => {
         if (!effectiveSchoolId) return [];
@@ -371,12 +380,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
         const currentMonthName = months[now.getMonth()];
         const currentYear = now.getFullYear();
 
-        const schoolClasses = classes.filter(c => c.schoolId === effectiveSchoolId);
+        const schoolClasses = branchFilteredClasses.filter(c => c.schoolId === effectiveSchoolId);
         const sortedClasses = [...schoolClasses].sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name));
 
         return sortedClasses.map(c => {
-            const classChallans = fees.filter(f => {
-                const student = students.find(s => s.id === f.studentId);
+            const classChallans = branchFilteredFees.filter(f => {
+                const student = branchFilteredStudents.find(s => s.id === f.studentId);
                 return student?.classId === c.id && f.month === currentMonthName && f.year === currentYear && f.status !== 'Cancelled';
             });
 
@@ -392,11 +401,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
                 ]
             };
         }).filter(item => item.value > 0);
-    }, [classes, fees, students, effectiveSchoolId]);
+    }, [branchFilteredClasses, branchFilteredFees, branchFilteredStudents, effectiveSchoolId]);
 
     const classStrengthData = useMemo(() => {
         if (!effectiveSchoolId) return [];
-        const schoolClasses = classes.filter(c => c.schoolId === effectiveSchoolId);
+        const schoolClasses = branchFilteredClasses.filter(c => c.schoolId === effectiveSchoolId);
 
         const sortedClasses = [...schoolClasses].sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name));
     
@@ -412,7 +421,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
                     value2: femaleCount,
                 };
             });
-    }, [classes, schoolStudents, effectiveSchoolId]);
+    }, [branchFilteredClasses, schoolStudents, effectiveSchoolId]);
 
     const recentLogs = useMemo(() => {
         return logs.slice(0, 5);
@@ -424,13 +433,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
         const currentYear = now.getFullYear();
 
         const status = item.label as FeeChallan['status'];
-        const relevantChallans = fees.filter(f => {
-            const student = students.find(s => s.id === f.studentId);
+        const relevantChallans = branchFilteredFees.filter(f => {
+            const student = branchFilteredStudents.find(s => s.id === f.studentId);
             return student?.schoolId === effectiveSchoolId && f.status === status && f.month === currentMonthName && f.year === currentYear;
         });
 
         const items = relevantChallans.map(c => {
-            const student = students.find(s => s.id === c.studentId);
+            const student = branchFilteredStudents.find(s => s.id === c.studentId);
             return {
                 id: c.id,
                 avatar: <Avatar student={student} className="w-9 h-9" />,
@@ -445,7 +454,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
     const handleAttendanceClick = (item: { label: string }) => {
         const status = item.label;
         const todayStr = getTodayKarachi();
-        const todaysAttendanceRecords = attendance.filter(a => a.date === todayStr);
+        const todaysAttendanceRecords = branchFilteredAttendance.filter(a => a.date === todayStr);
         const todaysAttendanceMap = new Map(todaysAttendanceRecords.map(a => [a.studentId, a.status]));
 
         let relevantStudents: Student[] = [];
@@ -515,9 +524,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
                 </div>
             </Modal>
             <div className="space-y-8">
-                <div>
-                    <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Admin Dashboard</h1>
-                    <p className="text-secondary-500 dark:text-secondary-400">Welcome back, {user.name}. Here's what's happening at {school?.name}.</p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Admin Dashboard</h1>
+                        <p className="text-secondary-500 dark:text-secondary-400">Welcome back, {user.name}. Here's what's happening at {school?.name}.</p>
+                    </div>
+                    <BranchPicker />
                 </div>
             
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

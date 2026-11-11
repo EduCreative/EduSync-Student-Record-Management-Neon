@@ -9,6 +9,8 @@ import { UserRole } from '../../types';
 import { formatDate } from '../../constants';
 import { getTodayKarachi, getFirstDayOfKarachiMonth, toLocalDateString } from '../../utils/dates';
 import PrintableReportLayout from './PrintableReportLayout';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 interface FeeCollectionReportModalProps {
     isOpen: boolean;
@@ -69,6 +71,7 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
     const { user, activeSchoolId } = useAuth();
     const { fees, students, classes, getSchoolById } = useData();
     const { showPrintPreview } = usePrint();
+    const { filterFees, selectedBranchName, hasMultipleBranches } = useBranchFilter();
 
     const [startDate, setStartDate] = useState(getFirstDayOfKarachiMonth());
     const [endDate, setEndDate] = useState(getTodayKarachi());
@@ -119,6 +122,7 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
 
     const reportData = useMemo(() => {
         const groupedByDate: Record<string, DateGroup> = {};
+        const branchFilteredFees = filterFees(fees);
 
         // Helper to add a transaction to the grouped object
         const addTransaction = (dateStr: string, fee: any, amount: number, isUntracked = false) => {
@@ -158,8 +162,8 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
             groupedByDate[normalizedDate].subtotals.paid += Number(amount);
         };
 
-        // Iterate through all fees to find relevant transactions
-        fees.forEach(fee => {
+        // Iterate through all filtered fees to find relevant transactions
+        branchFilteredFees.forEach(fee => {
             const history = fee.paymentHistory || [];
             
             if (history.length > 0) {
@@ -227,7 +231,7 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
             <PrintableReportLayout
                 school={school}
                 title="Fee Collection Report"
-                subtitle={`From: ${formatDate(startDate)} To: ${formatDate(endDate)}`}
+                subtitle={`Branch: ${selectedBranchName} | From: ${formatDate(startDate)} To: ${formatDate(endDate)}`}
             >
                 {reportData.map(dateGroup => (
                     <div key={dateGroup.date} className="class-group-container mb-6">
@@ -312,7 +316,10 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
         if (selectedColumns.balance) activeHeaders.push("Balance");
         activeHeaders.push("Is Estimated Date");
 
-        const csvRows = [activeHeaders.join(',')];
+        const csvRows = [
+            escapeCsvCell(`Branch: ${selectedBranchName}`),
+            activeHeaders.join(',')
+        ];
 
         reportData.forEach(dateGroup => {
             csvRows.push(escapeCsvCell(`Date: ${formatDate(dateGroup.date)}`));
@@ -358,6 +365,12 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Generate Fee Collection Report">
             <div className="space-y-4">
+                {hasMultipleBranches && (
+                    <div className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-secondary-700/50 rounded-lg">
+                        <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">Filter Branch:</span>
+                        <BranchPicker />
+                    </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                         <label htmlFor="start-date" className="input-label">Start Date</label>

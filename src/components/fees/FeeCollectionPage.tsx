@@ -15,6 +15,8 @@ import StudentFeeHistory from '../students/StudentFeeHistory';
 import PrintableChallan from '../reports/PrintableChallan';
 import { usePrint } from '../../context/PrintContext';
 import { getTodayKarachi, getCurrentKarachiMonthDetails } from '../../utils/dates';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -70,15 +72,20 @@ const FeeCollectionPage: React.FC = () => {
 
     const canManage = hasPermission(Permission.CAN_MANAGE_FEES);
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+    const { filterFees, filterClasses, selectedBranchId } = useBranchFilter();
 
-    const schoolClasses = useMemo(() => classes.filter(c => c.schoolId === effectiveSchoolId)
-        .sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name)), 
-        [classes, effectiveSchoolId]);
+    const branchFilteredFees = useMemo(() => filterFees(fees), [filterFees, fees]);
+
+    const schoolClasses = useMemo(() => {
+        const base = classes.filter(c => c.schoolId === effectiveSchoolId);
+        return filterClasses(base).sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name));
+    }, [classes, effectiveSchoolId, filterClasses]);
+
     const classMap = useMemo(() => new Map(classes.map((c: Class) => [c.id, c.name])), [classes]);
     const studentMap = useMemo(() => new Map(students.map(s => [s.id, s])), [students]);
 
     const filteredChallans = useMemo(() => {
-        const filtered = fees.filter(challan => {
+        const filtered = branchFilteredFees.filter(challan => {
             if (challan.status === 'Cancelled') return false;
             
             const student = studentMap.get(challan.studentId);
@@ -152,11 +159,11 @@ const FeeCollectionPage: React.FC = () => {
             return dateB - dateA;
         });
 
-    }, [fees, studentMap, effectiveSchoolId, statusFilter, classFilter, monthFilter, searchTerm, sortBy, classMap]);
+    }, [branchFilteredFees, studentMap, effectiveSchoolId, statusFilter, classFilter, monthFilter, searchTerm, sortBy, classMap]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, statusFilter, classFilter, monthFilter, sortBy]);
+    }, [searchTerm, statusFilter, classFilter, monthFilter, sortBy, selectedBranchId]);
 
     const totalPages = Math.ceil(filteredChallans.length / ROWS_PER_PAGE);
 
@@ -300,7 +307,8 @@ const FeeCollectionPage: React.FC = () => {
             <div className="p-4 sm:p-6 space-y-4">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <h1 className="text-2xl font-bold text-secondary-900 dark:text-white">Fee Collection</h1>
-                     <div className="flex gap-2">
+                     <div className="flex items-center gap-2 flex-wrap">
+                         <BranchPicker />
                          {canManage && (
                              <button onClick={() => setIsStudentSelectModalOpen(true)} className="btn-primary text-sm">
                                  + New Single Challan

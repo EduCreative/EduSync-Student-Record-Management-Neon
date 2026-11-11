@@ -11,6 +11,8 @@ import AttendanceReportModal from '../reports/AttendanceReportModal';
 import { PrinterIcon } from '../../constants';
 import { getClassLevel } from '../../utils/sorting';
 import { getTodayKarachi } from '../../utils/dates';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 type AttendanceStatus = 'Present' | 'Absent' | 'Leave';
 
@@ -29,6 +31,7 @@ const AttendanceMarker: React.FC = () => {
     const [sortBy, setSortBy] = useState<'name' | 'rollNumber'>('rollNumber');
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
+    const { filterClasses } = useBranchFilter();
 
     const userClasses = useMemo(() => {
         if (!user) return [];
@@ -37,9 +40,10 @@ const AttendanceMarker: React.FC = () => {
             filteredClasses = classes.filter((c: Class) => c.schoolId === effectiveSchoolId && c.teacherId === user.id);
         } else {
             filteredClasses = classes.filter((c: Class) => c.schoolId === effectiveSchoolId);
+            filteredClasses = filterClasses(filteredClasses);
         }
         return filteredClasses.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name));
-    }, [classes, user, effectiveRole, effectiveSchoolId]);
+    }, [classes, user, effectiveRole, effectiveSchoolId, filterClasses]);
 
     const studentsInClass = useMemo(() => {
         if (!selectedClassId) return [];
@@ -56,8 +60,12 @@ const AttendanceMarker: React.FC = () => {
     }, [students, selectedClassId, sortBy]);
     
     useEffect(() => {
-        if (userClasses.length > 0 && !selectedClassId) {
-            setSelectedClassId(userClasses[0].id);
+        if (userClasses.length > 0) {
+            if (!userClasses.some(c => c.id === selectedClassId)) {
+                setSelectedClassId(userClasses[0].id);
+            }
+        } else {
+            setSelectedClassId('');
         }
     }, [userClasses, selectedClassId]);
 
@@ -144,10 +152,13 @@ const AttendanceMarker: React.FC = () => {
             <div className="space-y-6">
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Mark Attendance</h1>
-                    <button onClick={() => setIsReportModalOpen(true)} className="btn-secondary">
-                        <PrinterIcon className="w-4 h-4" />
-                        Print Report
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {effectiveRole !== UserRole.Teacher && <BranchPicker />}
+                        <button onClick={() => setIsReportModalOpen(true)} className="btn-secondary">
+                            <PrinterIcon className="w-4 h-4" />
+                            Print Report
+                        </button>
+                    </div>
                 </div>
                 
                 <div className="p-4 bg-white dark:bg-secondary-800 rounded-lg shadow-md">

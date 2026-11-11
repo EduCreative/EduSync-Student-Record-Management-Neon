@@ -8,6 +8,8 @@ import { formatDate } from '../../constants';
 import { getClassLevel } from '../../utils/sorting';
 import { getTodayKarachi, getFirstDayOfKarachiMonth, toLocalDateString } from '../../utils/dates';
 import PrintableReportLayout from './PrintableReportLayout';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 interface AttendanceReportModalProps {
     isOpen: boolean;
@@ -21,6 +23,7 @@ const AttendanceReportModal: React.FC<AttendanceReportModalProps> = ({ isOpen, o
     const { user, activeSchoolId } = useAuth();
     const { students, classes, attendance, getSchoolById, loadAttendanceRange } = useData();
     const { showPrintPreview } = usePrint();
+    const { filterStudents, filterClasses, filterAttendance, selectedBranchName, hasMultipleBranches } = useBranchFilter();
 
     const [classId, setClassId] = useState('all');
     const [startDate, setStartDate] = useState(getFirstDayOfMonthString());
@@ -34,7 +37,10 @@ const AttendanceReportModal: React.FC<AttendanceReportModalProps> = ({ isOpen, o
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
     const school = useMemo(() => getSchoolById(effectiveSchoolId || ''), [getSchoolById, effectiveSchoolId]);
-    const schoolClasses = useMemo(() => classes.filter(c => c.schoolId === effectiveSchoolId), [classes, effectiveSchoolId]);
+    const schoolClasses = useMemo(() => {
+        const base = classes.filter(c => c.schoolId === effectiveSchoolId);
+        return filterClasses(base);
+    }, [classes, effectiveSchoolId, filterClasses]);
     const sortedClasses = useMemo(() => [...schoolClasses].sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name)), [schoolClasses]);
 
     const datesInRange = useMemo(() => {
@@ -51,14 +57,17 @@ const AttendanceReportModal: React.FC<AttendanceReportModalProps> = ({ isOpen, o
     }, [startDate, endDate]);
 
     const reportData = useMemo(() => {
-        const relevantStudents = students.filter(s =>
+        const branchFilteredStudents = filterStudents(students);
+        const branchFilteredAttendance = filterAttendance(attendance);
+
+        const relevantStudents = branchFilteredStudents.filter(s =>
             s.schoolId === effectiveSchoolId &&
             s.status === 'Active' &&
             (classId === 'all' || s.classId === classId)
         );
 
         const attendanceMap = new Map<string, { [date: string]: 'Present' | 'Absent' | 'Leave' }>();
-        attendance.forEach(att => {
+        branchFilteredAttendance.forEach(att => {
             if (att.date >= startDate && att.date <= endDate) {
                 if (!attendanceMap.has(att.studentId)) {
                     attendanceMap.set(att.studentId, {});
@@ -82,11 +91,14 @@ const AttendanceReportModal: React.FC<AttendanceReportModalProps> = ({ isOpen, o
 
     const handleGenerate = () => {
         const selectedClass = schoolClasses.find(c => c.id === classId);
+        const baseSubtitle = `Class: ${selectedClass ? `${selectedClass.name}${selectedClass.section ? ` - ${selectedClass.section}` : ''}` : 'All Classes'} | From: ${formatDate(startDate)} To: ${formatDate(endDate)}`;
+        const subtitle = hasMultipleBranches ? `Branch: ${selectedBranchName} | ${baseSubtitle}` : baseSubtitle;
+
         const content = (
             <PrintableReportLayout
                 school={school}
                 title="Attendance Report"
-                subtitle={`Class: ${selectedClass ? `${selectedClass.name}${selectedClass.section ? ` - ${selectedClass.section}` : ''}` : 'All Classes'} | From: ${formatDate(startDate)} To: ${formatDate(endDate)}`}
+                subtitle={subtitle}
             >
                 <table className="w-full text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
                     <thead>
@@ -132,6 +144,12 @@ const AttendanceReportModal: React.FC<AttendanceReportModalProps> = ({ isOpen, o
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Generate Attendance Report">
             <div className="space-y-4">
+                {hasMultipleBranches && (
+                    <div className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-secondary-700/50 rounded-lg">
+                        <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">Filter Branch:</span>
+                        <BranchPicker />
+                    </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="sm:col-span-3">
                         <label htmlFor="class-select-attendance" className="input-label">Class</label>

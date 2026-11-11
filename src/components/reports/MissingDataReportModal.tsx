@@ -7,6 +7,8 @@ import { downloadCsvString, escapeCsvCell } from '../../utils/csvHelper';
 import { UserRole, Student } from '../../types';
 import { getClassLevel } from '../../utils/sorting';
 import PrintableReportLayout from './PrintableReportLayout';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 interface MissingDataReportModalProps {
     isOpen: boolean;
@@ -31,6 +33,7 @@ const MissingDataReportModal: React.FC<MissingDataReportModalProps> = ({ isOpen,
     const { user, activeSchoolId } = useAuth();
     const { students, classes, getSchoolById } = useData();
     const { showPrintPreview } = usePrint();
+    const { filterStudents, filterClasses, selectedBranchName, hasMultipleBranches } = useBranchFilter();
 
     const [classId, setClassId] = useState('all');
     const [selectedFields, setSelectedFields] = useState<Set<FieldKey>>(new Set(Object.keys(checkableFields) as FieldKey[]));
@@ -54,12 +57,16 @@ const MissingDataReportModal: React.FC<MissingDataReportModalProps> = ({ isOpen,
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
     const school = useMemo(() => getSchoolById(effectiveSchoolId || ''), [getSchoolById, effectiveSchoolId]);
-    const schoolClasses = useMemo(() => classes.filter(c => c.schoolId === effectiveSchoolId), [classes, effectiveSchoolId]);
+    const schoolClasses = useMemo(() => {
+        const base = classes.filter(c => c.schoolId === effectiveSchoolId);
+        return filterClasses(base);
+    }, [classes, effectiveSchoolId, filterClasses]);
     const sortedClasses = useMemo(() => [...schoolClasses].sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name)), [schoolClasses]);
     const classMap = useMemo(() => new Map(classes.map(c => [c.id, `${c.name}${c.section ? ` - ${c.section}` : ''}`])), [classes]);
 
     const reportData = useMemo(() => {
-        const studentsInScope = students.filter(s =>
+        const branchFilteredStudents = filterStudents(students);
+        const studentsInScope = branchFilteredStudents.filter(s =>
             s.schoolId === effectiveSchoolId &&
             s.status === 'Active' &&
             (classId === 'all' || s.classId === classId)
@@ -73,14 +80,17 @@ const MissingDataReportModal: React.FC<MissingDataReportModalProps> = ({ isOpen,
             // FIX: Explicitly cast 'f' to FieldKey to resolve 'unknown' index type error.
             return { student, missingFields: missing.map(f => checkableFields[f as FieldKey]) };
         }).filter(item => item.missingFields.length > 0);
-    }, [students, classId, effectiveSchoolId, selectedFields]);
+    }, [students, filterStudents, classId, effectiveSchoolId, selectedFields]);
 
     const handleGenerate = () => {
+        const baseSubtitle = `Class: ${classId === 'all' ? 'All Classes' : classMap.get(classId) || ''}`;
+        const subtitle = hasMultipleBranches ? `Branch: ${selectedBranchName} | ${baseSubtitle}` : baseSubtitle;
+
         const content = (
             <PrintableReportLayout
                 school={school}
                 title="Missing Data Report"
-                subtitle={`Class: ${classId === 'all' ? 'All Classes' : classMap.get(classId) || ''}`}
+                subtitle={subtitle}
             >
                 <table className="w-full text-sm">
                     <thead>
@@ -111,7 +121,10 @@ const MissingDataReportModal: React.FC<MissingDataReportModalProps> = ({ isOpen,
 
     const handleExport = () => {
         const headers = ["Sr.", "Student Name", "Student ID", "Class", "Missing Fields"];
-        const csvRows = [headers.join(',')];
+        const csvRows = [
+            escapeCsvCell(`Branch: ${selectedBranchName}`),
+            headers.join(',')
+        ];
         
         reportData.forEach(({ student, missingFields }, index) => {
             const row = [
@@ -130,6 +143,12 @@ const MissingDataReportModal: React.FC<MissingDataReportModalProps> = ({ isOpen,
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Generate Missing Data Report">
             <div className="space-y-4">
+                {hasMultipleBranches && (
+                    <div className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-secondary-700/50 rounded-lg">
+                        <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">Filter Branch:</span>
+                        <BranchPicker />
+                    </div>
+                )}
                 <div>
                     <label htmlFor="class-filter-missing-data" className="input-label">Select Class</label>
                     <select id="class-filter-missing-data" value={classId} onChange={e => setClassId(e.target.value)} className="input-field">

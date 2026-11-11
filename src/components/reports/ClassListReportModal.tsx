@@ -8,6 +8,8 @@ import { UserRole, Student } from '../../types';
 import { formatDate } from '../../constants';
 import { getClassLevel } from '../../utils/sorting';
 import PrintableReportLayout from './PrintableReportLayout';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 interface ClassListReportModalProps {
     isOpen: boolean;
@@ -33,6 +35,7 @@ const ClassListReportModal: React.FC<ClassListReportModalProps> = ({ isOpen, onC
     const { user, activeSchoolId } = useAuth();
     const { students, classes, getSchoolById } = useData();
     const { showPrintPreview } = usePrint();
+    const { filterStudents, filterClasses, selectedBranchName, hasMultipleBranches } = useBranchFilter();
 
     const [classId, setClassId] = useState('all');
     const [sortBy, setSortBy] = useState('name');
@@ -56,12 +59,16 @@ const ClassListReportModal: React.FC<ClassListReportModalProps> = ({ isOpen, onC
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
     const school = useMemo(() => getSchoolById(effectiveSchoolId || ''), [getSchoolById, effectiveSchoolId]);
-    const schoolClasses = useMemo(() => classes.filter(c => c.schoolId === effectiveSchoolId), [classes, effectiveSchoolId]);
+    const schoolClasses = useMemo(() => {
+        const base = classes.filter(c => c.schoolId === effectiveSchoolId);
+        return filterClasses(base);
+    }, [classes, effectiveSchoolId, filterClasses]);
     const sortedClasses = useMemo(() => [...schoolClasses].sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name)), [schoolClasses]);
     const classMap = useMemo(() => new Map(classes.map(c => [c.id, `${c.name}${c.section ? ` - ${c.section}` : ''}`])), [classes]);
 
     const reportData = useMemo(() => {
-        return students
+        const branchFilteredStudents = filterStudents(students);
+        return branchFilteredStudents
             .filter((s: Student) =>
                 s.schoolId === effectiveSchoolId &&
                 (classId === 'all' || s.classId === classId) &&
@@ -74,16 +81,19 @@ const ClassListReportModal: React.FC<ClassListReportModalProps> = ({ isOpen, onC
                 }
                 return a.name.localeCompare(b.name);
             });
-    }, [students, classId, effectiveSchoolId, genderFilter, sortBy]);
+    }, [students, filterStudents, classId, effectiveSchoolId, genderFilter, sortBy]);
 
     const handleGenerate = () => {
         const activeColumns = Object.keys(selectedColumns).filter(k => selectedColumns[k as ColumnKey]) as ColumnKey[];
-        
+        const selectedClass = schoolClasses.find(c => c.id === classId);
+        const baseSubtitle = `Class: ${classId === 'all' ? 'All Classes' : `${selectedClass?.name || ''}${selectedClass?.section ? ` - ${selectedClass.section}` : ''}`}`;
+        const subtitle = hasMultipleBranches ? `Branch: ${selectedBranchName} | ${baseSubtitle}` : baseSubtitle;
+
         const content = (
             <PrintableReportLayout
                 school={school}
                 title="Class List"
-                subtitle={`Class: ${classId === 'all' ? 'All Classes' : schoolClasses.find(c => c.id === classId)?.name}`}
+                subtitle={subtitle}
             >
                 <table className="w-full text-sm">
                     <thead>
@@ -122,7 +132,10 @@ const ClassListReportModal: React.FC<ClassListReportModalProps> = ({ isOpen, onC
         const activeColumnHeaders = Object.keys(selectedColumns).filter(k => selectedColumns[k as ColumnKey]).map(k => availableColumns[k as ColumnKey]);
         headers.push(...activeColumnHeaders);
 
-        const csvRows = [headers.join(',')];
+        const csvRows = [
+            escapeCsvCell(`Branch: ${selectedBranchName}`),
+            headers.join(',')
+        ];
 
         reportData.forEach((student, index) => {
             const rowData: (string|number|null|undefined)[] = [
@@ -148,6 +161,12 @@ const ClassListReportModal: React.FC<ClassListReportModalProps> = ({ isOpen, onC
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Generate Printable Class List">
             <div className="space-y-4">
+                {hasMultipleBranches && (
+                    <div className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-secondary-700/50 rounded-lg">
+                        <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">Filter Branch:</span>
+                        <BranchPicker />
+                    </div>
+                )}
                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                         <label htmlFor="class-filter-list" className="input-label">Select Class</label>

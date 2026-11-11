@@ -1,7 +1,7 @@
 {
-  "version": "3.45.0",
-  "releaseDate": "2026-11-10",
+  "version": "3.46.0",
+  "releaseDate": "2026-11-11",
   "changelog": [
-    "Branded Startup Splash Screen: Added an instant, centered branded splash screen in index.html and AppLoadingFallback featuring the EduSync academic emblem, neon glow accents, and animated bounce indicators to dramatically improve perceived startup performance."
+    "P29d: Branch picker view filter for school-wide staff across Dashboards, Student Management, Fee Collection, Attendance, Class Management, and Reports."
   ]
 }

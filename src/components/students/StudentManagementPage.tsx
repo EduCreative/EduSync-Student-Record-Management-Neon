@@ -15,6 +15,8 @@ import { Permission } from '../../permissions';
 import { getClassLevel } from '../../utils/sorting';
 import GraduatedStudentsModal from '../classes/GraduatedStudentsModal';
 import { getTodayKarachi } from '../../utils/dates';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 interface StudentManagementPageProps {
     setActiveView: (view: ActiveView) => void;
@@ -51,15 +53,15 @@ const parseCurrency = (value: any): number | null => {
 
 const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActiveView }) => {
     const { user, activeSchoolId, hasPermission } = useAuth();
-    const { students, classes, branches, results, addStudent, updateStudent, deleteStudent, loading, bulkAddStudents, feeHeads, fees, reactivateGraduatedStudents, revertLastPromotion, getLedgerForStudent } = useData();
+    const { students, classes, results, addStudent, updateStudent, deleteStudent, loading, bulkAddStudents, feeHeads, fees, reactivateGraduatedStudents, revertLastPromotion, getLedgerForStudent } = useData();
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
 
     const [searchTerm, setSearchTerm] = useState('');
-    const [branchFilter, setBranchFilter] = useState<string>('all');
     const [classFilter, setClassFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<Student['status'] | 'all'>('Active');
     const [sortBy, setSortBy] = useState<'name' | 'rollNumber' | 'class'>('rollNumber');
+    const { filterStudents, filterClasses, hasMultipleBranches, selectedBranchId } = useBranchFilter();
     
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -72,27 +74,25 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
     const canEdit = hasPermission(Permission.CAN_EDIT_STUDENTS);
     const canDelete = hasPermission(Permission.CAN_DELETE_STUDENTS);
 
+    const branchFilteredStudents = useMemo(() => filterStudents(students), [filterStudents, students]);
+
     const graduatedStudents = useMemo(() => {
-        return students.filter(s => s.schoolId === effectiveSchoolId && s.status === 'Graduated');
-    }, [students, effectiveSchoolId]);
+        return branchFilteredStudents.filter(s => s.schoolId === effectiveSchoolId && s.status === 'Graduated');
+    }, [branchFilteredStudents, effectiveSchoolId]);
 
     const [snapshotVersion, setSnapshotVersion] = useState(0);
     const hasRollbackSnapshot = Boolean(localStorage.getItem('edusync_last_promotion_snapshot'));
 
-    const classBranchMap = useMemo(() => new Map(classes.map(c => [c.id, c.branchId])), [classes]);
+    const schoolClasses = useMemo(() => {
+        const base = classes.filter(c => c.schoolId === effectiveSchoolId);
+        return filterClasses(base).sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name));
+    }, [classes, effectiveSchoolId, filterClasses]);
 
-    const schoolClasses = useMemo(() => classes.filter(c => c.schoolId === effectiveSchoolId)
-        .sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name)), 
-        [classes, effectiveSchoolId]);
     const classMap = useMemo(() => new Map(schoolClasses.map(c => [c.id, `${c.name}${c.section ? ` - ${c.section}` : ''}`])), [schoolClasses]);
 
     const filteredStudents = useMemo(() => {
-        const result = students.filter(student => {
+        const result = branchFilteredStudents.filter(student => {
             if (student.schoolId !== effectiveSchoolId) return false;
-            if (branchFilter !== 'all') {
-                const bId = classBranchMap.get(student.classId);
-                if (bId !== branchFilter) return false;
-            }
             if (classFilter !== 'all' && student.classId !== classFilter) return false;
             if (statusFilter !== 'all' && student.status !== statusFilter) return false;
             if (searchTerm && !student.name.toLowerCase().includes(searchTerm.toLowerCase()) && !student.rollNumber.toLowerCase().includes(searchTerm.toLowerCase())) return false;
@@ -113,11 +113,11 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                 return a.rollNumber.localeCompare(b.rollNumber, undefined, { numeric: true });
             }
         });
-    }, [students, effectiveSchoolId, searchTerm, classFilter, statusFilter, sortBy, classMap]);
+    }, [branchFilteredStudents, effectiveSchoolId, searchTerm, classFilter, statusFilter, sortBy, classMap]);
     
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, classFilter, statusFilter, sortBy]);
+    }, [searchTerm, classFilter, statusFilter, sortBy, selectedBranchId]);
 
     const totalPages = Math.ceil(filteredStudents.length / STUDENTS_PER_PAGE);
     const paginatedStudents = useMemo(() => {
@@ -422,14 +422,9 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                 )}
 
                 <div className="p-4 bg-white dark:bg-secondary-800 rounded-lg shadow-md">
-                    <div className={`grid grid-cols-1 sm:grid-cols-2 ${branches.length > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
+                    <div className={`grid grid-cols-1 sm:grid-cols-2 ${hasMultipleBranches ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
                         <input type="text" placeholder="Search by name or roll number..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="input-field" />
-                        {branches.length > 0 && (
-                            <select value={branchFilter} onChange={e => { setBranchFilter(e.target.value); setCurrentPage(1); }} className="input-field">
-                                <option value="all">All Branches ({branches.length})</option>
-                                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                            </select>
-                        )}
+                        {hasMultipleBranches && <BranchPicker className="w-full" />}
                         <select value={classFilter} onChange={e => { setClassFilter(e.target.value); setCurrentPage(1); }} className="input-field">
                             <option value="all">All Classes</option>
                             {schoolClasses.map(c => <option key={c.id} value={c.id}>{`${c.name}${c.section ? ` - ${c.section}` : ''}`}</option>)}

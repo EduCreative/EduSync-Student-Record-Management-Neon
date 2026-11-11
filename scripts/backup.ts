@@ -32,7 +32,7 @@ async function runBackup() {
     await client.connect();
 
     // Read current package version
-    let appVersion = '3.45.0';
+    let appVersion = '3.46.0';
     try {
         const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'));
         if (pkg.version) appVersion = pkg.version;

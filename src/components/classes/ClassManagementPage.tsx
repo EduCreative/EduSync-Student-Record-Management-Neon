@@ -14,6 +14,8 @@ import { useToast } from '../../context/ToastContext';
 import { getClassLevel } from '../../utils/sorting';
 import Avatar from '../common/Avatar';
 import GraduatedStudentsModal from './GraduatedStudentsModal';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 const GraduationCapIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>;
 const DragHandleIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>;
@@ -36,7 +38,7 @@ const ClassManagementPage: React.FC = () => {
     const [classToDelete, setClassToDelete] = useState<Class | null>(null);
     const [draggedItem, setDraggedItem] = useState<Class | null>(null);
     const [classToViewDetails, setClassToViewDetails] = useState<Class | null>(null);
-    const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
+    const { filterClasses } = useBranchFilter();
     
     const canEditClasses = hasPermission(Permission.CAN_EDIT_CLASSES);
     const canDeleteClasses = hasPermission(Permission.CAN_DELETE_CLASSES);
@@ -52,17 +54,15 @@ const ClassManagementPage: React.FC = () => {
     }, [students]);
 
     const schoolClasses = useMemo(() => {
-        let filteredClasses: Class[];
+        let list: Class[];
         if (effectiveRole === UserRole.Teacher) {
-            filteredClasses = classes.filter(c => c.schoolId === effectiveSchoolId && c.teacherId === currentUser?.id);
+            list = classes.filter(c => c.schoolId === effectiveSchoolId && c.teacherId === currentUser?.id);
         } else {
-            filteredClasses = classes.filter(c => c.schoolId === effectiveSchoolId);
+            list = classes.filter(c => c.schoolId === effectiveSchoolId);
         }
-        if (selectedBranchId !== 'all') {
-            filteredClasses = filteredClasses.filter(c => c.branchId === selectedBranchId);
-        }
+        const filteredClasses = filterClasses(list);
         return [...filteredClasses].sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name));
-    }, [classes, effectiveSchoolId, effectiveRole, currentUser, selectedBranchId]);
+    }, [classes, effectiveSchoolId, effectiveRole, currentUser, filterClasses]);
     
     const teachers = useMemo(() => users.filter(u => u.schoolId === effectiveSchoolId && u.role === UserRole.Teacher), [users, effectiveSchoolId]);
     const teacherMap = useMemo(() => new Map(teachers.map(t => [t.id, t.name])), [teachers]);
@@ -369,18 +369,7 @@ const ClassManagementPage: React.FC = () => {
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">{canEditClasses ? 'Class Management' : 'My Classes'}</h1>
                     <div className="flex items-center gap-2 flex-wrap justify-end">
-                        {branches.length > 0 && (
-                            <select
-                                value={selectedBranchId}
-                                onChange={e => setSelectedBranchId(e.target.value)}
-                                className="input-field text-sm py-1.5 px-3 max-w-xs"
-                            >
-                                <option value="all">All Branches ({branches.length})</option>
-                                {branches.map(b => (
-                                    <option key={b.id} value={b.id}>{b.name}</option>
-                                ))}
-                            </select>
-                        )}
+                        {effectiveRole !== UserRole.Teacher && <BranchPicker />}
                          {canEditClasses && (
                              <button onClick={() => setIsImportModalOpen(true)} className="btn-secondary">
                                 <UploadIcon className="w-4 h-4" /> Import CSV

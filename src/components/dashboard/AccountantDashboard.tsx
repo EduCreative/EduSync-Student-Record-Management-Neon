@@ -6,8 +6,9 @@ import StatCardSkeleton from '../common/skeletons/StatCardSkeleton';
 import BarChart from '../charts/BarChart';
 import DoughnutChart from '../charts/DoughnutChart';
 import ChartSkeleton from '../common/skeletons/ChartSkeleton';
-
 import { getTodayKarachi } from '../../utils/dates';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 const QuickAction: React.FC<{ title: string; icon: React.ReactElement; }> = ({ title, icon }) => (
      <button className="flex flex-col items-center justify-center space-y-2 p-4 bg-secondary-50 dark:bg-secondary-700 dark:bg-opacity-50 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900 dark:hover:bg-opacity-50 hover:text-primary-600 transition-all text-center">
@@ -20,13 +21,17 @@ const QuickAction: React.FC<{ title: string; icon: React.ReactElement; }> = ({ t
 const AccountantDashboard: React.FC = () => {
     const { user } = useAuth();
     const { getSchoolById, fees, students, loading } = useData();
+    const { filterFees, filterStudents } = useBranchFilter();
 
     if (!user) return null;
     const school = user.schoolId != null ? getSchoolById(user.schoolId) : null;
 
+    const branchFilteredStudents = useMemo(() => filterStudents(students), [filterStudents, students]);
+    const branchFilteredFees = useMemo(() => filterFees(fees), [filterFees, fees]);
+
     const stats = useMemo(() => {
-        const schoolFees = fees.filter(fee => {
-            const student = students.find(s => s.id === fee.studentId);
+        const schoolFees = branchFilteredFees.filter(fee => {
+            const student = branchFilteredStudents.find(s => s.id === fee.studentId);
             return student?.schoolId === user.schoolId;
         });
 
@@ -65,7 +70,7 @@ const AccountantDashboard: React.FC = () => {
         
         const overdueInvoices = unpaidChallans.filter(f => new Date(f.dueDate) < now).length;
         
-        const totalStudentsInSchool = students.filter(s => s.schoolId === user.schoolId).length;
+        const totalStudentsInSchool = branchFilteredStudents.filter(s => s.schoolId === user.schoolId).length;
 
         return {
             collectedThisMonth: `Rs. ${collectedThisMonth.toLocaleString()}`,
@@ -73,10 +78,10 @@ const AccountantDashboard: React.FC = () => {
             overdueInvoices: overdueInvoices.toString(),
             totalStudentsInSchool: totalStudentsInSchool.toString(),
         };
-    }, [fees, students, user.schoolId]);
+    }, [branchFilteredFees, branchFilteredStudents, user.schoolId]);
 
     const monthlyCollection = useMemo(() => {
-        const schoolFees = fees.filter(fee => students.find(s => s.id === fee.studentId)?.schoolId === user.schoolId);
+        const schoolFees = branchFilteredFees.filter(fee => branchFilteredStudents.find(s => s.id === fee.studentId)?.schoolId === user.schoolId);
         const collections: Record<string, number> = {};
     
         for (let i = 5; i >= 0; i--) {
@@ -89,15 +94,17 @@ const AccountantDashboard: React.FC = () => {
         const addMonthly = (dateStr?: string | null, amount?: number) => {
             if (!dateStr || !amount || amount <= 0) return;
             const normDate = String(dateStr).slice(0, 10);
-            const parts = normDate.split('-');
-            if (parts.length < 3) return;
-            const year = parseInt(parts[0], 10);
-            const month = parseInt(parts[1], 10) - 1;
-            const day = parseInt(parts[2], 10);
-            const d = new Date(year, month, day);
-            const monthKey = d.toLocaleString('default', { month: 'short', year: '2-digit' });
-            if (monthKey in collections) {
-                collections[monthKey] += amount;
+            partsCheck: {
+                const parts = normDate.split('-');
+                if (parts.length < 3) break partsCheck;
+                const year = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10) - 1;
+                const day = parseInt(parts[2], 10);
+                const d = new Date(year, month, day);
+                const monthKey = d.toLocaleString('default', { month: 'short', year: '2-digit' });
+                if (monthKey in collections) {
+                    collections[monthKey] += amount;
+                }
             }
         };
 
@@ -120,17 +127,17 @@ const AccountantDashboard: React.FC = () => {
         });
     
         return Object.entries(collections).map(([label, value]) => ({ label, value }));
-    }, [fees, students, user.schoolId]);
+    }, [branchFilteredFees, branchFilteredStudents, user.schoolId]);
     
     const outstandingFees = useMemo(() => {
-        const schoolFees = fees.filter(fee => students.find(s => s.id === fee.studentId)?.schoolId === user.schoolId);
+        const schoolFees = branchFilteredFees.filter(fee => branchFilteredStudents.find(s => s.id === fee.studentId)?.schoolId === user.schoolId);
         const unpaid = schoolFees.filter(f => f.status === 'Unpaid').length;
         const partial = schoolFees.filter(f => f.status === 'Partial').length;
         return [
             { label: 'Unpaid', value: unpaid, color: '#ef4444' },
             { label: 'Partial', value: partial, color: '#f59e0b' },
         ];
-    }, [fees, students, user.schoolId]);
+    }, [branchFilteredFees, branchFilteredStudents, user.schoolId]);
 
     if (loading) {
         return (
@@ -162,9 +169,12 @@ const AccountantDashboard: React.FC = () => {
 
     return (
         <div className="space-y-8">
-             <div>
-                 <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Accountant Dashboard</h1>
-                 <p className="text-secondary-500 dark:text-secondary-400">Manage finances for {school?.name}.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                 <div>
+                     <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Accountant Dashboard</h1>
+                     <p className="text-secondary-500 dark:text-secondary-400">Manage finances for {school?.name}.</p>
+                 </div>
+                 <BranchPicker />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

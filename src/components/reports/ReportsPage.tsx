@@ -12,6 +12,7 @@ import StudentIdCardModal from './StudentIdCardModal';
 import AttendanceReportModal from './AttendanceReportModal';
 import MissingDataReportModal from './MissingDataReportModal';
 import DiscountReportModal from './DiscountReportModal';
+import BranchPicker from '../common/BranchPicker';
 
 type ReportType = 'feeCollection' | 'defaulter' | 'classList' | 'bulkChallan' | 'reportCard' | 'challanRange' | 'studentIdCard' | 'attendance' | 'missingData' | 'discount';
 
@@ -138,10 +139,15 @@ const ReportsPage: React.FC<ReportsPageProps> = () => {
             <MissingDataReportModal isOpen={activeReport === 'missingData'} onClose={() => setActiveReport(null)} />
 
             <div className="space-y-6">
-                <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Reports Center</h1>
-                <p className="text-secondary-600 dark:text-secondary-400">
-                    Generate, view, and print important school documents from one place.
-                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Reports Center</h1>
+                        <p className="text-secondary-600 dark:text-secondary-400">
+                            Generate, view, and print important school documents from one place.
+                        </p>
+                    </div>
+                    <BranchPicker />
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {availableReports.map(report => (
                         <ReportCard key={report.title} {...report} onGenerate={() => setActiveReport(report.id)} />

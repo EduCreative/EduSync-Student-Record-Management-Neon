@@ -1,6 +1,26 @@
 
 # Changelog
 
+## [3.46.0] - 2026-11-11
+
+### Branch Picker (View Filter Only) for School-Wide Staff (P29d)
+- **Shared Reactive Hook (`useBranchFilter`)**:
+  - Implemented `src/hooks/useBranchFilter.ts` providing `selectedBranchId`, `setSelectedBranchId`, `selectedBranchName`, `hasMultipleBranches`, `hasUnassignedClasses`, `branches`, and optimized lookups with memoized helpers (`filterClasses`, `filterStudents`, `filterFees`, `filterAttendance`, `filterResults`).
+  - Automatically derives branch relationships through `student.classId -> class.branchId`. Classes with no branch are classified as `Unassigned`.
+  - Persists preference per-browser in `localStorage` (`edusync_selected_branch`) with safety fallback to `'all'` if the branch is deleted or when switching active school (Owner role). Synchronizes across components in real-time.
+- **Universal BranchPicker Component (`BranchPicker.tsx`)**:
+  - Small, modern responsive selector supporting light and dark modes with sorted branch names and conditional 'Unassigned' option.
+  - Automatically hides when the school has $\le 1$ branch (`hasMultipleBranches === false`).
+- **Comprehensive Integration Across Dashboards & Modules**:
+  - **Dashboards**: Integrated in `AdminDashboard.tsx` (serves Owner & Admin) and `AccountantDashboard.tsx`, ensuring all statistics cards, collection charts, recoveries, and lists adjust in unison.
+  - **Management Pages**: Integrated into `StudentManagementPage.tsx`, `FeeCollectionPage.tsx`, and `AttendancePage.tsx` (teachers retain their class-specific view and do not see the picker). Replaced legacy local branch state in `ClassManagementPage.tsx`.
+  - **Global Header**: Added compact responsive `BranchPicker` in `Header.tsx` for quick switching from anywhere.
+  - **Reports & Document Exports**: Updated `ReportsPage.tsx` and all 6 core report modals (`FeeCollectionReportModal`, `DefaulterReportModal`, `DiscountReportModal`, `AttendanceReportModal`, `ClassListReportModal`, `MissingDataReportModal`).
+  - Printed reports and exported CSV files display the active branch in headers and metadata.
+- **Zero Calculation or Permission Regressions**:
+  - Operates purely as a client-side view filter; backend APIs, database schemas, and permissions remain untouched.
+  - Calculations with `'all'` or in single-branch schools match previous numbers exactly.
+
 ## [3.45.0] - 2026-11-10
 
 ### Branded Startup Splash Screen

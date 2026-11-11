@@ -9,6 +9,8 @@ import { formatDate } from '../../constants';
 import { getClassLevel } from '../../utils/sorting';
 import { getTodayKarachi, getFirstDayOfKarachiMonth, toLocalDateString } from '../../utils/dates';
 import PrintableReportLayout from './PrintableReportLayout';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 interface DiscountReportModalProps {
     isOpen: boolean;
@@ -73,6 +75,7 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
     const { user, activeSchoolId } = useAuth();
     const { fees, students, classes, getSchoolById } = useData();
     const { showPrintPreview } = usePrint();
+    const { filterFees, filterClasses, selectedBranchName, hasMultipleBranches } = useBranchFilter();
 
     const [startDate, setStartDate] = useState(getFirstDayOfKarachiMonth());
     const [endDate, setEndDate] = useState(getTodayKarachi());
@@ -80,7 +83,10 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
     const school = useMemo(() => getSchoolById(effectiveSchoolId || ''), [getSchoolById, effectiveSchoolId]);
-    const schoolClasses = useMemo(() => classes.filter(c => c.schoolId === effectiveSchoolId), [classes, effectiveSchoolId]);
+    const schoolClasses = useMemo(() => {
+        const base = classes.filter(c => c.schoolId === effectiveSchoolId);
+        return filterClasses(base);
+    }, [classes, effectiveSchoolId, filterClasses]);
     const sortedClassesList = useMemo(() => [...schoolClasses].sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name)), [schoolClasses]);
     
     const classMap = useMemo(() => new Map(classes.map(c => [c.id, `${c.name}${c.section ? ` - ${c.section}` : ''}`])), [classes]);
@@ -88,8 +94,9 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
 
     const reportData = useMemo(() => {
         const discountList: DiscountSummary[] = [];
+        const branchFilteredFees = filterFees(fees);
 
-        fees.forEach(fee => {
+        branchFilteredFees.forEach(fee => {
             const discountAmount = Number(fee.discount || 0);
             if (discountAmount > 0) {
                 const student = studentMap.get(fee.studentId);
@@ -150,11 +157,14 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
     const grandTotal = useMemo(() => reportData.reduce((sum, g) => sum + g.subtotal, 0), [reportData]);
 
     const handleGenerate = () => {
+        const baseSubtitle = `From: ${formatDate(startDate)} To: ${formatDate(endDate)} | Class: ${classIdFilter === 'all' ? 'All Classes' : classMap.get(classIdFilter)}`;
+        const subtitle = hasMultipleBranches ? `Branch: ${selectedBranchName} | ${baseSubtitle}` : baseSubtitle;
+
         const content = (
             <PrintableReportLayout
                 school={school}
                 title="Fee Discount Summary Report"
-                subtitle={`From: ${formatDate(startDate)} To: ${formatDate(endDate)} | Class: ${classIdFilter === 'all' ? 'All Classes' : classMap.get(classIdFilter)}`}
+                subtitle={subtitle}
             >
                 {reportData.map(group => (
                     <div key={group.classId} className="mb-8 class-group-container">
@@ -211,7 +221,10 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
 
     const handleExport = () => {
         const headers = ["Class", "Date", "Student ID", "Student Name", "Challan Month", "Discount Amount"];
-        const csvRows = [headers.join(',')];
+        const csvRows = [
+            escapeCsvCell(`Branch: ${selectedBranchName}`),
+            headers.join(',')
+        ];
 
         reportData.forEach(group => {
             group.discounts.forEach(d => {
@@ -241,6 +254,12 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Generate Discount Summary Report">
             <div className="space-y-4">
+                {hasMultipleBranches && (
+                    <div className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-secondary-700/50 rounded-lg">
+                        <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">Filter Branch:</span>
+                        <BranchPicker />
+                    </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                         <label htmlFor="start-date-disc" className="input-label">Start Date</label>

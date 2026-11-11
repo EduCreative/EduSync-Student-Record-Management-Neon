@@ -9,6 +9,8 @@ import { UserRole, Class } from '../../types';
 import { getClassLevel } from '../../utils/sorting';
 import PrintableReportLayout from './PrintableReportLayout';
 import { formatMonthDisplay } from '../../constants';
+import { useBranchFilter } from '../../hooks/useBranchFilter';
+import BranchPicker from '../common/BranchPicker';
 
 interface DefaulterReportModalProps {
     isOpen: boolean;
@@ -59,6 +61,7 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
     const { user, activeSchoolId } = useAuth();
     const { fees, students, classes, getSchoolById, getLedgerForStudent } = useData();
     const { showPrintPreview } = usePrint();
+    const { filterStudents, filterClasses, selectedBranchName, hasMultipleBranches } = useBranchFilter();
 
     const [classId, setClassId] = useState('all');
     const [sortBy, setSortBy] = useState('rollNumber'); 
@@ -83,11 +86,17 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
     const school = useMemo(() => getSchoolById(effectiveSchoolId || ''), [getSchoolById, effectiveSchoolId]);
     const classMap = useMemo(() => new Map(classes.map(c => [c.id, `${c.name}${c.section ? ` - ${c.section}` : ''}`])), [classes]);
 
-    const schoolClasses = useMemo(() => classes.filter(c => c.schoolId === effectiveSchoolId), [classes, effectiveSchoolId]);
+    const schoolClasses = useMemo(() => {
+        const base = classes.filter(c => c.schoolId === effectiveSchoolId);
+        return filterClasses(base);
+    }, [classes, effectiveSchoolId, filterClasses]);
+    
     const sortedClasses = useMemo(() => [...schoolClasses].sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || getClassLevel(a.name) - getClassLevel(b.name)), [schoolClasses]);
 
+    const branchFilteredStudents = useMemo(() => filterStudents(students), [filterStudents, students]);
+
     const reportData = useMemo(() => {
-        const relevantStudents = students.filter(s => 
+        const relevantStudents = branchFilteredStudents.filter(s => 
             s.schoolId === effectiveSchoolId && 
             s.status === 'Active' &&
             (classId === 'all' || s.classId === classId)
@@ -230,9 +239,11 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
         const activeColumns = Object.keys(selectedColumns).filter(k => selectedColumns[k as ColumnKey]) as ColumnKey[];
         const subtotalColspan = 3 + (activeColumns.includes('fatherName') ? 1 : 0);
         
-        const subtitle = reportType === 'cumulative' 
+        const baseSubtitle = reportType === 'cumulative' 
             ? `Cumulative Defaulters (All Time) - Class: ${classId === 'all' ? 'All Classes' : classMap.get(classId) || ''}`
             : `Monthly Defaulters Summary (Incl. Arrears) for ${formatMonthDisplay(month, year)} - Class: ${classId === 'all' ? 'All Classes' : classMap.get(classId) || ''}`;
+        
+        const subtitle = hasMultipleBranches ? `Branch: ${selectedBranchName} | ${baseSubtitle}` : baseSubtitle;
 
         const content = (
             <PrintableReportLayout
@@ -316,7 +327,10 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
         if (selectedColumns.paid) headers.push("Total Paid");
         headers.push('Balance');
 
-        const csvRows = [headers.join(',')];
+        const csvRows = [
+            escapeCsvCell(`Branch: ${selectedBranchName}`),
+            headers.join(',')
+        ];
     
         reportData.forEach(classGroup => {
             csvRows.push(escapeCsvCell(`Class: ${classGroup.className}`));
@@ -367,6 +381,12 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Generate Fee Defaulter Report">
             <div className="space-y-4">
+                {hasMultipleBranches && (
+                    <div className="flex items-center justify-between p-3 bg-secondary-50 dark:bg-secondary-700/50 rounded-lg">
+                        <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">Filter Branch:</span>
+                        <BranchPicker />
+                    </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label htmlFor="class-filter" className="input-label">Filter by Class</label>
