@@ -1,7 +1,7 @@
 {
-  "version": "3.49.0",
+  "version": "3.51.0",
   "releaseDate": "2026-11-12",
   "changelog": [
-    "Branch-Locked Staff (P29a-P29c): Server-side enforcement, database branch foreign keys, and branch selector scoping."
+    "Fine-Grained Permissions for Database Backup & Recovery: Open by default as Admin, and toggleable for Accountant to make local backups."
   ]
 }

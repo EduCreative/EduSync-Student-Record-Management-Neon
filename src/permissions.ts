@@ -35,6 +35,9 @@ export enum Permission {
 
   // Communication
   CAN_SEND_ANNOUNCEMENTS = 'CAN_SEND_ANNOUNCEMENTS',
+
+  // System Administration
+  CAN_MANAGE_BACKUPS = 'CAN_MANAGE_BACKUPS',
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -59,6 +62,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.CAN_GENERATE_ID_CARDS,
     Permission.CAN_PROMOTE_STUDENTS,
     Permission.CAN_SEND_ANNOUNCEMENTS,
+    Permission.CAN_MANAGE_BACKUPS,
   ],
 
   [UserRole.Accountant]: [

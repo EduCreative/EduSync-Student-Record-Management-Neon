@@ -12,10 +12,11 @@ import IncreaseTuitionFeeModal from './IncreaseTuitionFeeModal';
 import RestoreModal from './RestoreModal';
 import { UploadCloud } from 'lucide-react';
 import { GoogleDriveBackupCard } from './GoogleDriveBackupCard';
+import { Permission } from '../../permissions';
 
 const SettingsPage: React.FC = () => {
     const { toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, sidebarMode, setSidebarMode } = useTheme();
-    const { user, effectiveRole, activeSchoolId } = useAuth();
+    const { user, effectiveRole, activeSchoolId, hasPermission } = useAuth();
     const { schools, classes, branches, addBranch, updateBranch, deleteBranch, downloadFullBackup, updateSchool, feeHeads, addFeeHead, updateFeeHead } = useData();
     const { showToast } = useToast();
 
@@ -193,8 +194,8 @@ const SettingsPage: React.FC = () => {
             <div className="max-w-4xl mx-auto space-y-8">
                 <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Settings</h1>
 
-                {/* FULL DATABASE BACKUP & RESTORE SECTION - OWNER ONLY */}
-                {user?.role === UserRole.Owner && (
+                {/* FULL DATABASE BACKUP & RESTORE SECTION */}
+                {(user?.role === UserRole.Owner || hasPermission(Permission.CAN_MANAGE_BACKUPS)) && (
                     <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6">
                         <div className="flex items-start gap-4 mb-6">
                             <div className="p-3 bg-primary-100 dark:bg-primary-900/30 rounded-full">

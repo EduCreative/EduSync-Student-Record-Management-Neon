@@ -234,7 +234,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             id: updatedUser.id, 
             name: updatedUser.name, 
             avatarUrl: updatedUser.avatarUrl, 
-            status: updatedUser.status 
+            status: updatedUser.status,
+            role: updatedUser.role,
+            schoolId: updatedUser.schoolId,
+            branchId: updatedUser.branchId !== undefined ? updatedUser.branchId : null,
+            disabledNavLinks: updatedUser.disabledNavLinks || [],
+            permissionsOverrides: updatedUser.permissionsOverrides || {}
         });
         await fetchData();
     };
@@ -252,7 +257,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             password: userData.password,
             role: userData.role,
             schoolId: userData.schoolId,
-            avatarUrl: userData.avatarUrl
+            avatarUrl: userData.avatarUrl,
+            status: userData.status || 'Active',
+            branchId: userData.branchId !== undefined ? userData.branchId : null,
+            disabledNavLinks: userData.disabledNavLinks || [],
+            permissionsOverrides: userData.permissionsOverrides || {}
         });
         await fetchData();
     };
@@ -872,7 +881,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         const backupPayload = {
-            version: '3.49.0',
+            version: '3.50.0',
             createdAt: new Date().toISOString(),
             tables: tablesData,
             counts: countsData

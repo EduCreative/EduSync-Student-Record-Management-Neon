@@ -147,8 +147,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
     const branchFilteredAttendance = useMemo(() => filterAttendance(attendance), [filterAttendance, attendance]);
 
     const schoolStudents = useMemo(() => branchFilteredStudents.filter(s => s.schoolId === effectiveSchoolId && s.status === 'Active'), [branchFilteredStudents, effectiveSchoolId]);
-    const schoolTeachers = useMemo(() => users.filter(u => u.schoolId === effectiveSchoolId && u.role === UserRole.Teacher), [users, effectiveSchoolId]);
-    const schoolUsers = useMemo(() => users.filter(u => u.schoolId === effectiveSchoolId && u.id !== user.id), [users, effectiveSchoolId, user.id]);
+    const schoolTeachers = useMemo(() => users.filter(u => (!u.schoolId || u.schoolId === effectiveSchoolId) && u.role === UserRole.Teacher), [users, effectiveSchoolId]);
+    const schoolUsers = useMemo(() => users.filter(u => (!u.schoolId || u.schoolId === effectiveSchoolId) && u.id !== user.id), [users, effectiveSchoolId, user.id]);
 
     const stats = useMemo(() => {
         const todayStr = getTodayKarachi();

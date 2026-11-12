@@ -72,10 +72,16 @@ export default async function handler(req: any, res: any) {
                 ? avatarUrl
                 : null;
 
+            const userStatus = body.status || 'Active';
+            const userDisabledLinks = Array.isArray(body.disabledNavLinks) ? body.disabledNavLinks : [];
+            const userPermissions = body.permissionsOverrides && typeof body.permissionsOverrides === 'object' 
+                ? JSON.stringify(body.permissionsOverrides) 
+                : '{}';
+
             try {
                 await sql`
-                    INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url, branch_id)
-                    VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, 'Active', ${avatarUrlToInsert}, ${finalBranchId})
+                    INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url, branch_id, disabled_nav_links, permissions_overrides)
+                    VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, ${userStatus}, ${avatarUrlToInsert}, ${finalBranchId}, ${userDisabledLinks}, ${userPermissions}::jsonb)
                 `;
             } catch (err: any) {
                 if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('profiles_email_key')) {
@@ -99,12 +105,12 @@ export default async function handler(req: any, res: any) {
                 return res.status(403).json({ error: 'Access denied: Cannot update user accounts.' });
             }
 
-            const { id, name, avatarUrl, status, branchId } = body;
+            const { id, name, avatarUrl, status, branchId, role, schoolId, disabledNavLinks, permissionsOverrides } = body;
             if (!id) {
                 return res.status(400).json({ error: 'User ID is required.' });
             }
 
-            const targetUsers = await sql`SELECT id, role, school_id, branch_id FROM profiles WHERE id = ${id} LIMIT 1`;
+            const targetUsers = await sql`SELECT id, name, role, school_id, branch_id, status, disabled_nav_links, permissions_overrides FROM profiles WHERE id = ${id} LIMIT 1`;
             if (!targetUsers || targetUsers.length === 0) {
                 return res.status(404).json({ error: 'User not found.' });
             }
@@ -114,7 +120,8 @@ export default async function handler(req: any, res: any) {
                 return res.status(403).json({ error: 'Access denied: Admin cannot touch an Owner account.' });
             }
 
-            if (!requireSameSchool(session, targetUser.school_id)) {
+            // If targetUser already has a school_id, enforce tenant boundary
+            if (targetUser.school_id && !requireSameSchool(session, targetUser.school_id)) {
                 return res.status(403).json({ error: 'Access denied: Cannot update user from another school.' });
             }
 
@@ -131,13 +138,34 @@ export default async function handler(req: any, res: any) {
                 }
             }
 
+            const targetSchoolId = targetUser.school_id || schoolId || session.schoolId;
+
+            // Determine updated role
+            let newRole = targetUser.role;
+            if (role && role !== targetUser.role) {
+                if (session.role === 'Owner') {
+                    if (['Owner', 'Admin', 'Accountant', 'Teacher', 'Parent', 'Student'].includes(role)) {
+                        newRole = role;
+                    }
+                } else if (session.role === 'Admin') {
+                    if (targetUser.role !== 'Owner' && ['Accountant', 'Teacher', 'Parent', 'Student'].includes(role)) {
+                        newRole = role;
+                    }
+                }
+            }
+
+            // Determine updated branchId
             let newBranchId = targetUser.branch_id;
-            if (!locked && targetUser.role !== 'Owner') {
+            if (newRole === 'Owner') {
+                newBranchId = null;
+            } else if (!locked) {
                 if (branchId !== undefined) {
-                    if (branchId === null || branchId === '') {
+                    if (branchId === null || branchId === '' || branchId === 'all') {
                         newBranchId = null;
                     } else {
-                        const bCheck = await sql`SELECT id FROM branches WHERE id = ${branchId} AND school_id = ${targetUser.school_id} LIMIT 1`;
+                        const bCheck = targetSchoolId
+                            ? await sql`SELECT id FROM branches WHERE id = ${branchId} AND (school_id = ${targetSchoolId} OR school_id IS NULL) LIMIT 1`
+                            : await sql`SELECT id FROM branches WHERE id = ${branchId} LIMIT 1`;
                         if (!bCheck || bCheck.length === 0) {
                             return res.status(400).json({ error: 'Invalid branch specified.' });
                         }
@@ -146,19 +174,53 @@ export default async function handler(req: any, res: any) {
                 }
             }
 
+            const safeDisabledNavLinks = disabledNavLinks !== undefined
+                ? (Array.isArray(disabledNavLinks) ? disabledNavLinks : [])
+                : (targetUser.disabled_nav_links || []);
+
+            const safePermissionsOverrides = permissionsOverrides !== undefined
+                ? JSON.stringify(permissionsOverrides || {})
+                : JSON.stringify(targetUser.permissions_overrides || {});
+
+            const newStatus = status || targetUser.status || 'Active';
+
             await sql`
                 UPDATE profiles 
-                SET name = ${name}, 
+                SET name = COALESCE(${name}, name), 
                     avatar_url = CASE 
                         WHEN ${Boolean(avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('/api/photo'))} THEN avatar_url
                         WHEN ${Boolean(avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('data:'))} THEN ${avatarUrl}
                         WHEN ${avatarUrl === null || avatarUrl === ''} THEN NULL
                         ELSE avatar_url
                     END,
-                    status = ${status || 'Active'},
-                    branch_id = ${newBranchId}
+                    status = ${newStatus},
+                    role = ${newRole},
+                    school_id = COALESCE(school_id, ${targetSchoolId}),
+                    branch_id = ${newBranchId},
+                    disabled_nav_links = ${safeDisabledNavLinks},
+                    permissions_overrides = ${safePermissionsOverrides}::jsonb
                 WHERE id = ${id}
             `;
+
+            // If user status transitioned to Active from Pending Approval, notify the user
+            if (targetUser.status === 'Pending Approval' && newStatus === 'Active') {
+                try {
+                    await sql`
+                        INSERT INTO notifications (id, user_id, title, message, link, is_read, timestamp)
+                        VALUES (${crypto.randomUUID()}, ${id}, 'Account Approved', 'Your account has been approved by the administration. You now have full access.', '/', false, NOW())
+                    `;
+                } catch (notifErr) {
+                    console.warn('Could not create approval notification for user:', id, notifErr);
+                }
+            }
+
+            await writeServerAuditLog(
+                sql,
+                session,
+                targetUser.status === 'Pending Approval' && newStatus === 'Active' ? 'Approve User' : 'Update User',
+                `Updated profile for ${name || targetUser.name} (Role: ${newRole}, Status: ${newStatus}, Branch: ${newBranchId ? newBranchId : 'All Branches'})`,
+                targetSchoolId
+            );
 
             return res.status(200).json({ success: true });
 

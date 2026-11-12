@@ -1,6 +1,29 @@
 
 # Changelog
 
+## [3.51.0] - 2026-11-12
+
+### Fine-Grained Permissions for Database Backup & Recovery
+- **Database Backup & Recovery Permission (`CAN_MANAGE_BACKUPS`)**:
+  - Added `CAN_MANAGE_BACKUPS` permission to the fine-grained permissions system in `src/permissions.ts`.
+  - Configured Admin role to have Database Backup & Recovery enabled by default.
+  - Added "System & Security" group in `UserFormModal.tsx` allowing Owners and Admins to toggle Database Backup & Recovery permission for Accountants and other staff members so they can make local backups for safety when the Owner is busy.
+  - Updated `SettingsPage.tsx` to authorize users holding `CAN_MANAGE_BACKUPS` permission (or Owner) to view and execute Database Backup & Recovery operations.
+
+## [3.50.0] - 2026-11-12
+
+### Assigned Branch Persistence & User Registration Approval Workflow
+- **Assigned Branch Persistence Fix**:
+  - Resolved issue in `src/context/DataContext.tsx` (`updateUser` and `addUserByAdmin`) where `branchId`, `role`, `disabledNavLinks`, and `permissionsOverrides` were stripped from write payloads.
+  - Updated server write handler `src/server/handlers/write/users.ts` (`update-user` and `add-user`) to validate and persist `branch_id`, `role`, `school_id`, `disabled_nav_links`, and `permissions_overrides`.
+  - Fixed SQL branch validation to support users initially created without a school ID by resolving against `targetUser.school_id || session.schoolId`.
+- **Self-Registration "Pending Approval" & In-App Notification Flow**:
+  - Updated `src/server/handlers/auth/register.ts` to associate registered users with the school and insert accounts with `'Pending Approval'` status.
+  - Added automated in-app notifications sent to all active Administrators and Owners whenever a new user self-registers, complete with a direct link to `/users`.
+  - Added automated audit logging to `activity_logs` for new user self-registrations.
+  - Added 1-click "Approve" button in `UserManagementPage.tsx` for pending users, with instant state sync, toast feedback, and approval notification delivered to the user.
+  - Fixed user filtering in `UserManagementPage.tsx` and `AdminDashboard.tsx` to include users pending school/branch assignment.
+
 ## [3.49.0] - 2026-11-12
 
 ### Branch-Locked Staff (P29b & P29c: Server Enforcement & Client Scope)

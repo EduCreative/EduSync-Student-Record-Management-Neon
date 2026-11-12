@@ -11,6 +11,13 @@ import TableSkeleton from '../common/skeletons/TableSkeleton';
 import { exportToCsv } from '../../utils/csvHelper';
 import ImportModal from '../common/ImportModal';
 import { Permission } from '../../permissions';
+import { useToast } from '../../context/ToastContext';
+
+const CheckIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+    </svg>
+);
 
 interface UserManagementPageProps {
     payload?: { roleFilter?: UserRole };
@@ -19,6 +26,7 @@ interface UserManagementPageProps {
 const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
     const { user: currentUser, activeSchoolId, hasPermission } = useAuth();
     const { users, schools, branches, getSchoolById, bulkAddUsers, updateUser, deleteUser, loading, addUserByAdmin } = useData();
+    const { showToast } = useToast();
     
     const effectiveSchoolId = currentUser?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : currentUser?.schoolId;
     const isOwnerGlobalView = currentUser?.role === UserRole.Owner && !activeSchoolId;
@@ -51,10 +59,10 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
         return users
             .filter(user => {
                 const isAdminView = currentUser?.role === UserRole.Admin || (currentUser?.role === UserRole.Owner && activeSchoolId);
-                if (isAdminView && user.schoolId !== effectiveSchoolId) {
+                if (isAdminView && user.schoolId && user.schoolId !== effectiveSchoolId) {
                     return false;
                 }
-                if (currentUser?.role === UserRole.Owner && schoolFilter !== 'all' && user.schoolId !== schoolFilter) {
+                if (currentUser?.role === UserRole.Owner && schoolFilter !== 'all' && user.schoolId && user.schoolId !== schoolFilter) {
                     return false;
                 }
                 if (roleFilter !== 'all' && user.role !== roleFilter) {
@@ -110,6 +118,15 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
         if (userToDelete) {
             deleteUser(userToDelete.id);
             setUserToDelete(null); 
+        }
+    };
+
+    const handleApproveUser = async (userToApprove: User) => {
+        try {
+            await updateUser({ ...userToApprove, status: 'Active' });
+            showToast(`User "${userToApprove.name}" approved successfully.`, 'success');
+        } catch (error: any) {
+            showToast(error.message || 'Failed to approve user.', 'error');
         }
     };
 
@@ -375,7 +392,16 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
                                                     </td>
                                                     <td className="px-6 py-4">{formatDateTime(user.lastLogin)}</td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="flex items-center space-x-4">
+                                                        <div className="flex items-center space-x-3">
+                                                            {canManage && canPerformActionsOnUser && user.status === 'Pending Approval' && (
+                                                                <button 
+                                                                    onClick={() => handleApproveUser(user)} 
+                                                                    className="inline-flex items-center gap-1 font-semibold text-xs px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-900/60 dark:hover:bg-emerald-900 dark:text-emerald-200 rounded transition-colors"
+                                                                    title="Approve user registration"
+                                                                >
+                                                                    <CheckIcon className="w-3.5 h-3.5" /> Approve
+                                                                </button>
+                                                            )}
                                                             {canManage && canPerformActionsOnUser && (
                                                                 <button 
                                                                     onClick={() => handleOpenModal(user)} 

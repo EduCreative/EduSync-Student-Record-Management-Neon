@@ -91,6 +91,12 @@ const PERMISSION_GROUPS = [
             { key: Permission.CAN_DELETE_USERS, label: 'Delete Users' },
         ]
     },
+    {
+        title: 'System & Security',
+        permissions: [
+            { key: Permission.CAN_MANAGE_BACKUPS, label: 'Database Backup & Recovery' },
+        ]
+    },
 ];
 
 const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, userToEdit, defaultRole, lockRole = false }) => {

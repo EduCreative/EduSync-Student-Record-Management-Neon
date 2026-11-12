@@ -32,15 +32,63 @@ export default async function handler(req: any, res: any) {
             return res.status(409).json({ error: 'Email is already registered.' });
         }
 
+        // Query default/single school to associate the registered user with
+        const schools = await sql`SELECT id, name FROM schools LIMIT 1`;
+        const schoolId = schools.length > 0 ? schools[0].id : null;
+        const schoolName = schools.length > 0 ? schools[0].name : 'Institution';
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const userId = crypto.randomUUID();
 
         await sql`
-            INSERT INTO profiles (id, name, email, password, role, status)
-            VALUES (${userId}, ${name.trim()}, ${normalizedEmail}, ${hashedPassword}, ${role}, 'Pending Approval')
+            INSERT INTO profiles (id, name, email, password, role, school_id, status)
+            VALUES (${userId}, ${name.trim()}, ${normalizedEmail}, ${hashedPassword}, ${role}, ${schoolId}, 'Pending Approval')
         `;
 
-        return res.status(201).json({ success: true, message: 'Account registered successfully.' });
+        // Send notifications to all Owners and Admins of this school
+        try {
+            const adminsAndOwners = schoolId
+                ? await sql`SELECT id FROM profiles WHERE role IN ('Owner', 'Admin') AND (school_id = ${schoolId} OR school_id IS NULL) AND status = 'Active'`
+                : await sql`SELECT id FROM profiles WHERE role IN ('Owner', 'Admin') AND status = 'Active'`;
+
+            for (const admin of adminsAndOwners) {
+                await sql`
+                    INSERT INTO notifications (id, user_id, title, message, link, is_read, timestamp)
+                    VALUES (
+                        ${crypto.randomUUID()}, 
+                        ${admin.id}, 
+                        'New Account Registration', 
+                        ${`${name.trim()} (${normalizedEmail}) has requested a ${role} account and is pending approval.`}, 
+                        '/users', 
+                        false, 
+                        NOW()
+                    )
+                `;
+            }
+        } catch (notifErr) {
+            console.warn('Failed to send registration notifications:', notifErr);
+        }
+
+        // Record activity log for audit
+        try {
+            await sql`
+                INSERT INTO activity_logs (id, user_id, user_name, user_avatar, school_id, action, details, timestamp)
+                VALUES (
+                    ${crypto.randomUUID()}, 
+                    ${userId}, 
+                    ${name.trim()}, 
+                    '', 
+                    ${schoolId}, 
+                    'Account Registration', 
+                    ${`Self-registered as ${role} for ${schoolName} (Status: Pending Approval)`}, 
+                    ${new Date().toISOString()}
+                )
+            `;
+        } catch (logErr) {
+            console.warn('Failed to insert registration activity log:', logErr);
+        }
+
+        return res.status(201).json({ success: true, message: 'Account registered successfully. An administrator must approve your account before you can log in.' });
 
     } catch (err: any) {
         console.error("Register API error:", err);
