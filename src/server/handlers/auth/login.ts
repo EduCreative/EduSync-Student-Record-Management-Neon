@@ -39,7 +39,7 @@ export default async function handler(req: any, res: any) {
         }
 
         const users = await sql`
-            SELECT id, school_id, name, email, password, role, status, 
+            SELECT id, school_id, branch_id, name, email, password, role, status, 
                    avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login
             FROM profiles 
             WHERE LOWER(email) = LOWER(${email}) 
@@ -104,6 +104,7 @@ export default async function handler(req: any, res: any) {
             email: user.email,
             role: user.role,
             schoolId: user.school_id || null,
+            branchId: user.role === 'Owner' ? null : (user.branch_id || null),
             name: user.name || '',
             avatarUrl: user.avatar_url || ''
         };

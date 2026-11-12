@@ -1,7 +1,7 @@
 {
-  "version": "3.47.0",
+  "version": "3.49.0",
   "releaseDate": "2026-11-12",
   "changelog": [
-    "Google Drive Cloud Backup & Automated Scheduler with Firebase Auth and direct multipart uploads."
+    "Branch-Locked Staff (P29a-P29c): Server-side enforcement, database branch foreign keys, and branch selector scoping."
   ]
 }

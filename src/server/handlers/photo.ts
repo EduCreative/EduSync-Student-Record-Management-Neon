@@ -1,4 +1,5 @@
 import { getDb, getSessionUser } from '../_db';
+import { canAccessStudent, isBranchLocked } from './write/_helpers';
 import crypto from 'crypto';
 
 export default async function handler(req: any, res: any) {
@@ -38,16 +39,19 @@ export default async function handler(req: any, res: any) {
                 if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
                 rawAvatar = rows[0].avatar_url;
             } else if (role === 'Admin' || role === 'Accountant' || role === 'Teacher') {
-                // Staff can only view users in their own school
-                const rows = await sql`SELECT school_id, avatar_url FROM profiles WHERE id = ${id} LIMIT 1`;
+                // Staff can only view users in their own school & branch if locked
+                const rows = await sql`SELECT school_id, branch_id, avatar_url FROM profiles WHERE id = ${id} LIMIT 1`;
                 if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
                 if (rows[0].school_id && rows[0].school_id !== schoolId) {
-                    return res.status(403).json({ error: 'Forbidden: User belongs to another institution' });
+                    return res.status(403).json({ error: 'Outside your branch' });
+                }
+                if (isBranchLocked(session) && rows[0].branch_id !== session.branchId) {
+                    return res.status(403).json({ error: 'Outside your branch' });
                 }
                 rawAvatar = rows[0].avatar_url;
             } else {
                 // Parents and Students cannot view avatars of other arbitrary users
-                return res.status(403).json({ error: 'Forbidden: Insufficient permissions' });
+                return res.status(403).json({ error: 'Outside your branch' });
             }
         } else if (kind === 'student') {
             if (role === 'Owner') {
@@ -55,12 +59,13 @@ export default async function handler(req: any, res: any) {
                 if (rows.length === 0) return res.status(404).json({ error: 'Student not found' });
                 rawAvatar = rows[0].avatar_url;
             } else if (role === 'Admin' || role === 'Accountant' || role === 'Teacher') {
-                // Staff only for their own school's students
-                const rows = await sql`SELECT school_id, avatar_url FROM students WHERE id = ${id} LIMIT 1`;
-                if (rows.length === 0) return res.status(404).json({ error: 'Student not found' });
-                if (rows[0].school_id !== schoolId) {
-                    return res.status(403).json({ error: 'Forbidden: Student belongs to another institution' });
+                // Staff: check branch access if locked or school access
+                const allowed = await canAccessStudent(sql, session, id);
+                if (!allowed) {
+                    return res.status(403).json({ error: 'Outside your branch' });
                 }
+                const rows = await sql`SELECT avatar_url FROM students WHERE id = ${id} LIMIT 1`;
+                if (rows.length === 0) return res.status(404).json({ error: 'Student not found' });
                 rawAvatar = rows[0].avatar_url;
             } else if (role === 'Student') {
                 // Student only for themselves

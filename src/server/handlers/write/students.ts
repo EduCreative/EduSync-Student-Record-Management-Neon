@@ -1,4 +1,4 @@
-import { verifySession, isAuthorized, writeServerAuditLog, validateAvatarDataUrl } from './_helpers';
+import { verifySession, isAuthorized, writeServerAuditLog, validateAvatarDataUrl, canAccessClass, canAccessStudent } from './_helpers';
 import { getTodayKarachi } from '../../../utils/dates';
 import crypto from 'crypto';
 
@@ -28,6 +28,13 @@ export default async function handler(req: any, res: any) {
             const { student } = body;
             if (!student || !student.name || !student.rollNumber) {
                 return res.status(400).json({ error: 'Student name and roll number are required.' });
+            }
+
+            if (student.classId) {
+                const canAccess = await canAccessClass(sql, session, student.classId);
+                if (!canAccess) return res.status(403).json({ error: 'Outside your branch' });
+            } else if (session.role !== 'Owner' && session.branchId) {
+                return res.status(403).json({ error: 'Outside your branch' });
             }
 
             if (student.avatarUrl) {
@@ -84,6 +91,16 @@ export default async function handler(req: any, res: any) {
             const { student } = body;
             if (!student || !student.id) {
                 return res.status(400).json({ error: 'Student ID is required.' });
+            }
+
+            const canAccEst = await canAccessStudent(sql, session, student.id);
+            if (!canAccEst) return res.status(403).json({ error: 'Outside your branch' });
+
+            if (student.classId) {
+                const canAccCls = await canAccessClass(sql, session, student.classId);
+                if (!canAccCls) return res.status(403).json({ error: 'Outside your branch' });
+            } else if (session.role !== 'Owner' && session.branchId) {
+                return res.status(403).json({ error: 'Outside your branch' });
             }
 
             const existingRows = await sql`SELECT id, school_id, name, roll_number FROM students WHERE id = ${student.id}`;
@@ -156,6 +173,9 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'Student ID is required.' });
             }
 
+            const canAccEst = await canAccessStudent(sql, session, studentId);
+            if (!canAccEst) return res.status(403).json({ error: 'Outside your branch' });
+
             const existingRows = await sql`SELECT id, school_id, name, roll_number FROM students WHERE id = ${studentId}`;
             if (existingRows.length === 0) {
                 return res.status(404).json({ error: 'Student not found.' });
@@ -186,7 +206,7 @@ export default async function handler(req: any, res: any) {
 
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
 
-            // Validate all rows first (P10)
+            // Validate all rows first (P10) & Check branch access
             const seenRollNumbers = new Set<string>();
             const fileDuplicates: string[] = [];
 
@@ -197,6 +217,12 @@ export default async function handler(req: any, res: any) {
 
                 if (!name || !roll) {
                     return res.status(400).json({ error: `Student name and roll number are required for all rows (row ${i + 1} is missing required fields).` });
+                }
+
+                const targetClassId = s.classId || s.class_id;
+                const canAccess = await canAccessClass(sql, session, targetClassId);
+                if (!canAccess) {
+                    return res.status(403).json({ error: 'Outside your branch' });
                 }
 
                 if (seenRollNumbers.has(roll)) {
@@ -261,6 +287,9 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'Student ID and details are required.' });
             }
 
+            const canAccEst = await canAccessStudent(sql, session, studentId);
+            if (!canAccEst) return res.status(403).json({ error: 'Outside your branch' });
+
             const existingRows = await sql`SELECT id, school_id, name, roll_number FROM students WHERE id = ${studentId}`;
             if (existingRows.length === 0) {
                 return res.status(404).json({ error: 'Student not found.' });
@@ -296,6 +325,26 @@ export default async function handler(req: any, res: any) {
         } else if (action === 'promote-students') {
             const { graduations, promotions, schoolId } = body;
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
+
+            if (Array.isArray(graduations) && graduations.length > 0) {
+                for (const gId of graduations) {
+                    const canAcc = await canAccessStudent(sql, session, gId);
+                    if (!canAcc) return res.status(403).json({ error: 'Outside your branch' });
+                }
+            }
+
+            if (promotions && typeof promotions === 'object') {
+                for (const [targetClassId, stdIds] of Object.entries(promotions)) {
+                    const canAccCls = await canAccessClass(sql, session, targetClassId);
+                    if (!canAccCls) return res.status(403).json({ error: 'Outside your branch' });
+                    if (Array.isArray(stdIds)) {
+                        for (const sId of stdIds) {
+                            const canAccStd = await canAccessStudent(sql, session, sId as string);
+                            if (!canAccStd) return res.status(403).json({ error: 'Outside your branch' });
+                        }
+                    }
+                }
+            }
 
             let updatedCount = 0;
             const queries: any[] = [];
@@ -354,6 +403,16 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'studentIds array is required.' });
             }
 
+            for (const sId of studentIds) {
+                const canAcc = await canAccessStudent(sql, session, sId);
+                if (!canAcc) return res.status(403).json({ error: 'Outside your branch' });
+            }
+
+            if (targetClassId) {
+                const canAccCls = await canAccessClass(sql, session, targetClassId);
+                if (!canAccCls) return res.status(403).json({ error: 'Outside your branch' });
+            }
+
             const queries: any[] = [];
             const CHUNK = 50;
             for (let i = 0; i < studentIds.length; i += CHUNK) {
@@ -397,6 +456,18 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'Groups object is required.' });
             }
 
+            for (const [key, ids] of Object.entries(groups)) {
+                const [classId] = key.split('__');
+                const canAccCls = await canAccessClass(sql, session, classId);
+                if (!canAccCls) return res.status(403).json({ error: 'Outside your branch' });
+                if (Array.isArray(ids)) {
+                    for (const sId of ids) {
+                        const canAccStd = await canAccessStudent(sql, session, sId as string);
+                        if (!canAccStd) return res.status(403).json({ error: 'Outside your branch' });
+                    }
+                }
+            }
+
             let revertedCount = 0;
             const queries: any[] = [];
             for (const [key, ids] of Object.entries(groups)) {
@@ -436,6 +507,9 @@ export default async function handler(req: any, res: any) {
             if (!studentId || !Array.isArray(feeStructure)) {
                 return res.status(400).json({ error: 'studentId and feeStructure array are required.' });
             }
+
+            const canAccEst = await canAccessStudent(sql, session, studentId);
+            if (!canAccEst) return res.status(403).json({ error: 'Outside your branch' });
 
             for (const item of feeStructure) {
                 if (!item.feeHeadId || typeof item.amount !== 'number' || item.amount < 0) {

@@ -1,4 +1,4 @@
-import { verifySession, isAuthorized, writeServerAuditLog, requireSameSchool, validateAvatarDataUrl } from './_helpers';
+import { verifySession, isAuthorized, writeServerAuditLog, requireSameSchool, validateAvatarDataUrl, isBranchLocked } from './_helpers';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
@@ -15,6 +15,7 @@ export default async function handler(req: any, res: any) {
     try {
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
         const { action } = body;
+        const locked = isBranchLocked(session);
 
         // User Management (Owner, Admin)
         if (action === 'add-user') {
@@ -22,7 +23,7 @@ export default async function handler(req: any, res: any) {
                 return res.status(403).json({ error: 'Access denied: Cannot create user accounts.' });
             }
 
-            const { name, email, password, role, schoolId, avatarUrl } = body;
+            const { name, email, password, role, schoolId, avatarUrl, branchId } = body;
             if (!name || !email || !password || !role) {
                 return res.status(400).json({ error: 'Name, email, password, and role are required.' });
             }
@@ -50,6 +51,19 @@ export default async function handler(req: any, res: any) {
 
             const effectiveSchoolId = session.role === 'Admin' ? session.schoolId : (session.role === 'Owner' && schoolId ? schoolId : session.schoolId);
 
+            let finalBranchId: string | null = null;
+            if (role === 'Owner') {
+                finalBranchId = null;
+            } else if (locked) {
+                finalBranchId = session.branchId;
+            } else if (branchId) {
+                const bCheck = await sql`SELECT id FROM branches WHERE id = ${branchId} AND school_id = ${effectiveSchoolId} LIMIT 1`;
+                if (!bCheck || bCheck.length === 0) {
+                    return res.status(400).json({ error: 'Invalid branch specified.' });
+                }
+                finalBranchId = branchId;
+            }
+
             // Security fix: Hash password with bcrypt before inserting
             const saltRounds = 10;
             const hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -60,8 +74,8 @@ export default async function handler(req: any, res: any) {
 
             try {
                 await sql`
-                    INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url)
-                    VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, 'Active', ${avatarUrlToInsert})
+                    INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url, branch_id)
+                    VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, 'Active', ${avatarUrlToInsert}, ${finalBranchId})
                 `;
             } catch (err: any) {
                 if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('profiles_email_key')) {
@@ -85,12 +99,12 @@ export default async function handler(req: any, res: any) {
                 return res.status(403).json({ error: 'Access denied: Cannot update user accounts.' });
             }
 
-            const { id, name, avatarUrl, status } = body;
+            const { id, name, avatarUrl, status, branchId } = body;
             if (!id) {
                 return res.status(400).json({ error: 'User ID is required.' });
             }
 
-            const targetUsers = await sql`SELECT id, role, school_id FROM profiles WHERE id = ${id} LIMIT 1`;
+            const targetUsers = await sql`SELECT id, role, school_id, branch_id FROM profiles WHERE id = ${id} LIMIT 1`;
             if (!targetUsers || targetUsers.length === 0) {
                 return res.status(404).json({ error: 'User not found.' });
             }
@@ -104,10 +118,31 @@ export default async function handler(req: any, res: any) {
                 return res.status(403).json({ error: 'Access denied: Cannot update user from another school.' });
             }
 
+            if (locked) {
+                if (targetUser.branch_id !== session.branchId) {
+                    return res.status(403).json({ error: 'Outside your branch' });
+                }
+            }
+
             if (avatarUrl) {
                 const avatarCheck = validateAvatarDataUrl(avatarUrl);
                 if (!avatarCheck.valid) {
                     return res.status(400).json({ error: avatarCheck.error });
+                }
+            }
+
+            let newBranchId = targetUser.branch_id;
+            if (!locked && targetUser.role !== 'Owner') {
+                if (branchId !== undefined) {
+                    if (branchId === null || branchId === '') {
+                        newBranchId = null;
+                    } else {
+                        const bCheck = await sql`SELECT id FROM branches WHERE id = ${branchId} AND school_id = ${targetUser.school_id} LIMIT 1`;
+                        if (!bCheck || bCheck.length === 0) {
+                            return res.status(400).json({ error: 'Invalid branch specified.' });
+                        }
+                        newBranchId = branchId;
+                    }
                 }
             }
 
@@ -120,7 +155,8 @@ export default async function handler(req: any, res: any) {
                         WHEN ${avatarUrl === null || avatarUrl === ''} THEN NULL
                         ELSE avatar_url
                     END,
-                    status = ${status || 'Active'}
+                    status = ${status || 'Active'},
+                    branch_id = ${newBranchId}
                 WHERE id = ${id}
             `;
 
@@ -136,7 +172,7 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'User ID is required.' });
             }
 
-            const targetUserResult = await sql`SELECT id, role, school_id FROM profiles WHERE id = ${userId} LIMIT 1`;
+            const targetUserResult = await sql`SELECT id, role, school_id, branch_id FROM profiles WHERE id = ${userId} LIMIT 1`;
             if (!targetUserResult || targetUserResult.length === 0) {
                 return res.status(404).json({ error: 'User not found.' });
             }
@@ -146,12 +182,15 @@ export default async function handler(req: any, res: any) {
             if (targetUser.role === 'Owner') {
                 return res.status(400).json({ error: 'Cannot deactivate an Owner account.' });
             }
-            if (targetUser.role === 'Admin' && session.role !== 'Owner') {
-                // Admin cannot touch Owner
-            }
 
             if (!requireSameSchool(session, targetUser.school_id)) {
                 return res.status(403).json({ error: 'Access denied: Cannot deactivate user from another school.' });
+            }
+
+            if (locked) {
+                if (targetUser.branch_id !== session.branchId) {
+                    return res.status(403).json({ error: 'Outside your branch' });
+                }
             }
 
             await sql`UPDATE profiles SET status = 'Inactive' WHERE id = ${userId}`;
@@ -222,6 +261,15 @@ export default async function handler(req: any, res: any) {
                     }
                 }
 
+                let rowBranchId: string | null = null;
+                if (u.role === 'Owner') {
+                    rowBranchId = null;
+                } else if (locked) {
+                    rowBranchId = session.branchId;
+                } else if (u.branchId || u.branch_id) {
+                    rowBranchId = u.branchId || u.branch_id;
+                }
+
                 const hashedPassword = await bcrypt.hash(u.password, 10);
                 preparedUsers.push({
                     id: crypto.randomUUID(),
@@ -229,14 +277,15 @@ export default async function handler(req: any, res: any) {
                     email: u.email.toLowerCase().trim(),
                     password: hashedPassword,
                     role: u.role,
-                    avatarUrl: u.avatarUrl || u.avatar_url || null
+                    avatarUrl: u.avatarUrl || u.avatar_url || null,
+                    branchId: rowBranchId
                 });
             }
 
             // Insert in one atomic sql.transaction (P10)
             const queries = preparedUsers.map(u => sql`
-                INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url)
-                VALUES (${u.id}, ${u.name}, ${u.email}, ${u.password}, ${u.role}, ${effectiveSchoolId}, 'Active', ${u.avatarUrl})
+                INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url, branch_id)
+                VALUES (${u.id}, ${u.name}, ${u.email}, ${u.password}, ${u.role}, ${effectiveSchoolId}, 'Active', ${u.avatarUrl}, ${u.branchId})
             `);
 
             try {
@@ -265,6 +314,7 @@ export default async function handler(req: any, res: any) {
             return res.status(403).json({ error: 'Single-school installation: Adding additional schools is disabled.' });
 
         } else if (action === 'update-school') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             if (!isAuthorized(session, ['Owner', 'Admin'])) {
                 return res.status(403).json({ error: 'Access denied: Only Owner or Admin can update institution profile.' });
             }

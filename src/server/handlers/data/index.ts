@@ -37,6 +37,10 @@ export default async function handler(req: any, res: any) {
             schoolsData = await sql`SELECT id, name, address, logo_url FROM schools WHERE id = ${effectiveSchoolId}`;
         }
 
+        // Branch lock status
+        const isLocked = Boolean(role !== 'Owner' && session.branchId);
+        const lockBranchId = session.branchId;
+
         // 2. Fetch Classes, Branches, Subjects, Exams, Fee Heads, Events
         let classesData: any[] = [];
         let branchesData: any[] = [];
@@ -55,9 +59,17 @@ export default async function handler(req: any, res: any) {
                 sql`SELECT id, title, description, date, category, school_id FROM school_events ORDER BY date ASC`,
             ]);
         } else if (effectiveSchoolId) {
+            const classesQuery = isLocked
+                ? sql`SELECT id, name, section, teacher_id, school_id, branch_id, sort_order FROM classes WHERE school_id = ${effectiveSchoolId} AND branch_id = ${lockBranchId} ORDER BY sort_order ASC, name ASC`
+                : sql`SELECT id, name, section, teacher_id, school_id, branch_id, sort_order FROM classes WHERE school_id = ${effectiveSchoolId} ORDER BY sort_order ASC, name ASC`;
+
+            const branchesQuery = isLocked
+                ? sql`SELECT id, name, address, school_id FROM branches WHERE school_id = ${effectiveSchoolId} AND id = ${lockBranchId} ORDER BY name ASC`
+                : sql`SELECT id, name, address, school_id FROM branches WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`;
+
             [classesData, branchesData, subjectsData, examsData, feeHeadsData, eventsData] = await Promise.all([
-                sql`SELECT id, name, section, teacher_id, school_id, branch_id, sort_order FROM classes WHERE school_id = ${effectiveSchoolId} ORDER BY sort_order ASC, name ASC`,
-                sql`SELECT id, name, address, school_id FROM branches WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
+                classesQuery,
+                branchesQuery,
                 sql`SELECT id, name, school_id FROM subjects WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
                 sql`SELECT id, name, school_id FROM exams WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
                 sql`SELECT id, name, default_amount, school_id FROM fee_heads WHERE school_id = ${effectiveSchoolId} ORDER BY name ASC`,
@@ -70,7 +82,7 @@ export default async function handler(req: any, res: any) {
         if (isOwner) {
             usersData = effectiveSchoolId
                 ? await sql`
-                    SELECT id, school_id, name, email, role, status, 
+                    SELECT id, school_id, branch_id, name, email, role, status, 
                            (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
                            length(avatar_url) AS avatar_len, 
                            child_student_ids, disabled_nav_links, permissions_overrides, last_login 
@@ -79,7 +91,7 @@ export default async function handler(req: any, res: any) {
                     ORDER BY name ASC
                   `
                 : await sql`
-                    SELECT id, school_id, name, email, role, status, 
+                    SELECT id, school_id, branch_id, name, email, role, status, 
                            (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
                            length(avatar_url) AS avatar_len, 
                            child_student_ids, disabled_nav_links, permissions_overrides, last_login 
@@ -87,27 +99,49 @@ export default async function handler(req: any, res: any) {
                     ORDER BY name ASC
                   `;
         } else if (isAdmin || isAccountant) {
-            // Admins & Accountants see users in their school except Owner
-            usersData = await sql`
-                SELECT id, school_id, name, email, role, status, 
-                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
-                       length(avatar_url) AS avatar_len, 
-                       child_student_ids, disabled_nav_links, permissions_overrides, last_login 
-                FROM profiles 
-                WHERE (school_id = ${effectiveSchoolId} OR school_id IS NULL) AND role != 'Owner'
-                ORDER BY name ASC
-            `;
+            usersData = isLocked
+                ? await sql`
+                    SELECT id, school_id, branch_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    FROM profiles 
+                    WHERE (school_id = ${effectiveSchoolId} OR school_id IS NULL) 
+                      AND branch_id = ${lockBranchId} 
+                      AND role != 'Owner'
+                    ORDER BY name ASC
+                  `
+                : await sql`
+                    SELECT id, school_id, branch_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    FROM profiles 
+                    WHERE (school_id = ${effectiveSchoolId} OR school_id IS NULL) AND role != 'Owner'
+                    ORDER BY name ASC
+                  `;
         } else if (isTeacher) {
-            // Teachers only see colleagues in their school
-            usersData = await sql`
-                SELECT id, school_id, name, email, role, status, 
-                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
-                       length(avatar_url) AS avatar_len, 
-                       last_login 
-                FROM profiles 
-                WHERE school_id = ${effectiveSchoolId} AND role IN ('Admin', 'Accountant', 'Teacher')
-                ORDER BY name ASC
-            `;
+            usersData = isLocked
+                ? await sql`
+                    SELECT id, school_id, branch_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           last_login 
+                    FROM profiles 
+                    WHERE school_id = ${effectiveSchoolId} 
+                      AND branch_id = ${lockBranchId}
+                      AND role IN ('Admin', 'Accountant', 'Teacher')
+                    ORDER BY name ASC
+                  `
+                : await sql`
+                    SELECT id, school_id, branch_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           last_login 
+                    FROM profiles 
+                    WHERE school_id = ${effectiveSchoolId} AND role IN ('Admin', 'Accountant', 'Teacher')
+                    ORDER BY name ASC
+                  `;
         } else {
             // Parents and Students do not see other user records
             usersData = [];
@@ -119,18 +153,32 @@ export default async function handler(req: any, res: any) {
 
         if (isOwner || isAdmin || isAccountant || isTeacher) {
             studentsData = effectiveSchoolId
-                ? await sql`
-                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
-                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
-                           secondary_contact_number, address, status, gender, date_of_leaving,
-                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
-                           fee_structure, admitted_class, caste, last_school_attended,
-                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
-                           length(avatar_url) AS avatar_len
-                    FROM students 
-                    WHERE school_id = ${effectiveSchoolId} 
-                    ORDER BY roll_number ASC, name ASC
-                  `
+                ? (isLocked
+                    ? await sql`
+                        SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                               father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                               secondary_contact_number, address, status, gender, date_of_leaving,
+                               reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                               fee_structure, admitted_class, caste, last_school_attended,
+                               (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                               length(avatar_url) AS avatar_len
+                        FROM students 
+                        WHERE school_id = ${effectiveSchoolId}
+                          AND class_id IN (SELECT id FROM classes WHERE branch_id = ${lockBranchId})
+                        ORDER BY roll_number ASC, name ASC
+                      `
+                    : await sql`
+                        SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                               father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                               secondary_contact_number, address, status, gender, date_of_leaving,
+                               reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                               fee_structure, admitted_class, caste, last_school_attended,
+                               (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                               length(avatar_url) AS avatar_len
+                        FROM students 
+                        WHERE school_id = ${effectiveSchoolId} 
+                        ORDER BY roll_number ASC, name ASC
+                      `)
                 : await sql`
                     SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
                            father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
@@ -324,7 +372,14 @@ export default async function handler(req: any, res: any) {
                 ? await sql`SELECT * FROM activity_logs WHERE school_id = ${effectiveSchoolId} ORDER BY timestamp DESC LIMIT 250`
                 : await sql`SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 250`;
         } else if (isAdmin || isAccountant) {
-            logsData = await sql`SELECT * FROM activity_logs WHERE school_id = ${effectiveSchoolId} ORDER BY timestamp DESC LIMIT 250`;
+            logsData = isLocked
+                ? await sql`
+                    SELECT * FROM activity_logs 
+                    WHERE school_id = ${effectiveSchoolId} 
+                      AND user_id IN (SELECT id FROM profiles WHERE branch_id = ${lockBranchId})
+                    ORDER BY timestamp DESC LIMIT 250
+                  `
+                : await sql`SELECT * FROM activity_logs WHERE school_id = ${effectiveSchoolId} ORDER BY timestamp DESC LIMIT 250`;
         }
 
         // Transform results into camelCase and enforce proper numbers

@@ -1,4 +1,5 @@
 import { getDb, getSessionUser } from '../../_db';
+import { isBranchLocked } from '../write/_helpers';
 import crypto from 'crypto';
 
 export default async function handler(req: any, res: any) {
@@ -66,16 +67,31 @@ export default async function handler(req: any, res: any) {
 
                 const uniqueUserIds = Array.from(new Set(userIds));
 
-                // Restrict recipients to the caller's school
-                const recipientRows = await sql`
-                    SELECT id FROM profiles
-                    WHERE id = ANY(${uniqueUserIds})
-                      AND (${session.role === 'Owner'}::boolean OR school_id = ${session.schoolId || null}::uuid)
-                `;
+                // Restrict recipients to the caller's school and branch if locked
+                const recipientRows = isBranchLocked(session)
+                    ? await sql`
+                        SELECT p.id FROM profiles p
+                        WHERE p.id = ANY(${uniqueUserIds})
+                          AND p.school_id = ${session.schoolId}
+                          AND (
+                            p.branch_id = ${session.branchId}
+                            OR EXISTS (
+                              SELECT 1 FROM students s
+                              JOIN classes c ON s.class_id = c.id
+                              WHERE s.id = ANY(p.child_student_ids)
+                                AND c.branch_id = ${session.branchId}
+                            )
+                          )
+                      `
+                    : await sql`
+                        SELECT id FROM profiles
+                        WHERE id = ANY(${uniqueUserIds})
+                          AND (${session.role === 'Owner'}::boolean OR school_id = ${session.schoolId || null}::uuid)
+                      `;
 
                 const scopedUserIds: string[] = recipientRows.map((r: any) => r.id);
                 if (scopedUserIds.length === 0) {
-                    return res.status(403).json({ error: 'Forbidden: No valid recipient user IDs belong to your school.' });
+                    return res.status(403).json({ error: 'Outside your branch' });
                 }
 
                 const CHUNK_SIZE = 25;

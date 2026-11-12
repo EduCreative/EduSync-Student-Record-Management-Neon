@@ -95,8 +95,11 @@ const PERMISSION_GROUPS = [
 
 const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, userToEdit, defaultRole, lockRole = false }) => {
     const { user: currentUser, activeSchoolId } = useAuth();
-    const { schools } = useData();
+    const { schools, branches } = useData();
     const { showToast } = useToast();
+
+    const isBranchLockedUser = Boolean(currentUser && currentUser.role !== UserRole.Owner && currentUser.branchId);
+
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -104,6 +107,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
         schoolId: '',
         status: 'Pending Approval' as User['status'],
         avatarUrl: null as string | null | undefined,
+        branchId: null as string | null | undefined,
     });
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -136,6 +140,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                     schoolId: userToEdit.schoolId || '',
                     status: userToEdit.status,
                     avatarUrl: userToEdit.avatarUrl,
+                    branchId: userToEdit.branchId || null,
                 });
                 const initialDisabled: Record<string, boolean> = {};
                 if (userToEdit.disabledNavLinks) {
@@ -153,6 +158,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                     schoolId: effectiveSchoolId || '',
                     status: 'Pending Approval',
                     avatarUrl: null,
+                    branchId: isBranchLockedUser ? currentUser?.branchId : null,
                 });
                 setDisabledLinks({});
                 setPermissionsOverrides({});
@@ -164,7 +170,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
             setAdminResetSuccess(null);
             setErrors({});
         }
-    }, [userToEdit, isOpen, currentUser, schools, defaultRole, effectiveSchoolId]);
+    }, [userToEdit, isOpen, currentUser, schools, defaultRole, effectiveSchoolId, isBranchLockedUser]);
 
     const validate = () => {
         const newErrors: { name?: string; email?: string; role?: string; schoolId?: string; password?: string; confirmPassword?: string; } = {};
@@ -276,10 +282,21 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 .filter(([, isDisabled]) => isDisabled)
                 .map(([path]) => path);
 
+            const finalBranchId = formData.role === UserRole.Owner
+                ? null
+                : (isBranchLockedUser ? currentUser?.branchId : (formData.branchId || null));
+
+            const submissionPayload = {
+                ...formData,
+                branchId: finalBranchId,
+                disabledNavLinks,
+                permissionsOverrides
+            };
+
             if (userToEdit) {
-                await onSave({ ...userToEdit, ...formData, disabledNavLinks, permissionsOverrides });
+                await onSave({ ...userToEdit, ...submissionPayload });
             } else {
-                await onSave({ ...formData, password, disabledNavLinks, permissionsOverrides });
+                await onSave({ ...submissionPayload, password });
             }
             onClose();
         } catch (error) {
@@ -416,6 +433,27 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                     </select>
                     {errors.role && <p className="text-red-500 text-xs mt-1">{errors.role}</p>}
                 </div>
+                {formData.role !== UserRole.Owner && branches.length > 0 && (
+                    <div>
+                        <label htmlFor="branchId" className="input-label">Assigned Branch</label>
+                        <select
+                            name="branchId"
+                            id="branchId"
+                            value={formData.branchId || ''}
+                            onChange={handleChange}
+                            disabled={isBranchLockedUser}
+                            className="input-field"
+                        >
+                            {!isBranchLockedUser && <option value="">All Branches (Unlocked)</option>}
+                            {branches.map(b => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                        </select>
+                        {isBranchLockedUser && (
+                            <p className="text-xs text-secondary-500 mt-1">Locked to your assigned branch.</p>
+                        )}
+                    </div>
+                )}
                 {isOwnerGlobalView && (
                     <div>
                         <label htmlFor="schoolId" className="input-label">School</label>

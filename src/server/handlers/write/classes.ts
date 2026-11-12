@@ -1,4 +1,4 @@
-import { verifySession, isAuthorized, writeServerAuditLog, requireSameSchool } from './_helpers';
+import { verifySession, isAuthorized, writeServerAuditLog, requireSameSchool, isBranchLocked, canAccessClass } from './_helpers';
 import crypto from 'crypto';
 
 export default async function handler(req: any, res: any) {
@@ -18,28 +18,36 @@ export default async function handler(req: any, res: any) {
     try {
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
         const { action } = body;
+        const locked = isBranchLocked(session);
 
         // Class operations
         if (action === 'add-class') {
             const { name, section, teacherId, branchId, sortOrder, schoolId } = body;
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
             const id = crypto.randomUUID();
+            const finalBranchId = locked ? session.branchId : (branchId || null);
 
             await sql`
                 INSERT INTO classes (id, name, section, teacher_id, school_id, branch_id, sort_order)
-                VALUES (${id}, ${name}, ${section || null}, ${teacherId || null}, ${effectiveSchoolId}, ${branchId || null}, ${sortOrder || 0})
+                VALUES (${id}, ${name}, ${section || null}, ${teacherId || null}, ${effectiveSchoolId}, ${finalBranchId}, ${sortOrder || 0})
             `;
             await writeServerAuditLog(sql, session, 'Add Class', `Added class: ${name} ${section || ''}`, effectiveSchoolId);
             return res.status(200).json({ success: true, id });
 
         } else if (action === 'update-class') {
             const { id, name, section, teacherId, branchId, sortOrder } = body;
-            const records = await sql`SELECT school_id FROM classes WHERE id = ${id} LIMIT 1`;
+            const records = await sql`SELECT school_id, branch_id FROM classes WHERE id = ${id} LIMIT 1`;
             if (!records || records.length === 0) return res.status(404).json({ error: 'Class not found.' });
             if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
+            if (locked) {
+                if (!(await canAccessClass(sql, session, id))) {
+                    return res.status(403).json({ error: 'Outside your branch' });
+                }
+            }
+            const finalBranchId = locked ? records[0].branch_id : (branchId || null);
             await sql`
                 UPDATE classes 
-                SET name = ${name}, section = ${section || null}, teacher_id = ${teacherId || null}, branch_id = ${branchId || null}, sort_order = ${sortOrder || 0}
+                SET name = ${name}, section = ${section || null}, teacher_id = ${teacherId || null}, branch_id = ${finalBranchId}, sort_order = ${sortOrder || 0}
                 WHERE id = ${id}
             `;
             return res.status(200).json({ success: true });
@@ -49,11 +57,17 @@ export default async function handler(req: any, res: any) {
             const records = await sql`SELECT school_id FROM classes WHERE id = ${id} LIMIT 1`;
             if (!records || records.length === 0) return res.status(404).json({ error: 'Class not found.' });
             if (!requireSameSchool(session, records[0].school_id)) return res.status(403).json({ error: 'Access denied.' });
+            if (locked) {
+                if (!(await canAccessClass(sql, session, id))) {
+                    return res.status(403).json({ error: 'Outside your branch' });
+                }
+            }
             await sql`DELETE FROM classes WHERE id = ${id}`;
             return res.status(200).json({ success: true });
 
         // Branch operations
         } else if (action === 'add-branch') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { name, address, schoolId } = body;
             if (!name || !name.trim()) {
                 return res.status(400).json({ error: 'Branch name is required.' });
@@ -75,6 +89,7 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({ success: true, id });
 
         } else if (action === 'update-branch') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { id, name, address } = body;
             if (!id || !name || !name.trim()) {
                 return res.status(400).json({ error: 'Branch ID and name are required.' });
@@ -97,6 +112,7 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({ success: true });
 
         } else if (action === 'delete-branch') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { id } = body;
             if (!id) return res.status(400).json({ error: 'Branch ID is required.' });
             const records = await sql`SELECT school_id FROM branches WHERE id = ${id} LIMIT 1`;
@@ -115,9 +131,10 @@ export default async function handler(req: any, res: any) {
         } else if (action === 'bulk-add-classes') {
             const { classes, schoolId } = body;
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
+            const finalBranchId = locked ? session.branchId : null;
             for (const c of classes) {
                 const id = crypto.randomUUID();
-                await sql`INSERT INTO classes (id, name, school_id) VALUES (${id}, ${c.name}, ${effectiveSchoolId})`;
+                await sql`INSERT INTO classes (id, name, school_id, branch_id) VALUES (${id}, ${c.name}, ${effectiveSchoolId}, ${finalBranchId})`;
             }
             return res.status(200).json({ success: true, count: classes.length });
 
@@ -134,6 +151,7 @@ export default async function handler(req: any, res: any) {
                 SELECT id FROM classes
                 WHERE id = ANY(${ids})
                 AND (${isOwnerGlobal}::boolean OR school_id = ${effectiveSchoolId}::uuid)
+                ${locked ? sql`AND branch_id = ${session.branchId}::uuid` : sql``}
             `;
             const validIds = new Set(valid.map((c: any) => c.id));
             let updatedCount = 0;
@@ -147,6 +165,7 @@ export default async function handler(req: any, res: any) {
 
         // Subject operations
         } else if (action === 'add-subject') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { name, schoolId } = body;
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
             const id = crypto.randomUUID();
@@ -154,6 +173,7 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({ success: true, id });
 
         } else if (action === 'update-subject') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { id, name } = body;
             const records = await sql`SELECT school_id FROM subjects WHERE id = ${id} LIMIT 1`;
             if (!records || records.length === 0) return res.status(404).json({ error: 'Subject not found.' });
@@ -162,6 +182,7 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({ success: true });
 
         } else if (action === 'delete-subject') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { id } = body;
             const records = await sql`SELECT school_id FROM subjects WHERE id = ${id} LIMIT 1`;
             if (!records || records.length === 0) return res.status(404).json({ error: 'Subject not found.' });
@@ -171,6 +192,7 @@ export default async function handler(req: any, res: any) {
 
         // Exam operations
         } else if (action === 'add-exam') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { name, schoolId } = body;
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
             const id = crypto.randomUUID();
@@ -178,6 +200,7 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({ success: true, id });
 
         } else if (action === 'update-exam') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { id, name } = body;
             const records = await sql`SELECT school_id FROM exams WHERE id = ${id} LIMIT 1`;
             if (!records || records.length === 0) return res.status(404).json({ error: 'Exam not found.' });
@@ -186,6 +209,7 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({ success: true });
 
         } else if (action === 'delete-exam') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { id } = body;
             const records = await sql`SELECT school_id FROM exams WHERE id = ${id} LIMIT 1`;
             if (!records || records.length === 0) return res.status(404).json({ error: 'Exam not found.' });
@@ -195,6 +219,7 @@ export default async function handler(req: any, res: any) {
 
         // Fee Head operations
         } else if (action === 'add-fee-head') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { name, defaultAmount, schoolId } = body;
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
             const id = crypto.randomUUID();
@@ -206,6 +231,7 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({ success: true, id });
 
         } else if (action === 'update-fee-head') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { id, name, defaultAmount } = body;
             const records = await sql`SELECT school_id FROM fee_heads WHERE id = ${id} LIMIT 1`;
             if (!records || records.length === 0) return res.status(404).json({ error: 'Fee head not found.' });
@@ -218,6 +244,7 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({ success: true });
 
         } else if (action === 'delete-fee-head') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { id } = body;
             const records = await sql`SELECT school_id FROM fee_heads WHERE id = ${id} LIMIT 1`;
             if (!records || records.length === 0) return res.status(404).json({ error: 'Fee head not found.' });
@@ -227,6 +254,7 @@ export default async function handler(req: any, res: any) {
 
         // School Events / Calendar
         } else if (action === 'add-event') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { title, date, category, description, schoolId } = body;
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
             const id = crypto.randomUUID();
@@ -237,6 +265,7 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({ success: true, id });
 
         } else if (action === 'update-event') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { id, title, date, category, description } = body;
             const records = await sql`SELECT school_id FROM school_events WHERE id = ${id} LIMIT 1`;
             if (!records || records.length === 0) return res.status(404).json({ error: 'Event not found.' });
@@ -249,6 +278,7 @@ export default async function handler(req: any, res: any) {
             return res.status(200).json({ success: true });
 
         } else if (action === 'delete-event') {
+            if (locked) return res.status(403).json({ error: 'Outside your branch' });
             const { id } = body;
             const records = await sql`SELECT school_id FROM school_events WHERE id = ${id} LIMIT 1`;
             if (!records || records.length === 0) return res.status(404).json({ error: 'Event not found.' });

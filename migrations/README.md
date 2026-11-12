@@ -9,3 +9,5 @@ Every subsequent database schema change is added as a new sequentially numbered 
 2. **Standard Statements Only**: Do NOT use `DO $$` blocks or custom procedural functions in migration files.
 3. **Statement Delimiters**: Each SQL statement must end with `;` on its own line.
 4. **Execution**: Applied migrations are tracked automatically in the `schema_migrations` table by running `npm run migrate`.
+
+- `003_user_branch.sql`: Adds `branch_id` foreign key column and index to `profiles` for branch-locked staff.

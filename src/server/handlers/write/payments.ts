@@ -1,4 +1,4 @@
-import { verifySession, isAuthorized, writeServerAuditLog } from './_helpers';
+import { verifySession, isAuthorized, writeServerAuditLog, isBranchLocked, canAccessChallan, canAccessStudent } from './_helpers';
 import { getTodayKarachi } from '../../../utils/dates';
 
 export default async function handler(req: any, res: any) {
@@ -19,6 +19,7 @@ export default async function handler(req: any, res: any) {
     try {
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
         const { action } = body;
+        const locked = isBranchLocked(session);
 
         if (action === 'record-payment') {
             const { challanId, amount, discount = 0, paidDate, allowOverpayment, idempotencyKey } = body;
@@ -31,6 +32,10 @@ export default async function handler(req: any, res: any) {
 
             if (numDiscount < 0) {
                 return res.status(400).json({ error: 'Discount cannot be negative.' });
+            }
+
+            if (locked && !(await canAccessChallan(sql, session, challanId))) {
+                return res.status(403).json({ error: 'Outside your branch' });
             }
 
             // Fetch challan and verify school access via student
@@ -172,6 +177,10 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'Discount cannot be negative.' });
             }
 
+            if (locked && !(await canAccessChallan(sql, session, challanId))) {
+                return res.status(403).json({ error: 'Outside your branch' });
+            }
+
             const challanRows = await sql`
                 SELECT fc.*, s.school_id, s.name as student_name, s.roll_number
                 FROM fee_challans fc
@@ -267,6 +276,10 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'Challan ID is required.' });
             }
 
+            if (locked && !(await canAccessChallan(sql, session, challanId))) {
+                return res.status(403).json({ error: 'Outside your branch' });
+            }
+
             const challanRows = await sql`
                 SELECT fc.*, s.school_id, s.name as student_name
                 FROM fee_challans fc
@@ -317,6 +330,14 @@ export default async function handler(req: any, res: any) {
 
             if (!Array.isArray(studentIds) || studentIds.length === 0 || incAmount === 0) {
                 return res.status(400).json({ error: 'studentIds array and non-zero amount are required.' });
+            }
+
+            if (locked) {
+                for (const sId of studentIds) {
+                    if (!(await canAccessStudent(sql, session, sId))) {
+                        return res.status(403).json({ error: 'Outside your branch' });
+                    }
+                }
             }
 
             // Get tuition fee head

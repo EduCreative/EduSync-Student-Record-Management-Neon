@@ -25,6 +25,7 @@ export interface TokenPayload {
     email: string;
     role: string;
     schoolId: string | null;
+    branchId: string | null;
     name?: string;
     avatarUrl?: string;
 }
@@ -118,7 +119,7 @@ export async function getSessionUser(req: any, res?: any): Promise<TokenPayload 
     try {
         const sql = getDb();
         const rows = await sql`
-            SELECT id, name, email, role, school_id, status, avatar_url
+            SELECT id, name, email, role, school_id, branch_id, status, avatar_url
             FROM profiles
             WHERE id = ${payload.userId}
             LIMIT 1
@@ -141,6 +142,7 @@ export async function getSessionUser(req: any, res?: any): Promise<TokenPayload 
             email: user.email,
             role: user.role,
             schoolId: user.school_id || null,
+            branchId: user.role === 'Owner' ? null : (user.branch_id || null),
             name: user.name || '',
             avatarUrl: user.avatar_url || ''
         };

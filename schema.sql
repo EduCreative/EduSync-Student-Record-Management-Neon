@@ -7,6 +7,16 @@ CREATE TABLE IF NOT EXISTS schools (
     logo_url TEXT
 );
 
+-- Branches table (Must be created before profiles)
+CREATE TABLE IF NOT EXISTS branches (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    address TEXT,
+    school_id UUID REFERENCES schools(id) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(school_id, name)
+);
+
 -- Profiles table for all user roles
 CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY,
@@ -15,6 +25,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     password TEXT NOT NULL,
     role TEXT NOT NULL, -- 'Owner', 'Admin', 'Accountant', 'Teacher', 'Parent', 'Student'
     school_id UUID REFERENCES schools(id),
+    branch_id UUID REFERENCES branches(id) ON DELETE RESTRICT,
     status TEXT DEFAULT 'Active',
     avatar_url TEXT,
     last_login TIMESTAMP WITH TIME ZONE,
@@ -24,15 +35,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     phone_number TEXT
 );
 
--- Branches table
-CREATE TABLE IF NOT EXISTS branches (
-    id UUID PRIMARY KEY,
-    name TEXT NOT NULL,
-    address TEXT,
-    school_id UUID REFERENCES schools(id) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(school_id, name)
-);
+CREATE INDEX IF NOT EXISTS idx_profiles_branch_id ON profiles(branch_id);
 
 -- Classes table
 CREATE TABLE IF NOT EXISTS classes (

@@ -1,4 +1,4 @@
-import { verifySession, isAuthorized, writeServerAuditLog } from './_helpers';
+import { verifySession, isAuthorized, writeServerAuditLog, isBranchLocked } from './_helpers';
 import crypto from 'crypto';
 
 const MONTH_NAMES = [
@@ -23,6 +23,7 @@ export default async function handler(req: any, res: any) {
     try {
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
         const { action } = body;
+        const locked = isBranchLocked(session);
 
         if (action === 'generate') {
             const { month, year, selectedFeeHeads, studentIds, dueDate, schoolId } = body;
@@ -34,13 +35,15 @@ export default async function handler(req: any, res: any) {
 
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
 
-            // Fetch students belonging to this school
+            // Fetch students belonging to this school (filtered by branch if locked)
             const students = await sql`
-                SELECT id, name, roll_number, class_id, school_id, opening_balance, fee_structure
-                FROM students
-                WHERE id = ANY(${studentIds})
-                AND (${effectiveSchoolId}::uuid IS NULL OR school_id = ${effectiveSchoolId}::uuid)
-                AND status = 'Active'
+                SELECT s.id, s.name, s.roll_number, s.class_id, s.school_id, s.opening_balance, s.fee_structure
+                FROM students s
+                JOIN classes c ON c.id = s.class_id
+                WHERE s.id = ANY(${studentIds})
+                AND (${effectiveSchoolId}::uuid IS NULL OR s.school_id = ${effectiveSchoolId}::uuid)
+                AND s.status = 'Active'
+                ${locked ? sql`AND c.branch_id = ${session.branchId}::uuid` : sql``}
             `;
 
             if (students.length === 0) {
@@ -245,6 +248,7 @@ export default async function handler(req: any, res: any) {
                 SELECT fc.id, fc.student_id, fc.challan_number, s.name as student_name, s.roll_number
                 FROM fee_challans fc
                 JOIN students s ON s.id = fc.student_id
+                JOIN classes c ON c.id = fc.class_id
                 WHERE fc.month = ${month} 
                 AND fc.year = ${targetYear} 
                 AND fc.paid_amount = 0 
@@ -252,6 +256,7 @@ export default async function handler(req: any, res: any) {
                 AND (fc.payment_history IS NULL OR fc.payment_history = '[]'::jsonb)
                 AND fc.status != 'Cancelled'
                 AND (${effectiveSchoolId}::uuid IS NULL OR s.school_id = ${effectiveSchoolId}::uuid)
+                ${locked ? sql`AND c.branch_id = ${session.branchId}::uuid` : sql``}
             `;
 
             if (candidates.length === 0) {

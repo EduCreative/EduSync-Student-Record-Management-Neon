@@ -18,7 +18,7 @@ interface UserManagementPageProps {
 
 const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
     const { user: currentUser, activeSchoolId, hasPermission } = useAuth();
-    const { users, schools, getSchoolById, bulkAddUsers, updateUser, deleteUser, loading, addUserByAdmin } = useData();
+    const { users, schools, branches, getSchoolById, bulkAddUsers, updateUser, deleteUser, loading, addUserByAdmin } = useData();
     
     const effectiveSchoolId = currentUser?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : currentUser?.schoolId;
     const isOwnerGlobalView = currentUser?.role === UserRole.Owner && !activeSchoolId;
@@ -176,6 +176,7 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
             name: u.name,
             email: u.email,
             role: u.role,
+            branch: u.branchId ? branches.find(b => b.id === u.branchId)?.name || 'Assigned' : 'All Branches',
             status: u.status,
             school: u.schoolId != null ? getSchoolById(u.schoolId)?.name || 'N/A' : 'N/A',
             last_login: formatDateTime(u.lastLogin),
@@ -197,11 +198,12 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
     };
     
     const skeletonColumns = [
-        { width: '35%' }, 
+        { width: '30%' }, 
         { width: '15%' }, 
+        { width: '15%' },
         ...(currentUser?.role === UserRole.Owner && !activeSchoolId ? [{ width: '15%' }] : []),
         { width: '10%' }, 
-        { width: '15%' }, 
+        { width: '10%' }, 
         { width: '10%' }
     ];
 
@@ -321,6 +323,7 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
                                         <tr>
                                             <th scope="col" className="px-6 py-3">User</th>
                                             <th scope="col" className="px-6 py-3">Role</th>
+                                            {branches.length > 0 && <th scope="col" className="px-6 py-3">Branch</th>}
                                             {currentUser?.role === UserRole.Owner && !activeSchoolId && <th scope="col" className="px-6 py-3">School</th>}
                                             <th scope="col" className="px-6 py-3">Status</th>
                                             <th scope="col" className="px-6 py-3">Last Login</th>
@@ -339,6 +342,8 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
                                                 return true;
                                             })();
 
+                                            const userBranch = user.branchId ? branches.find(b => b.id === user.branchId) : null;
+
                                             return (
                                                 <tr key={user.id} className="bg-white dark:bg-secondary-800 border-b dark:border-secondary-700 hover:bg-secondary-50 dark:hover:bg-secondary-700/50">
                                                     <td className="px-6 py-4">
@@ -351,6 +356,17 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4"><Badge>{user.role}</Badge></td>
+                                                    {branches.length > 0 && (
+                                                        <td className="px-6 py-4">
+                                                            {user.role === UserRole.Owner ? (
+                                                                <span className="text-xs text-secondary-400 font-medium">All Branches</span>
+                                                            ) : userBranch ? (
+                                                                <Badge color="blue">{userBranch.name}</Badge>
+                                                            ) : (
+                                                                <span className="text-xs text-secondary-400 font-medium">All Branches</span>
+                                                            )}
+                                                        </td>
+                                                    )}
                                                     {currentUser?.role === UserRole.Owner && !activeSchoolId && <td className="px-6 py-4">{user.schoolId != null ? getSchoolById(user.schoolId)?.name || 'N/A' : 'N/A'}</td>}
                                                     <td className="px-6 py-4">
                                                         <Badge color={getStatusBadgeColor(user.status)}>

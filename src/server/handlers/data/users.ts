@@ -23,11 +23,13 @@ export default async function handler(req: any, res: any) {
 
         let users: any[] = [];
 
+        const isLocked = Boolean(role !== 'Owner' && session.branchId);
+
         if (role === 'Owner') {
             const effectiveSchoolId = requestedSchoolId || null;
             users = effectiveSchoolId
                 ? await sql`
-                    SELECT id, school_id, name, email, role, status, 
+                    SELECT id, school_id, branch_id, name, email, role, status, 
                            (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
                            length(avatar_url) AS avatar_len, 
                            child_student_ids, disabled_nav_links, permissions_overrides, last_login 
@@ -36,7 +38,7 @@ export default async function handler(req: any, res: any) {
                     ORDER BY name ASC
                   `
                 : await sql`
-                    SELECT id, school_id, name, email, role, status, 
+                    SELECT id, school_id, branch_id, name, email, role, status, 
                            (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
                            length(avatar_url) AS avatar_len, 
                            child_student_ids, disabled_nav_links, permissions_overrides, last_login 
@@ -44,26 +46,50 @@ export default async function handler(req: any, res: any) {
                     ORDER BY name ASC
                   `;
         } else if (role === 'Admin' || role === 'Accountant') {
-            users = await sql`
-                SELECT id, school_id, name, email, role, status, 
-                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
-                       length(avatar_url) AS avatar_len, 
-                       child_student_ids, disabled_nav_links, permissions_overrides, last_login 
-                FROM profiles 
-                WHERE (school_id = ${schoolId} OR school_id IS NULL) AND role != 'Owner'
-                ORDER BY name ASC
-            `;
+            users = isLocked
+                ? await sql`
+                    SELECT id, school_id, branch_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    FROM profiles 
+                    WHERE (school_id = ${schoolId} OR school_id IS NULL) 
+                      AND branch_id = ${session.branchId} 
+                      AND role != 'Owner'
+                    ORDER BY name ASC
+                  `
+                : await sql`
+                    SELECT id, school_id, branch_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           child_student_ids, disabled_nav_links, permissions_overrides, last_login 
+                    FROM profiles 
+                    WHERE (school_id = ${schoolId} OR school_id IS NULL) AND role != 'Owner'
+                    ORDER BY name ASC
+                  `;
         } else if (role === 'Teacher') {
             // Teachers only see colleagues in their school
-            users = await sql`
-                SELECT id, school_id, name, email, role, status, 
-                       (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
-                       length(avatar_url) AS avatar_len, 
-                       last_login 
-                FROM profiles 
-                WHERE school_id = ${schoolId} AND role IN ('Admin', 'Accountant', 'Teacher')
-                ORDER BY name ASC
-            `;
+            users = isLocked
+                ? await sql`
+                    SELECT id, school_id, branch_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           last_login 
+                    FROM profiles 
+                    WHERE school_id = ${schoolId} 
+                      AND branch_id = ${session.branchId}
+                      AND role IN ('Admin', 'Accountant', 'Teacher')
+                    ORDER BY name ASC
+                  `
+                : await sql`
+                    SELECT id, school_id, branch_id, name, email, role, status, 
+                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar, 
+                           length(avatar_url) AS avatar_len, 
+                           last_login 
+                    FROM profiles 
+                    WHERE school_id = ${schoolId} AND role IN ('Admin', 'Accountant', 'Teacher')
+                    ORDER BY name ASC
+                  `;
         }
 
         const transformed = toCamelCase(users).map((u: any) => ({

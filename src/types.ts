@@ -17,6 +17,7 @@ export interface User {
     email: string;
     role: UserRole;
     schoolId: string | null;
+    branchId?: string | null;
     status: 'Active' | 'Inactive' | 'Pending Approval' | 'Suspended';
     avatarUrl?: string | null;
     lastLogin?: string;

@@ -22,20 +22,36 @@ export default async function handler(req: any, res: any) {
 
         let students: any[] = [];
 
+        const isLocked = Boolean(role !== 'Owner' && session.branchId);
+
         if (role === 'Owner' || role === 'Admin' || role === 'Accountant' || role === 'Teacher') {
             students = effectiveSchoolId
-                ? await sql`
-                    SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
-                           father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
-                           secondary_contact_number, address, status, gender, date_of_leaving,
-                           reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
-                           fee_structure, admitted_class, caste, last_school_attended,
-                           (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
-                           length(avatar_url) AS avatar_len
-                    FROM students 
-                    WHERE school_id = ${effectiveSchoolId} 
-                    ORDER BY roll_number ASC, name ASC
-                  `
+                ? (isLocked
+                    ? await sql`
+                        SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                               father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                               secondary_contact_number, address, status, gender, date_of_leaving,
+                               reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                               fee_structure, admitted_class, caste, last_school_attended,
+                               (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                               length(avatar_url) AS avatar_len
+                        FROM students 
+                        WHERE school_id = ${effectiveSchoolId}
+                          AND class_id IN (SELECT id FROM classes WHERE branch_id = ${session.branchId})
+                        ORDER BY roll_number ASC, name ASC
+                      `
+                    : await sql`
+                        SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
+                               father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
+                               secondary_contact_number, address, status, gender, date_of_leaving,
+                               reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
+                               fee_structure, admitted_class, caste, last_school_attended,
+                               (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
+                               length(avatar_url) AS avatar_len
+                        FROM students 
+                        WHERE school_id = ${effectiveSchoolId} 
+                        ORDER BY roll_number ASC, name ASC
+                      `)
                 : await sql`
                     SELECT id, user_id, name, class_id, school_id, roll_number, gr_number, religion,
                            father_name, father_cnic, date_of_birth, date_of_admission, contact_number,

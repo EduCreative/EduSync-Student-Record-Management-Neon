@@ -23,6 +23,8 @@ export default async function handler(req: any, res: any) {
 
         let targetStudentIds: string[] = [];
 
+        const isLocked = Boolean(role !== 'Owner' && session.branchId);
+
         if (role === 'Owner') {
             const effectiveSchoolId = requestedSchoolId || null;
             const students = effectiveSchoolId
@@ -30,7 +32,9 @@ export default async function handler(req: any, res: any) {
                 : await sql`SELECT id FROM students`;
             targetStudentIds = students.map((s: any) => s.id);
         } else if (role === 'Admin' || role === 'Accountant') {
-            const students = await sql`SELECT id FROM students WHERE school_id = ${schoolId}`;
+            const students = isLocked
+                ? await sql`SELECT id FROM students WHERE school_id = ${schoolId} AND class_id IN (SELECT id FROM classes WHERE branch_id = ${session.branchId})`
+                : await sql`SELECT id FROM students WHERE school_id = ${schoolId}`;
             targetStudentIds = students.map((s: any) => s.id);
         } else if (role === 'Parent') {
             const parentProfile = await sql`SELECT child_student_ids FROM profiles WHERE id = ${userId} LIMIT 1`;

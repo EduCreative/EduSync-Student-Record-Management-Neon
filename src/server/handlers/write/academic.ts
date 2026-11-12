@@ -1,4 +1,4 @@
-import { verifySession, isAuthorized, writeServerAuditLog } from './_helpers';
+import { verifySession, isAuthorized, writeServerAuditLog, isBranchLocked } from './_helpers';
 import crypto from 'crypto';
 
 export default async function handler(req: any, res: any) {
@@ -18,12 +18,29 @@ export default async function handler(req: any, res: any) {
     try {
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
         const { action } = body;
+        const locked = isBranchLocked(session);
 
         if (action === 'set-attendance') {
             const { date, records, schoolId } = body;
 
             if (!date || !Array.isArray(records) || records.length === 0) {
                 return res.status(400).json({ error: 'Date and records array are required.' });
+            }
+
+            if (locked) {
+                const studentIds = records.map((r: any) => r.studentId);
+                const validCount = await sql`
+                    SELECT COUNT(DISTINCT s.id)::int as count
+                    FROM students s
+                    JOIN classes c ON c.id = s.class_id
+                    WHERE s.id = ANY(${studentIds})
+                    AND c.branch_id = ${session.branchId}::uuid
+                    AND s.school_id = ${session.schoolId}::uuid
+                `;
+                const distinctRequested = new Set(studentIds).size;
+                if ((validCount[0]?.count || 0) !== distinctRequested) {
+                    return res.status(403).json({ error: 'Outside your branch' });
+                }
             }
 
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
@@ -58,6 +75,22 @@ export default async function handler(req: any, res: any) {
 
             if (!Array.isArray(results) || results.length === 0) {
                 return res.status(400).json({ error: 'Results array is required.' });
+            }
+
+            if (locked) {
+                const studentIds = results.map((r: any) => r.studentId);
+                const validCount = await sql`
+                    SELECT COUNT(DISTINCT s.id)::int as count
+                    FROM students s
+                    JOIN classes c ON c.id = s.class_id
+                    WHERE s.id = ANY(${studentIds})
+                    AND c.branch_id = ${session.branchId}::uuid
+                    AND s.school_id = ${session.schoolId}::uuid
+                `;
+                const distinctRequested = new Set(studentIds).size;
+                if ((validCount[0]?.count || 0) !== distinctRequested) {
+                    return res.status(403).json({ error: 'Outside your branch' });
+                }
             }
 
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;

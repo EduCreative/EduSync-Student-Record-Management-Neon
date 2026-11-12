@@ -14,7 +14,7 @@ export default async function handler(req: any, res: any) {
 
         const sql = getDb();
         const users = await sql`
-            SELECT id, school_id, name, email, role, status, 
+            SELECT id, school_id, branch_id, name, email, role, status, 
                    avatar_url, child_student_ids, disabled_nav_links, permissions_overrides, last_login
             FROM profiles 
             WHERE id = ${session.userId} 

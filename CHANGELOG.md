@@ -1,6 +1,31 @@
 
 # Changelog
 
+## [3.49.0] - 2026-11-12
+
+### Branch-Locked Staff (P29b & P29c: Server Enforcement & Client Scope)
+- **Server-Side Authorization & Data Isolation (P29b)**:
+  - Enforced `isBranchLocked(session)` across all read and write endpoints (`data/index.ts`, `data/students.ts`, `data/fees.ts`, `data/users.ts`, `photo.ts`, `notifications/index.ts`, `write/students.ts`, `write/classes.ts`, `write/challans.ts`, `write/payments.ts`, `write/academic.ts`, `write/users.ts`).
+  - Locked staff are strictly restricted to data within their assigned branch, returning HTTP `403` (`"Outside your branch"`) on any unauthorized out-of-branch attempt.
+  - Refused restricted institutional configuration actions (`branches`, `subjects`, `exams`, `fee_heads`, `school_events`, `update-school`) with HTTP 403 for locked staff.
+- **Client Scope & Branch Switcher Integration (P29c)**:
+  - Updated `useBranchFilter` hook (`src/hooks/useBranchFilter.ts`) to lock `selectedBranchId` to `user.branchId` when staff members are branch-locked (`user.role !== Owner && user.branchId`), disabling manual branch selection and ensuring client views match server isolation.
+  - Updated `UserFormModal.tsx` and `UserManagementPage.tsx` with branch assignment controls, allowing Owners and unlocked Admins to assign staff members to specific branches or set them unlocked ("All Branches"), while displaying branch badges in the user directory.
+
+## [3.48.0] - 2026-11-12
+
+### Branch-Locked Staff (P29a: Database & Session)
+- **Database Schema (`schema.sql` & Migration 003)**:
+  - Added `branch_id UUID REFERENCES branches(id) ON DELETE RESTRICT` foreign key column and index to the `profiles` table.
+  - Reordered table creation (`branches` created before `profiles`) to ensure pristine initialization order.
+  - Created idempotent migration `migrations/003_user_branch.sql` and documented it in `migrations/README.md`.
+- **Server Session & Token Helpers (`_db.ts` & `write/_helpers.ts`)**:
+  - Added `branchId: string | null` to `TokenPayload`.
+  - Updated `getSessionUser` to re-query `branch_id` fresh from the database on every request (forcing Owner role to always return `branchId: null`).
+  - Implemented core server-side verification helpers: `isBranchLocked`, `branchOfClass`, `canAccessClass`, `canAccessStudent`, and `canAccessChallan`.
+- **API Endpoints & Types (`auth/me.ts`, `login.ts`, `types.ts`)**:
+  - Included `branchId` in session verification (`me.ts`), authentication login response (`login.ts`), and TypeScript definitions (`User`).
+
 ## [3.47.0] - 2026-11-12
 
 ### Google Drive Cloud Backup & Automated Scheduler

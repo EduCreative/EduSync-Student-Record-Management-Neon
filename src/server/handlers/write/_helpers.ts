@@ -105,3 +105,63 @@ export function validateAvatarDataUrl(dataUrl: any): { valid: boolean; error?: s
     }
     return { valid: true };
 }
+
+export function isBranchLocked(session: TokenPayload): boolean {
+    return session.role !== 'Owner' && !!session.branchId;
+}
+
+export async function branchOfClass(sql: any, classId: string): Promise<string | null | undefined> {
+    const res = await sql`SELECT branch_id FROM classes WHERE id = ${classId} LIMIT 1`;
+    if (!res || res.length === 0) return undefined;
+    return res[0].branch_id !== undefined ? res[0].branch_id : null;
+}
+
+export async function canAccessClass(sql: any, session: TokenPayload, classId: string): Promise<boolean> {
+    if (session.role === 'Owner') return true;
+    if (!classId) return false;
+    const res = await sql`
+        SELECT c.branch_id, c.school_id 
+        FROM classes c 
+        WHERE c.id = ${classId} 
+        LIMIT 1
+    `;
+    if (!res || res.length === 0) return false;
+    const cls = res[0];
+    if (session.schoolId && cls.school_id !== session.schoolId) return false;
+    if (!session.branchId) return true;
+    return cls.branch_id === session.branchId;
+}
+
+export async function canAccessStudent(sql: any, session: TokenPayload, studentId: string): Promise<boolean> {
+    if (session.role === 'Owner') return true;
+    if (!studentId) return false;
+    const res = await sql`
+        SELECT c.branch_id, s.school_id
+        FROM students s
+        JOIN classes c ON s.class_id = c.id
+        WHERE s.id = ${studentId}
+        LIMIT 1
+    `;
+    if (!res || res.length === 0) return false;
+    const row = res[0];
+    if (session.schoolId && row.school_id !== session.schoolId) return false;
+    if (!session.branchId) return true;
+    return row.branch_id === session.branchId;
+}
+
+export async function canAccessChallan(sql: any, session: TokenPayload, challanId: string): Promise<boolean> {
+    if (session.role === 'Owner') return true;
+    if (!challanId) return false;
+    const res = await sql`
+        SELECT c.branch_id, c.school_id
+        FROM fee_challans fc
+        JOIN classes c ON fc.class_id = c.id
+        WHERE fc.id = ${challanId}
+        LIMIT 1
+    `;
+    if (!res || res.length === 0) return false;
+    const row = res[0];
+    if (session.schoolId && row.school_id !== session.schoolId) return false;
+    if (!session.branchId) return true;
+    return row.branch_id === session.branchId;
+}
