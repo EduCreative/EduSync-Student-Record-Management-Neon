@@ -74,6 +74,7 @@ interface DataContextType {
     bulkAddUsers: (users: (Omit<User, 'id'> & { password?: string })[]) => Promise<void>;
     bulkAddClasses: (classes: Omit<Class, 'id'>[]) => Promise<void>;
     downloadFullBackup: () => Promise<void>;
+    generateFullBackupPayload: () => Promise<any>;
     promoteAllStudents: (mappings: Record<string, string | 'graduate'>, exemptedStudentIds: string[]) => Promise<void>;
     reactivateGraduatedStudents: (options?: { studentIds?: string[]; targetClassId?: string; restoreFromHistory?: boolean }) => Promise<number>;
     revertLastPromotion: () => Promise<boolean>;
@@ -827,59 +828,64 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         'notifications'
     ];
 
+    const generateFullBackupPayload = useCallback(async (): Promise<any> => {
+        const tablesData: Record<string, any[]> = {};
+        const countsData: Record<string, number> = {};
+        const totalTables = BACKUP_TABLES.length;
+
+        for (let tIdx = 0; tIdx < totalTables; tIdx++) {
+            const tableName = BACKUP_TABLES[tIdx];
+            const tableRows: any[] = [];
+            let cursor: string | null = null;
+            let hasMore = true;
+
+            const basePct = 5 + Math.round((tIdx / totalTables) * 85);
+            setOperationProgress({ 
+                percentage: basePct, 
+                status: `Streaming table "${tableName}" (${tIdx + 1}/${totalTables})...` 
+            });
+
+            while (hasMore) {
+                const chunkUrl: string = cursor 
+                    ? `/api/backup?table=${encodeURIComponent(tableName)}&cursor=${encodeURIComponent(cursor)}`
+                    : `/api/backup?table=${encodeURIComponent(tableName)}`;
+                
+                const chunkRes: Response = await fetch(chunkUrl, { credentials: 'include' });
+                if (!chunkRes.ok) {
+                    const err: any = await chunkRes.json().catch(() => ({ error: 'Backup chunk stream failed' }));
+                    throw new Error(err.error || `Failed to fetch backup for table ${tableName}`);
+                }
+
+                const chunkData: any = await chunkRes.json();
+                if (Array.isArray(chunkData.rows)) {
+                    tableRows.push(...chunkData.rows);
+                }
+
+                cursor = chunkData.nextCursor;
+                if (!cursor) {
+                    hasMore = false;
+                }
+            }
+
+            tablesData[tableName] = tableRows;
+            countsData[tableName] = tableRows.length;
+        }
+
+        const backupPayload = {
+            version: '3.47.0',
+            createdAt: new Date().toISOString(),
+            tables: tablesData,
+            counts: countsData
+        };
+
+        return backupPayload;
+    }, []);
+
     const downloadFullBackup = useCallback(async (): Promise<void> => {
         setOperationProgress({ percentage: 5, status: 'Initializing full database backup stream...' });
         try {
-            const tablesData: Record<string, any[]> = {};
-            const countsData: Record<string, number> = {};
-            const totalTables = BACKUP_TABLES.length;
-
-            for (let tIdx = 0; tIdx < totalTables; tIdx++) {
-                const tableName = BACKUP_TABLES[tIdx];
-                const tableRows: any[] = [];
-                let cursor: string | null = null;
-                let hasMore = true;
-
-                const basePct = 5 + Math.round((tIdx / totalTables) * 85);
-                setOperationProgress({ 
-                    percentage: basePct, 
-                    status: `Streaming table "${tableName}" (${tIdx + 1}/${totalTables})...` 
-                });
-
-                while (hasMore) {
-                    const chunkUrl: string = cursor 
-                        ? `/api/backup?table=${encodeURIComponent(tableName)}&cursor=${encodeURIComponent(cursor)}`
-                        : `/api/backup?table=${encodeURIComponent(tableName)}`;
-                    
-                    const chunkRes: Response = await fetch(chunkUrl, { credentials: 'include' });
-                    if (!chunkRes.ok) {
-                        const err: any = await chunkRes.json().catch(() => ({ error: 'Backup chunk stream failed' }));
-                        throw new Error(err.error || `Failed to fetch backup for table ${tableName}`);
-                    }
-
-                    const chunkData: any = await chunkRes.json();
-                    if (Array.isArray(chunkData.rows)) {
-                        tableRows.push(...chunkData.rows);
-                    }
-
-                    cursor = chunkData.nextCursor;
-                    if (!cursor) {
-                        hasMore = false;
-                    }
-                }
-
-                tablesData[tableName] = tableRows;
-                countsData[tableName] = tableRows.length;
-            }
-
+            const backupPayload = await generateFullBackupPayload();
             setOperationProgress({ percentage: 95, status: 'Packaging JSON backup archive...' });
-
-            const backupPayload = {
-                version: '3.46.0',
-                createdAt: new Date().toISOString(),
-                tables: tablesData,
-                counts: countsData
-            };
 
             const jsonString = JSON.stringify(backupPayload, null, 2);
             const blob = new Blob([jsonString], { type: 'application/json' });
@@ -907,7 +913,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             showToast('Backup Error', err.message || 'Failed to download database backup.', 'error');
             setOperationProgress({ percentage: 0, status: '' });
         }
-    }, [showToast]);
+    }, [generateFullBackupPayload, showToast]);
 
     const sendFeeReminders = async (challanIds: string[]) => {
         showToast('Success', `Broadcasted ${challanIds.length} reminders to parent dashboard.`, 'success');
@@ -919,7 +925,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const value: DataContextType = {
         schools, users, classes, branches, subjects, exams, students, attendance, fees, ledger, results, logs, feeHeads, events,
         loading, isInitialLoad, lastSyncTime, syncError, syncProgress, operationProgress,
-        fetchData, downloadFullBackup,
+        fetchData, downloadFullBackup, generateFullBackupPayload,
         getSchoolById: (id) => schools.find(s => s.id === id),
         getLedgerForStudent,
         updateUser, deleteUser, addUserByAdmin, addStudent, updateStudent, updateFeeStructure, deleteStudent,

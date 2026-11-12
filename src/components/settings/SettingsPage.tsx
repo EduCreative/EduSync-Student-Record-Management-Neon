@@ -11,6 +11,7 @@ import ImageUpload from '../common/ImageUpload';
 import IncreaseTuitionFeeModal from './IncreaseTuitionFeeModal';
 import RestoreModal from './RestoreModal';
 import { UploadCloud } from 'lucide-react';
+import { GoogleDriveBackupCard } from './GoogleDriveBackupCard';
 
 const SettingsPage: React.FC = () => {
     const { toggleTheme, increaseFontSize, decreaseFontSize, resetFontSize, sidebarMode, setSidebarMode } = useTheme();
@@ -243,6 +244,10 @@ const SettingsPage: React.FC = () => {
                             </p>
                         </div>
                     </div>
+                )}
+
+                {(user?.role === UserRole.Owner || effectiveRole === UserRole.Admin) && (
+                    <GoogleDriveBackupCard />
                 )}
 
                 {/* INTERFACE & OTHER SETTINGS - Standard Style */}

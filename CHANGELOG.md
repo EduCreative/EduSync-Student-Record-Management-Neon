@@ -1,6 +1,19 @@
 
 # Changelog
 
+## [3.47.0] - 2026-11-12
+
+### Google Drive Cloud Backup & Automated Scheduler
+- **Google Drive OAuth & Permissions (`googleDriveService.ts`)**:
+  - Integrated Firebase Auth popup sign-in requesting Google Drive file scope (`https://www.googleapis.com/auth/drive.file`).
+  - Implemented multipart backup payload upload (`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`) directly to Owner or Admin Google Drive account.
+- **Automated Scheduler & Settings UI (`GoogleDriveBackupCard.tsx`)**:
+  - Added schedule options (Disabled, Daily, Weekly, Monthly) persisting preferences in `localStorage` (`edusync_gdrive_frequency`).
+  - Implemented automated background check on app mount that triggers cloud backup upload when interval elapses.
+  - Added manual "Backup Now to Google Drive" button, connection status indicators, and last upload timestamp tracking.
+- **Context & Data Pipeline Integration**:
+  - Extracted `generateFullBackupPayload()` in `DataContext.tsx` shared between local JSON downloads and Google Drive cloud backups.
+
 ## [3.46.0] - 2026-11-11
 
 ### Branch Picker (View Filter Only) for School-Wide Staff (P29d)
