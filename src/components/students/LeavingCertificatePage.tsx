@@ -86,7 +86,10 @@ const LeavingCertificatePage: React.FC<LeavingCertificatePageProps> = ({ student
                 />
             );
             
-            showPrintPreview(content, `Leaving Certificate - ${student.name}`);
+            const todayStr = getTodayString();
+            const [y, m, d] = todayStr.split('-');
+            const formattedDate = `${d}-${m}-${y}`;
+            showPrintPreview(content, `EduSync-Leaving Certificate-${student.name}-${studentClass?.name || 'Class'}-${formattedDate}`);
         } catch (error: any) {
             console.error("Error issuing certificate:", error);
             showToast('Error', error.message || 'Failed to issue certificate.', 'error');

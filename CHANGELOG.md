@@ -1,6 +1,17 @@
 
 # Changelog
 
+## [3.53.0] - 2026-11-12
+
+### Standardized PDF & CSV Export Filename Enforcement
+- **Browser Default PDF Naming (`document.title` Synchronization)**:
+  - Updated `PrintContext.tsx` and `PrintPreview.tsx` (`handlePrint`) to temporarily update `document.title` and `iframe.contentDocument.title` directly to the report title (e.g. `EduSync-Fee Challans-Playgroup-Jan 2026`) when Print Preview opens and when Print/Save is triggered.
+  - This ensures that when users click "Print / Save" and select "Save as PDF", browser print dialogs (Chrome, Edge, Firefox, Safari) default the suggested PDF filename to `EduSync-[Report Name]-[Class(s)]-[dates/month].pdf` instead of falling back to the application title `EduSync - Student Record Management.pdf`.
+- **CSV Filename Sanitization**:
+  - Updated `downloadCsvString` in `src/utils/csvHelper.ts` to sanitize filenames and avoid forcing double date suffixes when downloading CSV reports.
+- **Report Title & Filename Standardization Across All Modals**:
+  - Updated report title and export name formats across `BulkChallanReportModal.tsx`, `DefaulterReportModal.tsx`, `FeeCollectionReportModal.tsx`, `AttendanceReportModal.tsx`, `ClassListReportModal.tsx`, `DiscountReportModal.tsx`, `MissingDataReportModal.tsx`, `ReportCardModal.tsx`, `StudentIdCardModal.tsx`, `ChallanRangeReportModal.tsx`, `FeeCollectionPage.tsx`, and `LeavingCertificatePage.tsx`.
+
 ## [3.52.0] - 2026-11-12
 
 ### Report Format, Logo Sizing, Print Preview & Filename Convention Updates

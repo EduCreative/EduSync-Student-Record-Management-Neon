@@ -1,7 +1,7 @@
 {
-  "version": "3.52.0",
+  "version": "3.53.0",
   "releaseDate": "2026-11-12",
   "changelog": [
-    "Report Improvements: Compact corner school logo sizing, high-contrast Print Preview font colors, Print/Save format consistency, and standardized PDF/CSV naming convention."
+    "Standardized PDF & CSV Naming: Automatic document.title synchronization during Print/Save to ensure browser default PDF export matches EduSync-[Report Name]-[Class(s)]-[dates/month] filename convention."
   ]
 }

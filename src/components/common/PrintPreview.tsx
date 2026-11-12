@@ -83,11 +83,15 @@ const PrintPreview: React.FC = () => {
         const blob = new Blob([printHTML], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
 
+        const originalTitle = document.title;
+        document.title = printTitle;
+
         const iframe = document.createElement('iframe');
         iframe.style.display = 'none';
         iframe.id = 'print-frame-id';
         
         const cleanup = () => {
+            document.title = originalTitle;
             URL.revokeObjectURL(url);
             if (document.body.contains(iframe)) {
                 document.body.removeChild(iframe);
@@ -97,10 +101,14 @@ const PrintPreview: React.FC = () => {
         iframe.onload = () => {
             try {
                 if (iframe.contentWindow) {
+                    if (iframe.contentDocument) {
+                        iframe.contentDocument.title = printTitle;
+                    }
                     iframe.contentWindow.focus();
                     // Use `afterprint` event for reliable cleanup after the print dialog closes.
                     iframe.contentWindow.addEventListener('afterprint', cleanup);
                     iframe.contentWindow.print();
+                    setTimeout(cleanup, 3000);
                 } else {
                      throw new Error("Could not access print window.");
                 }

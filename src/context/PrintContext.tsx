@@ -14,16 +14,26 @@ const PrintContext = createContext<PrintContextType | undefined>(undefined);
 export const PrintProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [printContent, setPrintContent] = useState<ReactNode | null>(null);
     const [printTitle, setPrintTitle] = useState('');
+    const [originalTitle, setOriginalTitle] = useState<string>('');
 
     const showPrintPreview = useCallback((content: ReactNode, title: string) => {
+        const cleanTitle = title.replace(/[\\/:*?"<>|]/g, '-').trim();
+        if (!originalTitle) {
+            setOriginalTitle(document.title);
+        }
+        document.title = cleanTitle;
         setPrintContent(content);
-        setPrintTitle(title);
-    }, []);
+        setPrintTitle(cleanTitle);
+    }, [originalTitle]);
 
     const hidePrintPreview = useCallback(() => {
+        if (originalTitle) {
+            document.title = originalTitle;
+            setOriginalTitle('');
+        }
         setPrintContent(null);
         setPrintTitle('');
-    }, []);
+    }, [originalTitle]);
 
     const value = {
         showPrintPreview,

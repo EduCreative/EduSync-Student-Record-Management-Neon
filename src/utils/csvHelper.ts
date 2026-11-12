@@ -90,7 +90,17 @@ export const downloadCsvString = (csvContent: string, fileName: string) => {
     if (link.download !== undefined) {
         const url = URL.createObjectURL(blob);
         link.setAttribute('href', url);
-        link.setAttribute('download', `${fileName}_${new Date().toISOString().split('T')[0]}.csv`);
+        
+        let cleanName = fileName.replace(/[\\/:*?"<>|]/g, '-').trim();
+        if (!cleanName.toLowerCase().endsWith('.csv')) {
+            if (!cleanName.startsWith('EduSync')) {
+                cleanName = `${cleanName}_${new Date().toISOString().split('T')[0]}.csv`;
+            } else {
+                cleanName = `${cleanName}.csv`;
+            }
+        }
+        
+        link.setAttribute('download', cleanName);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();

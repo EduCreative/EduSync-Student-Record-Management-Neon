@@ -6,6 +6,7 @@ import { usePrint } from '../../context/PrintContext';
 import { UserRole } from '../../types';
 import PrintableChallan from './PrintableChallan';
 import { naturalCompare } from '../../utils/sorting';
+import { getTodayKarachi } from '../../utils/dates';
 
 interface ChallanRangeReportModalProps {
     isOpen: boolean;
@@ -79,7 +80,10 @@ const ChallanRangeReportModal: React.FC<ChallanRangeReportModalProps> = ({ isOpe
                 })}
             </div>
         );
-        showPrintPreview(content, `EduSync - Fee Challans - Range`);
+        const todayStr = getTodayKarachi();
+        const [y, m, d] = todayStr.split('-');
+        const formattedDate = `${d}-${m}-${y}`;
+        showPrintPreview(content, `EduSync-Fee Challans-Challans ${startChallan} to ${endChallan}-${formattedDate}`);
     };
 
     return (

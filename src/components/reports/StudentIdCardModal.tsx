@@ -6,6 +6,7 @@ import { usePrint } from '../../context/PrintContext';
 import { UserRole } from '../../types';
 import PrintableIdCard from './PrintableIdCard';
 import { getClassLevel } from '../../utils/sorting';
+import { getTodayKarachi } from '../../utils/dates';
 
 interface StudentIdCardModalProps {
     isOpen: boolean;
@@ -45,7 +46,11 @@ const StudentIdCardModal: React.FC<StudentIdCardModalProps> = ({ isOpen, onClose
                 ))}
             </div>
         );
-        showPrintPreview(content, `EduSync - ID Cards - ${classId === 'all' ? 'All Classes' : classMap.get(classId)}`);
+        const classNameStr = classId === 'all' ? 'All Classes' : (classMap.get(classId) || 'Class');
+        const todayStr = getTodayKarachi();
+        const [y, m, d] = todayStr.split('-');
+        const formattedDate = `${d}-${m}-${y}`;
+        showPrintPreview(content, `EduSync-ID Cards-${classNameStr}-${formattedDate}`);
     };
 
     return (

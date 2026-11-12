@@ -45,7 +45,8 @@ const FeeCollectionPage: React.FC = () => {
                 </div>
             </div>
         );
-        showPrintPreview(content, `EduSync - Fee Challan - ${student.name} (${challan.challanNumber})`);
+        const classNameStr = classMap.get(student.classId) || 'Class';
+        showPrintPreview(content, `EduSync-Fee Challan-${student.name}-${classNameStr}-${challan.month} ${challan.year}`);
     };
     
     const [challanToManage, setChallanToManage] = useState<{ challan: FeeChallan, student: Student, mode: 'pay' | 'edit' } | null>(null);
