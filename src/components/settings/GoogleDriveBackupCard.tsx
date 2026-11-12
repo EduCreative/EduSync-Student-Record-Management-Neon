@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, CheckCircle, RefreshCw, LogOut, KeyRound, AlertTriangle } from 'lucide-react';
+import { Cloud, CheckCircle, RefreshCw, LogOut, KeyRound, AlertTriangle, HelpCircle } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -31,7 +31,6 @@ export const GoogleDriveBackupCard: React.FC = () => {
             (u) => setFbUser(u),
             () => {
                 if (localStorage.getItem('edusync_gdrive_manual_token')) {
-                    // Create dummy firebase user wrapper if manual token is active
                     setFbUser({ email: 'connected.via.token@edusync.local' } as any);
                 } else {
                     setFbUser(null);
@@ -67,6 +66,7 @@ export const GoogleDriveBackupCard: React.FC = () => {
                     showToast('Cloud Backup', `Scheduled backup successfully uploaded to Google Drive (${res.fileName}).`, 'success');
                 } catch (err: any) {
                     console.error('Scheduled Google Drive backup failed:', err);
+                    showToast('Cloud Backup Error', err.message || 'Scheduled backup failed (Check Google Drive storage quota).', 'error');
                 }
             }
         };
@@ -133,7 +133,7 @@ export const GoogleDriveBackupCard: React.FC = () => {
             setLastFilename(res.fileName);
             showToast('Success', `Database backup uploaded to Google Drive successfully! (${res.fileName})`, 'success');
         } catch (err: any) {
-            showToast('Cloud Backup Error', err.message || 'Failed to upload backup to Google Drive.', 'error');
+            showToast('Cloud Backup Error', err.message || 'Failed to upload backup to Google Drive. Check if your Google Drive storage is full.', 'error');
         } finally {
             setIsUploading(false);
         }
@@ -178,7 +178,7 @@ export const GoogleDriveBackupCard: React.FC = () => {
                             <li>Click <strong>Add domain</strong> and paste: <code className="font-mono bg-amber-100 dark:bg-amber-900 px-1 py-0.5 rounded">{currentDomain}</code>.</li>
                         </ol>
                         <p className="text-xs text-amber-700 dark:text-amber-400 pt-1">
-                            Alternatively, you can link Google Drive instantly using a Google OAuth Access Token below.
+                            Alternatively, you can link Google Drive instantly using the <strong>Enter Token Manually</strong> option below.
                         </p>
                     </div>
                 )}
@@ -206,26 +206,41 @@ export const GoogleDriveBackupCard: React.FC = () => {
                                     className="px-4 py-2.5 bg-secondary-200 dark:bg-secondary-700 hover:bg-secondary-300 dark:hover:bg-secondary-600 text-secondary-800 dark:text-secondary-200 font-bold rounded-lg transition-all flex items-center gap-2 text-sm"
                                 >
                                     <KeyRound className="w-4 h-4" />
-                                    {showManualInput ? 'Hide Token Input' : 'Enter Token Manually'}
+                                    {showManualInput ? 'Hide Token Guide' : 'Enter Token Manually'}
                                 </button>
                             </div>
                         </div>
 
                         {showManualInput && (
-                            <form onSubmit={handleSaveManualToken} className="p-4 bg-white dark:bg-secondary-800 rounded-lg border dark:border-secondary-700 space-y-3">
+                            <form onSubmit={handleSaveManualToken} className="p-4 bg-white dark:bg-secondary-800 rounded-lg border dark:border-secondary-700 space-y-4">
+                                <div className="border-b pb-3 dark:border-secondary-700">
+                                    <div className="flex items-center gap-2 text-secondary-900 dark:text-white font-bold text-sm mb-1">
+                                        <HelpCircle className="w-4 h-4 text-primary-600" />
+                                        How to get a Google OAuth Access Token (Step-by-Step Guide):
+                                    </div>
+                                    <ol className="text-xs text-secondary-600 dark:text-secondary-300 list-decimal list-inside space-y-1.5 pl-1">
+                                        <li>Open the official <a href="https://developers.google.com/oauthplayground/" target="_blank" rel="noreferrer" className="text-primary-600 dark:text-primary-400 underline font-semibold">Google OAuth 2.0 Playground</a>.</li>
+                                        <li>On the left sidebar, scroll down and expand <strong>Drive API v3</strong>.</li>
+                                        <li>Select scope: <code className="bg-secondary-100 dark:bg-secondary-900 px-1 py-0.5 rounded font-mono text-[11px]">https://www.googleapis.com/auth/drive.file</code>.</li>
+                                        <li>Click the blue <strong>Authorize APIs</strong> button and sign in with your Google account.</li>
+                                        <li>Under Step 2 (&quot;Exchange authorization code for tokens&quot;), click <strong>Exchange authorization code for token</strong>.</li>
+                                        <li>Copy the resulting **Access token** (starts with <code className="bg-secondary-100 dark:bg-secondary-900 px-1 py-0.5 rounded font-mono text-[11px]">ya29...</code>) and paste it below.</li>
+                                    </ol>
+                                    <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 font-medium">
+                                        ⚠️ <em>Note on Token Expiry:</em> Manual tokens generated via OAuth Playground expire after <strong>1 hour</strong>. For permanent automated backups without expiration, use <strong>Connect Google Drive</strong> (after adding your domain to Firebase).
+                                    </p>
+                                </div>
+
                                 <div>
-                                    <label className="input-label">Google OAuth Access Token (with Drive scope)</label>
+                                    <label className="input-label">Paste Access Token Here</label>
                                     <input
                                         type="password"
                                         required
-                                        placeholder="Paste OAuth access token here..."
+                                        placeholder="ya29.a0..."
                                         value={manualToken}
                                         onChange={e => setManualToken(e.target.value)}
                                         className="input-field font-mono text-xs"
                                     />
-                                    <p className="text-[11px] text-secondary-400 mt-1">
-                                        You can generate a temporary access token with <code className="bg-secondary-100 dark:bg-secondary-900 px-1 py-0.5 rounded">https://www.googleapis.com/auth/drive.file</code> scope using the Google OAuth 2.0 Playground.
-                                    </p>
                                 </div>
                                 <div className="flex justify-end">
                                     <button type="submit" className="btn-primary text-xs font-bold py-2 px-4">
