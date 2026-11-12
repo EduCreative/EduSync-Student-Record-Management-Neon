@@ -23,7 +23,7 @@ export interface UseBranchFilterResult {
 
 export function useBranchFilter(): UseBranchFilterResult {
     const { user, activeSchoolId } = useAuth();
-    const { branches, classes, students } = useData();
+    const { branches, classes, students, loading, isInitialLoad } = useData();
 
     const isLocked = Boolean(user && user.role !== UserRole.Owner && user.branchId);
     const lockedBranchId = isLocked && user?.branchId ? user.branchId : null;
@@ -62,8 +62,11 @@ export function useBranchFilter(): UseBranchFilterResult {
 
     const selectedBranchId = isLocked && lockedBranchId ? lockedBranchId : selectedBranchIdState;
 
-    // Reset to 'all' if remembered branch no longer exists in current school
+    // Reset to 'all' if remembered branch no longer exists in current school.
+    // Run this check only after data has loaded to prevent resetting during initial load.
     useEffect(() => {
+        if (isInitialLoad || loading) return;
+
         if (!isLocked && selectedBranchId !== 'all' && selectedBranchId !== 'unassigned') {
             const exists = schoolBranches.some(b => b.id === selectedBranchId);
             if (!exists) {
@@ -75,12 +78,14 @@ export function useBranchFilter(): UseBranchFilterResult {
                 }
             }
         }
-    }, [schoolBranches, selectedBranchId, isLocked]);
+    }, [schoolBranches, selectedBranchId, isLocked, isInitialLoad, loading]);
 
     // Switching school (Owner) resets branch filter to 'all'
     const prevSchoolIdRef = useRef(effectiveSchoolId);
     useEffect(() => {
-        if (prevSchoolIdRef.current !== effectiveSchoolId) {
+        if (isInitialLoad || loading) return;
+
+        if (prevSchoolIdRef.current && prevSchoolIdRef.current !== effectiveSchoolId) {
             prevSchoolIdRef.current = effectiveSchoolId;
             if (!isLocked) {
                 setSelectedBranchIdState('all');
@@ -90,8 +95,10 @@ export function useBranchFilter(): UseBranchFilterResult {
                     // ignore localStorage errors
                 }
             }
+        } else {
+            prevSchoolIdRef.current = effectiveSchoolId;
         }
-    }, [effectiveSchoolId, isLocked]);
+    }, [effectiveSchoolId, isLocked, isInitialLoad, loading]);
 
     // Sync across components in the same tab
     const setSelectedBranchId = useCallback((id: string) => {

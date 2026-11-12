@@ -38,3 +38,4 @@ cookies.txt
 backups/
 bun.lock
 public/assets/aistudio/
+.aistudio/

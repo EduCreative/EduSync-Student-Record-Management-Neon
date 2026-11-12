@@ -146,12 +146,13 @@ export default async function handler(req: any, res: any) {
             const ids = updates.map((u: any) => u.id);
             const isOwnerGlobal = session.role === 'Owner';
             const effectiveSchoolId = session.schoolId;
+            const lockedBranch = locked ? session.branchId : null;
 
             const valid = await sql`
                 SELECT id FROM classes
                 WHERE id = ANY(${ids})
                 AND (${isOwnerGlobal}::boolean OR school_id = ${effectiveSchoolId}::uuid)
-                ${locked ? sql`AND branch_id = ${session.branchId}::uuid` : sql``}
+                AND (${lockedBranch}::uuid IS NULL OR branch_id = ${lockedBranch}::uuid)
             `;
             const validIds = new Set(valid.map((c: any) => c.id));
             let updatedCount = 0;

@@ -62,12 +62,12 @@ export default async function handler(req: any, res: any) {
                 return res.status(401).json({ error: 'Incorrect Owner password. Database restore aborted.' });
             }
 
-            // Create staging tables if they don't exist and truncate any previous staging data
+            // Drop any previous staging tables and recreate them matching current live schema
             for (const tbl of RESTORE_TABLE_ORDER) {
                 const quotedLive = `"${tbl.replace(/"/g, '""')}"`;
                 const stagingTable = `"staging_${tbl.replace(/"/g, '""')}"`;
-                await sql(`CREATE TABLE IF NOT EXISTS ${stagingTable} (LIKE ${quotedLive} INCLUDING DEFAULTS)`);
-                await sql(`TRUNCATE TABLE ${stagingTable}`);
+                await sql(`DROP TABLE IF EXISTS ${stagingTable}`);
+                await sql(`CREATE TABLE ${stagingTable} (LIKE ${quotedLive} INCLUDING DEFAULTS)`);
             }
 
             // Issue short-lived HMAC token for upload session

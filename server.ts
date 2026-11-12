@@ -34,7 +34,7 @@ async function startServer() {
         // Production mode: Serve built static files
         const distPath = path.resolve(__dirname, 'dist');
         app.use(express.static(distPath));
-        app.get('*', (_req, res) => {
+        app.get('/{*splat}', (_req, res) => {
             res.sendFile(path.resolve(distPath, 'index.html'));
         });
     }

@@ -1,6 +1,35 @@
 
 # Changelog
 
+## [3.55.0] - 2026-11-12
+
+### Registration Rate Limiting, Staging Table Schema Sync & Drive Backup Hardening
+- **Registration Rate Limiting & Account Enumeration Prevention (`register.ts`)**:
+  - Implemented IP-keyed rate limiting in `login_attempts` (`register:${clientIp}`), returning HTTP 429 after 5 registration requests in an hour.
+  - Standardized success response for existing emails so registration forms cannot be used for user discovery.
+- **Database Restore Staging Synchronization (`write/restore.ts`)**:
+  - Replaced `CREATE TABLE IF NOT EXISTS` with `DROP TABLE IF EXISTS` and `CREATE TABLE ... (LIKE live INCLUDING DEFAULTS)` in the restore `init` step to guarantee staging table column alignment.
+- **Owner-Only Google Drive Backup Card (`SettingsPage.tsx`)**:
+  - Restricted `GoogleDriveBackupCard` display in `SettingsPage.tsx` exclusively to the Institutional Owner.
+- **Manual Google Drive Backup & Security Refactor (`GoogleDriveBackupCard.tsx` & `googleDriveService.ts`)**:
+  - Updated card copy to "manual backup to Google Drive" and added guidance note explaining browser scheduling limitations and CLI `npm run backup` usage.
+  - Removed manual OAuth token pasting input and purged `edusync_gdrive_manual_token` localStorage persistence.
+- **Repository `.gitignore` Hardening**:
+  - Added `.aistudio/` to `.gitignore` while keeping `firebase-applet-config.json` intact.
+
+## [3.54.0] - 2026-11-12
+
+### Neon SQL Nested Template Fix, Express 5 Production Routing, Branch Filter Persistence & Header Locked Branch Display
+- **Neon Driver SQL Parameter Handling**:
+  - Replaced nested `sql` fragments in `write/challans.ts` (challan generation query and delete-unpaid query) and `write/classes.ts` (class sort order bulk update) with clean parameterized null checks `AND (${lockedBranch}::uuid IS NULL OR c.branch_id = ${lockedBranch}::uuid)`.
+  - Resolves Postgres syntax errors caused by `@neondatabase/serverless` passing nested `sql` tagged templates as ordinary parameter placeholders.
+- **Express 5 Production Routing**:
+  - Updated wildcard route in `server.ts` from `app.get('*', ...)` to `app.get('/{*splat}', ...)` so `npm start` initializes properly with Express 5.
+- **Branch Filter Persistence on Page Reload**:
+  - Fixed `useBranchFilter` to prevent premature branch validation and reset before initial data load finishes (`isInitialLoad || loading`), preserving the chosen branch across reloads.
+- **Header Branch Name Display for Branch-Locked Users**:
+  - Updated `Header.tsx` to display the assigned branch name next to the school name (e.g. `Test School · Main`) for branch-locked staff members, while maintaining the clean school name for unlocked users.
+
 ## [3.53.0] - 2026-11-12
 
 ### Standardized PDF & CSV Export Filename Enforcement

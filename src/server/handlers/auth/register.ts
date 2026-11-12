@@ -27,9 +27,42 @@ export default async function handler(req: any, res: any) {
         }
 
         const sql = getDb();
+        const ipHeader = req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || '';
+        const clientIp = typeof ipHeader === 'string' ? (ipHeader.split(',')[0].trim() || 'unknown') : 'unknown';
+        const rateLimitKey = 'register:' + clientIp;
+
+        // DB-backed rate limiting: 5 registration requests per hour per IP
+        try {
+            const attemptCountRows = await sql`
+                SELECT COUNT(*)::int as count 
+                FROM login_attempts 
+                WHERE LOWER(email) = LOWER(${rateLimitKey}) 
+                  AND attempted_at >= NOW() - INTERVAL '1 hour'
+            `;
+            const attempts = attemptCountRows?.[0]?.count || 0;
+            if (attempts >= 5) {
+                return res.status(429).json({
+                    error: 'Too many registration requests. Please try again after one hour.'
+                });
+            }
+        } catch (rlErr) {
+            console.warn("Registration rate-limit check skipped due to DB error:", rlErr);
+        }
+
+        // Record attempt to enforce rate limiting
+        try {
+            await sql`INSERT INTO login_attempts (email, ip, attempted_at) VALUES (${rateLimitKey}, ${clientIp}, NOW())`;
+            await sql`DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL '1 day'`;
+        } catch (recordErr) {
+            console.warn("Failed to record registration attempt:", recordErr);
+        }
+
+        const successMessage = 'Account registered successfully. An administrator must approve your account before you can log in.';
+
         const existing = await sql`SELECT id FROM profiles WHERE LOWER(email) = LOWER(${normalizedEmail}) LIMIT 1`;
         if (existing.length > 0) {
-            return res.status(409).json({ error: 'Email is already registered.' });
+            // Return identical success response to prevent account enumeration
+            return res.status(200).json({ success: true, message: successMessage });
         }
 
         // Query default/single school to associate the registered user with
@@ -88,7 +121,7 @@ export default async function handler(req: any, res: any) {
             console.warn('Failed to insert registration activity log:', logErr);
         }
 
-        return res.status(201).json({ success: true, message: 'Account registered successfully. An administrator must approve your account before you can log in.' });
+        return res.status(200).json({ success: true, message: successMessage });
 
     } catch (err: any) {
         console.error("Register API error:", err);

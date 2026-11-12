@@ -1,7 +1,11 @@
 {
-  "version": "3.53.0",
+  "version": "3.55.0",
   "releaseDate": "2026-11-12",
   "changelog": [
-    "Standardized PDF & CSV Naming: Automatic document.title synchronization during Print/Save to ensure browser default PDF export matches EduSync-[Report Name]-[Class(s)]-[dates/month] filename convention."
+    "Registration Rate Limiting & Anti-Enumeration: Enforced 5 registrations per hour per IP limit and unified response message for existing emails.",
+    "Restore Staging Schema Sync: Added DROP TABLE IF EXISTS before CREATE TABLE (LIKE live INCLUDING DEFAULTS) in restore init step.",
+    "Owner-Only Google Drive Card: Restricted GoogleDriveBackupCard rendering in SettingsPage to Institutional Owners.",
+    "Manual Cloud Backup Refactor: Removed in-browser scheduling and manual token input, clarifying CLI npm run backup usage for automated scheduling.",
+    "Git Ignore Hardening: Added .aistudio/ to .gitignore while preserving firebase-applet-config.json."
   ]
 }

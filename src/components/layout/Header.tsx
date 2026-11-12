@@ -102,7 +102,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAboutModal }) => {
     const { user, logout, activeSchoolId } = useAuth();
     const { theme, toggleTheme } = useTheme();
-    const { getSchoolById, fetchData, loading, isInitialLoad, syncProgress } = useData();
+    const { getSchoolById, branches, fetchData, loading, isInitialLoad, syncProgress } = useData();
     const { isOnline } = useSync();
     const [profileOpen, setProfileOpen] = useState(false);
 
@@ -123,6 +123,13 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAbou
 
     const displaySchoolId = activeSchoolId || user?.schoolId;
     const school = displaySchoolId ? getSchoolById(displaySchoolId) : null;
+
+    const isLocked = Boolean(user && user.role !== UserRole.Owner && user.branchId);
+    const lockedBranch = isLocked ? branches.find(b => b.id === user?.branchId) : null;
+    const baseSchoolName = school?.name || 'EduSync';
+    const schoolDisplayName = isLocked && lockedBranch
+        ? `${baseSchoolName} · ${lockedBranch.name}`
+        : baseSchoolName;
 
     return (
         <header className="sticky top-0 z-30 border-b border-secondary-200 bg-white dark:border-secondary-700 dark:bg-secondary-800 no-print transition-colors duration-300">
@@ -160,7 +167,7 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen, setActiveView, openAbou
                             <EduSyncLogo className="h-7 sm:h-8 w-auto text-primary-600 dark:text-primary-400 neon-glow-primary shrink-0" />
                         )}
                         <div className="flex items-center gap-1.5 overflow-hidden">
-                            <h1 className="text-xs sm:text-base font-semibold truncate max-w-[120px] sm:max-w-none">{school?.name || 'EduSync'}</h1>
+                            <h1 className="text-xs sm:text-base font-semibold truncate max-w-[120px] sm:max-w-none">{schoolDisplayName}</h1>
                             <span className="bg-neon-accent/20 text-neon-accent text-[8px] sm:text-[10px] px-1 py-0.5 rounded font-bold border border-neon-accent/30 hidden xs:inline-block">NEON</span>
                         </div>
                         {user?.role !== UserRole.Teacher && (

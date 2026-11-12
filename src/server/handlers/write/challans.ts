@@ -34,6 +34,7 @@ export default async function handler(req: any, res: any) {
             }
 
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
+            const lockedBranch = locked ? session.branchId : null;
 
             // Fetch students belonging to this school (filtered by branch if locked)
             const students = await sql`
@@ -43,7 +44,7 @@ export default async function handler(req: any, res: any) {
                 WHERE s.id = ANY(${studentIds})
                 AND (${effectiveSchoolId}::uuid IS NULL OR s.school_id = ${effectiveSchoolId}::uuid)
                 AND s.status = 'Active'
-                ${locked ? sql`AND c.branch_id = ${session.branchId}::uuid` : sql``}
+                AND (${lockedBranch}::uuid IS NULL OR c.branch_id = ${lockedBranch}::uuid)
             `;
 
             if (students.length === 0) {
@@ -242,6 +243,7 @@ export default async function handler(req: any, res: any) {
             }
 
             const effectiveSchoolId = session.role === 'Owner' && schoolId ? schoolId : session.schoolId;
+            const lockedBranch = locked ? session.branchId : null;
 
             // Fetch candidate unpaid challans: paid_amount = 0, discount = 0, empty payment_history, not cancelled (A12)
             const candidates = await sql`
@@ -256,7 +258,7 @@ export default async function handler(req: any, res: any) {
                 AND (fc.payment_history IS NULL OR fc.payment_history = '[]'::jsonb)
                 AND fc.status != 'Cancelled'
                 AND (${effectiveSchoolId}::uuid IS NULL OR s.school_id = ${effectiveSchoolId}::uuid)
-                ${locked ? sql`AND c.branch_id = ${session.branchId}::uuid` : sql``}
+                AND (${lockedBranch}::uuid IS NULL OR c.branch_id = ${lockedBranch}::uuid)
             `;
 
             if (candidates.length === 0) {

@@ -247,7 +247,7 @@ const SettingsPage: React.FC = () => {
                     </div>
                 )}
 
-                {(user?.role === UserRole.Owner || effectiveRole === UserRole.Admin) && (
+                {user?.role === UserRole.Owner && (
                     <GoogleDriveBackupCard />
                 )}
 
