@@ -17,15 +17,21 @@ export const initAuth = (
 ) => {
     return onAuthStateChanged(auth, async (user: User | null) => {
         if (user) {
-            if (cachedAccessToken) {
-                if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
+            const token = cachedAccessToken || localStorage.getItem('edusync_gdrive_manual_token');
+            if (token) {
+                if (onAuthSuccess) onAuthSuccess(user, token);
             } else if (!isSigningIn) {
                 cachedAccessToken = null;
                 if (onAuthFailure) onAuthFailure();
             }
         } else {
-            cachedAccessToken = null;
-            if (onAuthFailure) onAuthFailure();
+            const manual = localStorage.getItem('edusync_gdrive_manual_token');
+            if (manual && auth.currentUser) {
+                if (onAuthSuccess) onAuthSuccess(auth.currentUser, manual);
+            } else {
+                cachedAccessToken = null;
+                if (onAuthFailure) onAuthFailure();
+            }
         }
     });
 };
@@ -43,19 +49,34 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
         return { user: result.user, accessToken: cachedAccessToken };
     } catch (error: any) {
         console.error('Google sign-in error:', error);
+        if (error.code === 'auth/unauthorized-domain') {
+            const currentDomain = window.location.hostname;
+            throw new Error(`Domain "${currentDomain}" is not authorized in Firebase Console. Please open your Firebase Console > Authentication > Settings > Authorized domains and add "${currentDomain}". Alternatively, use the Manual OAuth Token option below.`);
+        }
         throw error;
     } finally {
         isSigningIn = false;
     }
 };
 
+export const setManualAccessToken = (token: string) => {
+    cachedAccessToken = token.trim();
+    localStorage.setItem('edusync_gdrive_manual_token', token.trim());
+};
+
 export const getAccessToken = async (): Promise<string | null> => {
-    return cachedAccessToken;
+    if (cachedAccessToken) return cachedAccessToken;
+    const manual = localStorage.getItem('edusync_gdrive_manual_token');
+    if (manual) return manual;
+    return null;
 };
 
 export const googleSignOut = async () => {
-    await auth.signOut();
+    try {
+        await auth.signOut();
+    } catch {}
     cachedAccessToken = null;
+    localStorage.removeItem('edusync_gdrive_manual_token');
 };
 
 /**
@@ -64,7 +85,7 @@ export const googleSignOut = async () => {
 export async function uploadBackupToGoogleDrive(backupPayload: any, schoolName = 'School'): Promise<{ fileId: string; fileName: string }> {
     const accessToken = await getAccessToken();
     if (!accessToken) {
-        throw new Error('Not authenticated with Google Drive. Please sign in with Google first.');
+        throw new Error('Not authenticated with Google Drive. Please sign in or connect with a Google OAuth token first.');
     }
 
     const now = new Date();

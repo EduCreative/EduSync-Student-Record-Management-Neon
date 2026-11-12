@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, CheckCircle, RefreshCw, LogOut } from 'lucide-react';
+import { Cloud, CheckCircle, RefreshCw, LogOut, KeyRound, AlertTriangle } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { googleSignIn, googleSignOut, initAuth, uploadBackupToGoogleDrive } from '../../utils/googleDriveService';
+import { googleSignIn, googleSignOut, initAuth, uploadBackupToGoogleDrive, setManualAccessToken } from '../../utils/googleDriveService';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { School } from '../../types';
 
@@ -15,6 +15,9 @@ export const GoogleDriveBackupCard: React.FC = () => {
     const [fbUser, setFbUser] = useState<FirebaseUser | null>(null);
     const [isSigningIn, setIsSigningIn] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [showManualInput, setShowManualInput] = useState(false);
+    const [manualToken, setManualToken] = useState('');
+    const [domainError, setDomainError] = useState<string | null>(null);
     const [frequency, setFrequency] = useState<string>(() => localStorage.getItem('edusync_gdrive_frequency') || 'disabled');
     const [lastUploadTime, setLastUploadTime] = useState<string | null>(() => localStorage.getItem('edusync_gdrive_last_upload'));
     const [lastFilename, setLastFilename] = useState<string | null>(() => localStorage.getItem('edusync_gdrive_last_filename'));
@@ -26,7 +29,14 @@ export const GoogleDriveBackupCard: React.FC = () => {
     useEffect(() => {
         const unsubscribe = initAuth(
             (u) => setFbUser(u),
-            () => setFbUser(null)
+            () => {
+                if (localStorage.getItem('edusync_gdrive_manual_token')) {
+                    // Create dummy firebase user wrapper if manual token is active
+                    setFbUser({ email: 'connected.via.token@edusync.local' } as any);
+                } else {
+                    setFbUser(null);
+                }
+            }
         );
         return () => unsubscribe();
     }, []);
@@ -66,6 +76,7 @@ export const GoogleDriveBackupCard: React.FC = () => {
 
     const handleGoogleSignIn = async () => {
         setIsSigningIn(true);
+        setDomainError(null);
         try {
             const result = await googleSignIn();
             if (result) {
@@ -73,16 +84,32 @@ export const GoogleDriveBackupCard: React.FC = () => {
                 showToast('Success', `Connected to Google Drive as ${result.user.email}`, 'success');
             }
         } catch (err: any) {
-            showToast('Google Sign-In Error', err.message || 'Failed to authenticate with Google.', 'error');
+            const msg = err.message || 'Failed to authenticate with Google.';
+            if (msg.includes('not authorized in Firebase Console')) {
+                setDomainError(msg);
+            }
+            showToast('Google Sign-In Error', msg, 'error');
         } finally {
             setIsSigningIn(false);
         }
+    };
+
+    const handleSaveManualToken = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!manualToken.trim()) return;
+        setManualAccessToken(manualToken);
+        setFbUser({ email: 'connected.via.token@edusync.local' } as any);
+        setShowManualInput(false);
+        setManualToken('');
+        setDomainError(null);
+        showToast('Success', 'Google Drive access token linked successfully!', 'success');
     };
 
     const handleGoogleSignOut = async () => {
         try {
             await googleSignOut();
             setFbUser(null);
+            setDomainError(null);
             showToast('Success', 'Disconnected from Google Drive.', 'success');
         } catch (err: any) {
             showToast('Error', 'Failed to sign out from Google.', 'error');
@@ -119,6 +146,8 @@ export const GoogleDriveBackupCard: React.FC = () => {
         showToast('Scheduler Updated', `Cloud backup schedule set to: ${val.toUpperCase()}`, 'success');
     };
 
+    const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'preview domain';
+
     return (
         <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6 mt-6">
             <div className="flex items-start gap-4 mb-6">
@@ -134,21 +163,77 @@ export const GoogleDriveBackupCard: React.FC = () => {
             </div>
 
             <div className="bg-secondary-50 dark:bg-secondary-900/40 rounded-xl p-5 border dark:border-secondary-700 space-y-4">
-                {!fbUser ? (
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-white dark:bg-secondary-800 rounded-lg border dark:border-secondary-700">
-                        <div>
-                            <p className="text-sm font-bold text-secondary-900 dark:text-white">Google Drive Connection</p>
-                            <p className="text-xs text-secondary-500 mt-0.5">Link your Google account to enable direct cloud storage uploads.</p>
+                {domainError && (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-lg space-y-2">
+                        <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-bold text-sm">
+                            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                            Firebase Auth Domain Authorization Required
                         </div>
-                        <button
-                            type="button"
-                            onClick={handleGoogleSignIn}
-                            disabled={isSigningIn}
-                            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-all flex items-center gap-2 text-sm disabled:opacity-50"
-                        >
-                            <Cloud className="w-4 h-4" />
-                            {isSigningIn ? 'Connecting...' : 'Connect Google Drive'}
-                        </button>
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                            Your current preview domain (<code className="font-mono bg-amber-100 dark:bg-amber-900 px-1 py-0.5 rounded">{currentDomain}</code>) is not yet added to your Firebase project&apos;s authorized domains.
+                        </p>
+                        <ol className="text-xs text-amber-700 dark:text-amber-400 list-decimal list-inside space-y-1 pl-1">
+                            <li>Open your <a href="https://console.firebase.google.com" target="_blank" rel="noreferrer" className="underline font-semibold">Firebase Console</a>.</li>
+                            <li>Go to <strong>Authentication</strong> &gt; <strong>Settings</strong> &gt; <strong>Authorized domains</strong>.</li>
+                            <li>Click <strong>Add domain</strong> and paste: <code className="font-mono bg-amber-100 dark:bg-amber-900 px-1 py-0.5 rounded">{currentDomain}</code>.</li>
+                        </ol>
+                        <p className="text-xs text-amber-700 dark:text-amber-400 pt-1">
+                            Alternatively, you can link Google Drive instantly using a Google OAuth Access Token below.
+                        </p>
+                    </div>
+                )}
+
+                {!fbUser ? (
+                    <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-white dark:bg-secondary-800 rounded-lg border dark:border-secondary-700">
+                            <div>
+                                <p className="text-sm font-bold text-secondary-900 dark:text-white">Google Drive Connection</p>
+                                <p className="text-xs text-secondary-500 mt-0.5">Link your Google account to enable direct cloud storage uploads.</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleGoogleSignIn}
+                                    disabled={isSigningIn}
+                                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-all flex items-center gap-2 text-sm disabled:opacity-50"
+                                >
+                                    <Cloud className="w-4 h-4" />
+                                    {isSigningIn ? 'Connecting...' : 'Connect Google Drive'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowManualInput(!showManualInput)}
+                                    className="px-4 py-2.5 bg-secondary-200 dark:bg-secondary-700 hover:bg-secondary-300 dark:hover:bg-secondary-600 text-secondary-800 dark:text-secondary-200 font-bold rounded-lg transition-all flex items-center gap-2 text-sm"
+                                >
+                                    <KeyRound className="w-4 h-4" />
+                                    {showManualInput ? 'Hide Token Input' : 'Enter Token Manually'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {showManualInput && (
+                            <form onSubmit={handleSaveManualToken} className="p-4 bg-white dark:bg-secondary-800 rounded-lg border dark:border-secondary-700 space-y-3">
+                                <div>
+                                    <label className="input-label">Google OAuth Access Token (with Drive scope)</label>
+                                    <input
+                                        type="password"
+                                        required
+                                        placeholder="Paste OAuth access token here..."
+                                        value={manualToken}
+                                        onChange={e => setManualToken(e.target.value)}
+                                        className="input-field font-mono text-xs"
+                                    />
+                                    <p className="text-[11px] text-secondary-400 mt-1">
+                                        You can generate a temporary access token with <code className="bg-secondary-100 dark:bg-secondary-900 px-1 py-0.5 rounded">https://www.googleapis.com/auth/drive.file</code> scope using the Google OAuth 2.0 Playground.
+                                    </p>
+                                </div>
+                                <div className="flex justify-end">
+                                    <button type="submit" className="btn-primary text-xs font-bold py-2 px-4">
+                                        Save &amp; Link Token
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 ) : (
                     <div className="space-y-4">

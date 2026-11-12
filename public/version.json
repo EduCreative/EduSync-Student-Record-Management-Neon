@@ -1,7 +1,7 @@
 {
-  "version": "3.46.0",
-  "releaseDate": "2026-11-11",
+  "version": "3.47.0",
+  "releaseDate": "2026-11-12",
   "changelog": [
-    "P29d: Branch picker view filter for school-wide staff across Dashboards, Student Management, Fee Collection, Attendance, Class Management, and Reports."
+    "Google Drive Cloud Backup & Automated Scheduler with Firebase Auth and direct multipart uploads."
   ]
 }
