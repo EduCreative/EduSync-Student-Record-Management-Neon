@@ -1,4 +1,4 @@
-# EduSync: Comprehensive User Manual (v3.40.0)
+# EduSync: Comprehensive User Manual (v3.56.0)
 
 Welcome to **EduSync**, the school administration and student record management platform. This manual provides role-by-role guidance, financial operating procedures, academic tracking, and operational instructions.
 
@@ -14,6 +14,8 @@ EduSync serves a single institution with optional campus branches. Access is par
 - **Teacher**: Academic operations. Marks student daily attendance, records exam marks, and tracks class performance.
 - **Parent**: Family portal. Monitors attendance records, examination grades, and fee challans for their enrolled children.
 - **Student**: Personal student portal. Accesses attendance history, report cards, and fee status.
+
+*Feature Visibility Overrides*: Owners can toggle menu access for individual user accounts ("Hide features for this user"). Hides menus and buttons. For real access limits, use the role and the branch lock.
 
 Authentication is secured via database-backed password hashing (`bcrypt`), rate-limited login defense, and session cookies.
 

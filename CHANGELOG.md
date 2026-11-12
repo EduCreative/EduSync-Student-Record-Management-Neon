@@ -1,6 +1,16 @@
 
 # Changelog
 
+## [3.56.0] - 2026-11-12
+
+### Package Lockfile Synchronization & User Feature Override Setting Clarification
+- **Firebase Lockfile Synchronization**:
+  - Re-indexed `package-lock.json` with installed `firebase` dependency tree to ensure `npm ci` succeeds cleanly in automated CI/CD builds.
+- **User Form Feature Visibility Overrides Label & Guidance (`UserFormModal.tsx` & `UserManual.md`)**:
+  - Renamed the menu override section setting in `UserFormModal.tsx` to **"Hide features for this user"**.
+  - Added explicit one-line help text: *"Hides menus and buttons. For real access limits, use the role and the branch lock."*
+  - Documented the same guidance in `UserManual.md` Section 1 (*Access, Roles & Security*).
+
 ## [3.55.0] - 2026-11-12
 
 ### Registration Rate Limiting, Staging Table Schema Sync & Drive Backup Hardening

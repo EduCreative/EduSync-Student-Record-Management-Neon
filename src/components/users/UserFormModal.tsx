@@ -485,7 +485,8 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 )}
                  {currentUser?.role === UserRole.Owner && userToEdit && (
                     <div className="pt-2">
-                        <label className="input-label mb-2">Menu Permissions</label>
+                        <label className="input-label mb-1">Hide features for this user</label>
+                        <p className="text-xs text-secondary-500 dark:text-secondary-400 mb-2">Hides menus and buttons. For real access limits, use the role and the branch lock.</p>
                         <div className="space-y-2 max-h-40 overflow-y-auto p-3 bg-secondary-50 dark:bg-secondary-700 rounded-md border dark:border-secondary-600">
                              {linksForRole.length > 0 ? linksForRole.map(link => (
                                 <label key={link.path} className="flex items-center space-x-3 cursor-pointer hover:bg-secondary-100 dark:hover:bg-secondary-600 p-1 rounded">
