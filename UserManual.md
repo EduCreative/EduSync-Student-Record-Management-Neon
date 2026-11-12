@@ -1,4 +1,4 @@
-# EduSync: Comprehensive User Manual (v3.56.0)
+# EduSync: Comprehensive User Manual (v3.57.0)
 
 Welcome to **EduSync**, the school administration and student record management platform. This manual provides role-by-role guidance, financial operating procedures, academic tracking, and operational instructions.
 
@@ -107,7 +107,19 @@ Institutional Owners can restore database archives directly from the browser wit
 5. The system safely streams records into an isolated staging area in small batches (bypassing serverless payload limits).
 6. Once 100% of rows are verified, an atomic transaction swaps staging into live tables, ensuring zero corruption or partial data risks.
 
-### 6.3 Command-Line CLI Restore
+### 6.3 Automated Weekly GitHub Actions Backup
+You can schedule automated weekly database backups directly inside your private GitHub repository:
+1. Open your repository on GitHub and navigate to **Settings > Secrets and variables > Actions**.
+2. Add secret **`DATABASE_URL`**: Set your PostgreSQL connection string.
+3. (Optional) Add secret **`BACKUP_PASSPHRASE`**: Set an encryption passphrase to secure backup files with AES-256 encryption (`openssl`).
+4. The workflow runs automatically every Sunday at 00:00 UTC and uploads private build artifacts retained for 90 days. You can also trigger an immediate backup anytime via **Actions > Scheduled Database Backup > Run workflow**.
+5. **Decrypting encrypted backups**:
+   ```bash
+   openssl enc -d -aes-256-cbc -pbkdf2 -in edusync-YYYYMMDD.json.enc -out backup.json -pass pass:<YOUR_PASSPHRASE>
+   ```
+6. **GitHub Inactivity Reminder**: GitHub automatically pauses scheduled workflows if a repository has no activity for 60 days. Pushing code updates or manually running the workflow resets the 60-day timer.
+
+### 6.4 Command-Line CLI Restore
 For headless or server environments, administrators can also run the CLI restore tool:
 ```bash
 npm run restore -- backups/edusync-YYYYMMDD-HHmmss.json

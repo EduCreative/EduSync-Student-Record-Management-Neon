@@ -1,8 +1,8 @@
 {
-  "version": "3.56.0",
+  "version": "3.57.0",
   "releaseDate": "2026-11-12",
   "changelog": [
-    "Lockfile Sync: Updated package-lock.json with complete Firebase dependencies for npm ci builds.",
-    "Overrides Setting Label & Help Text: Renamed setting in UserFormModal to 'Hide features for this user' with clear security guidance text in UI and UserManual."
+    "GitHub Actions Automated Backup: Added weekly scheduled database backup workflow with optional AES-256 passphrase encryption and 90-day private artifact retention.",
+    "Settings & User Manual Integration: Created GitHubBackupCard settings component and documented setup, secrets configuration, decryption, and 60-day GitHub inactivity rules."
   ]
 }

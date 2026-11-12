@@ -1,0 +1,51 @@
+name: Scheduled Database Backup
+
+on:
+  schedule:
+    # Run every Sunday at midnight (00:00 UTC)
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    # Allows manual triggering from the GitHub Actions UI
+
+jobs:
+  backup:
+    name: Run & Store Encrypted Database Backup
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run CLI Database Backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run backup
+
+      - name: Encrypt Backup File (Optional Passphrase)
+        if: ${{ secrets.BACKUP_PASSPHRASE != '' }}
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          for f in backups/*.json; do
+            if [ -f "$f" ]; then
+              echo "Encrypting $f..."
+              openssl enc -aes-256-cbc -salt -pbkdf2 -in "$f" -out "${f}.enc" -pass pass:"$PASSPHRASE"
+              rm "$f"
+            fi
+          done
+
+      - name: Upload Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: edusync-database-backup-${{ github.run_id }}
+          path: backups/
+          retention-days: 90

@@ -11,7 +11,7 @@ import ImageUpload from '../common/ImageUpload';
 import IncreaseTuitionFeeModal from './IncreaseTuitionFeeModal';
 import RestoreModal from './RestoreModal';
 import { UploadCloud } from 'lucide-react';
-import { GoogleDriveBackupCard } from './GoogleDriveBackupCard';
+import { GitHubBackupCard } from './GitHubBackupCard';
 import { Permission } from '../../permissions';
 
 const SettingsPage: React.FC = () => {
@@ -248,7 +248,7 @@ const SettingsPage: React.FC = () => {
                 )}
 
                 {user?.role === UserRole.Owner && (
-                    <GoogleDriveBackupCard />
+                    <GitHubBackupCard />
                 )}
 
                 {/* INTERFACE & OTHER SETTINGS - Standard Style */}

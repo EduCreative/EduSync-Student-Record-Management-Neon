@@ -881,7 +881,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         const backupPayload = {
-            version: '3.56.0',
+            version: '3.57.0',
             createdAt: new Date().toISOString(),
             tables: tablesData,
             counts: countsData

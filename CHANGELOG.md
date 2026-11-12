@@ -1,6 +1,20 @@
 
 # Changelog
 
+## [3.57.0] - 2026-11-12
+
+### GitHub Actions Scheduled Backup Workflow & Encrypted Private Artifacts
+- **Automated Weekly GitHub Actions Workflow (`.github/workflows/scheduled-backup.yml`)**:
+  - Configured weekly schedule (`0 0 * * 0` - every Sunday at 00:00 UTC) and `workflow_dispatch` trigger.
+  - Automatically executes `npm run backup` with repository secret `DATABASE_URL`.
+  - Supports optional AES-256 passphrase encryption using `BACKUP_PASSPHRASE` secret (`openssl enc`).
+  - Stores backup archives as private GitHub build artifacts with 90-day retention.
+- **GitHub Backup Settings Card (`GitHubBackupCard.tsx` & `SettingsPage.tsx`)**:
+  - Rendered interactive GitHub Actions backup setup card for Institutional Owners in Settings.
+  - Displays secret setup instructions, copyable decryption terminal commands, and 60-day GitHub scheduled run inactivity warnings.
+- **User Manual Documentation (`UserManual.md`)**:
+  - Added Section 6.3 (*Automated Weekly GitHub Actions Backup*) detailing setup, encryption, artifact retrieval, and CLI restore instructions.
+
 ## [3.56.0] - 2026-11-12
 
 ### Package Lockfile Synchronization & User Feature Override Setting Clarification
