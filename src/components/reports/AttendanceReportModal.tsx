@@ -138,7 +138,8 @@ const AttendanceReportModal: React.FC<AttendanceReportModalProps> = ({ isOpen, o
                 </table>
             </PrintableReportLayout>
         );
-        showPrintPreview(content, "EduSync - Attendance Report");
+        const classNameStr = classId === 'all' ? 'All Classes' : (classes.find(c => c.id === classId)?.name || 'Class');
+        showPrintPreview(content, `EduSync-Attendance Report-${classNameStr}-${startDate} to ${endDate}`);
     };
 
     return (

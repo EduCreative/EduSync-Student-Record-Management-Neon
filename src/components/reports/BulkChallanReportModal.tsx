@@ -81,7 +81,8 @@ const BulkChallanReportModal: React.FC<BulkChallanReportModalProps> = ({ isOpen,
                 })}
             </div>
         );
-        showPrintPreview(content, `EduSync - Fee Challans - ${classId === 'all' ? 'All Classes' : classMap.get(classId)} - ${formatMonthDisplay(month, year)}`);
+        const classNameStr = classId === 'all' ? 'All Classes' : (classMap.get(classId) || 'Class');
+        showPrintPreview(content, `EduSync-Fee Challans-${classNameStr}-${formatMonthDisplay(month, year)}`);
     };
 
     return (

@@ -216,7 +216,7 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
                 )}
             </PrintableReportLayout>
         );
-        showPrintPreview(content, "EduSync - Discount Report");
+        showPrintPreview(content, `EduSync-Discount Report-${selectedBranchName}-${startDate} to ${endDate}`);
     };
 
     const handleExport = () => {
@@ -248,7 +248,7 @@ const DiscountReportModal: React.FC<DiscountReportModalProps> = ({ isOpen, onClo
             csvRows.push(totalRow.map(escapeCsvCell).join(','));
         }
 
-        downloadCsvString(csvRows.join('\n'), 'fee_discount_report');
+        downloadCsvString(csvRows.join('\n'), `EduSync-DiscountReport-${selectedBranchName}-${startDate}-to-${endDate}`);
     };
 
     return (

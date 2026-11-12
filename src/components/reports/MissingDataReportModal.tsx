@@ -9,6 +9,7 @@ import { getClassLevel } from '../../utils/sorting';
 import PrintableReportLayout from './PrintableReportLayout';
 import { useBranchFilter } from '../../hooks/useBranchFilter';
 import BranchPicker from '../common/BranchPicker';
+import { getTodayKarachi } from '../../utils/dates';
 
 interface MissingDataReportModalProps {
     isOpen: boolean;
@@ -116,7 +117,8 @@ const MissingDataReportModal: React.FC<MissingDataReportModalProps> = ({ isOpen,
                 </table>
             </PrintableReportLayout>
         );
-        showPrintPreview(content, `EduSync - Missing Data Report`);
+        const dateStr = getTodayKarachi();
+        showPrintPreview(content, `EduSync-Missing Data Report-${selectedBranchName}-${dateStr}`);
     };
 
     const handleExport = () => {
@@ -137,7 +139,8 @@ const MissingDataReportModal: React.FC<MissingDataReportModalProps> = ({ isOpen,
             csvRows.push(row.map(escapeCsvCell).join(','));
         });
         
-        downloadCsvString(csvRows.join('\n'), 'missing_data_report');
+        const dateStr = getTodayKarachi();
+        downloadCsvString(csvRows.join('\n'), `EduSync-MissingDataReport-${selectedBranchName}-${dateStr}`);
     };
 
     return (

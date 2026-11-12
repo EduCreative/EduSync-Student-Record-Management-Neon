@@ -80,7 +80,8 @@ const ReportCardModal: React.FC<ReportCardModalProps> = ({ isOpen, onClose, init
                 ))}
             </div>
         );
-        showPrintPreview(content, `EduSync - Report Cards - ${classId === 'all' ? 'All Classes' : classMap.get(classId)} - ${exam}`);
+        const classNameStr = classId === 'all' ? 'All Classes' : (classMap.get(classId) || 'Class');
+        showPrintPreview(content, `EduSync-Report Cards-${classNameStr}-${exam}`);
     };
 
     return (

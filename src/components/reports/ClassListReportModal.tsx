@@ -10,6 +10,7 @@ import { getClassLevel } from '../../utils/sorting';
 import PrintableReportLayout from './PrintableReportLayout';
 import { useBranchFilter } from '../../hooks/useBranchFilter';
 import BranchPicker from '../common/BranchPicker';
+import { getTodayKarachi } from '../../utils/dates';
 
 interface ClassListReportModalProps {
     isOpen: boolean;
@@ -121,7 +122,9 @@ const ClassListReportModal: React.FC<ClassListReportModalProps> = ({ isOpen, onC
                 </table>
             </PrintableReportLayout>
         );
-        showPrintPreview(content, `EduSync - Class List - ${schoolClasses.find(c => c.id === classId)?.name || 'All Classes'}`);
+        const classNameStr = classId === 'all' ? 'All Classes' : (schoolClasses.find(c => c.id === classId)?.name || 'Class');
+        const dateStr = getTodayKarachi();
+        showPrintPreview(content, `EduSync-Class List-${classNameStr}-${dateStr}`);
     };
     
     const handleExport = () => {
@@ -155,7 +158,9 @@ const ClassListReportModal: React.FC<ClassListReportModalProps> = ({ isOpen, onC
             csvRows.push(rowData.map(escapeCsvCell).join(','));
         });
         
-        downloadCsvString(csvRows.join('\n'), 'class_list_report');
+        const classNameStr = classId === 'all' ? 'All Classes' : (schoolClasses.find(c => c.id === classId)?.name || 'Class');
+        const dateStr = getTodayKarachi();
+        downloadCsvString(csvRows.join('\n'), `EduSync-ClassList-${classNameStr}-${dateStr}`);
     };
 
     return (

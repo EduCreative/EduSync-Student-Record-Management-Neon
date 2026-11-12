@@ -47,13 +47,34 @@ const PrintPreview: React.FC = () => {
 
         const printHTML = `
             <!DOCTYPE html>
-            <html lang="en" class="${document.documentElement.className}">
+            <html lang="en">
                 <head>
                     <meta charset="UTF-8" />
                     <title>${printTitle}</title>
                     ${headHTML}
+                    <style>
+                        @media print {
+                            body {
+                                background-color: white !important;
+                                color: #0f172a !important;
+                                -webkit-print-color-adjust: exact !important;
+                                print-color-adjust: exact !important;
+                            }
+                            table { page-break-inside: auto; }
+                            tr { page-break-inside: avoid; page-break-after: auto; }
+                            thead { display: table-header-group; }
+                            tfoot { display: table-footer-group; }
+                        }
+                        body {
+                            background-color: white;
+                            color: #0f172a;
+                            font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+                            margin: 0;
+                            padding: 0;
+                        }
+                    </style>
                 </head>
-                <body class="bg-white">
+                <body class="bg-white text-secondary-900">
                     ${contentToPrint.innerHTML}
                 </body>
             </html>
@@ -126,10 +147,10 @@ const PrintPreview: React.FC = () => {
                 </div>
             </header>
             
-            <main className="flex-1 overflow-auto p-4 md:p-8 flex justify-center">
+            <main className="flex-1 overflow-auto p-4 md:p-8 flex justify-center bg-secondary-100 dark:bg-secondary-950">
                 <div
                     id="print-content-container"
-                    className="bg-white shadow-xl"
+                    className="bg-white text-secondary-900 shadow-xl"
                     style={{
                         width: '210mm', // A4 page width
                         maxWidth: '100%', // Crucial for responsiveness on small screens

@@ -33,17 +33,19 @@ const PrintableReportCard: FC<PrintableReportCardProps> = ({ student, studentCla
     return (
         <div className="printable-result-card bg-white p-6 border rounded-lg shadow-lg mb-8" style={{ pageBreakAfter: 'always' }}>
             {/* Header */}
-            <div className="flex items-center gap-4 pb-4 border-b">
-                <div className="flex-shrink-0 h-16 w-16 flex items-center justify-center">
-                    {school.logoUrl ? (
-                        <img src={school.logoUrl} alt="School Logo" className="max-h-16 max-w-16 object-contain" />
-                    ) : (
-                        <EduSyncLogo className="h-12 w-12 text-primary-700" />
-                    )}
-                </div>
-                <div className="text-left">
-                    <h1 className="text-2xl font-bold">{school.name}</h1>
-                    <p className="text-sm">{school.address}</p>
+            <div className="flex items-center justify-between pb-4 border-b">
+                <div className="flex items-center gap-3 text-left">
+                    <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center">
+                        {school.logoUrl ? (
+                            <img src={school.logoUrl} alt="School Logo" className="max-h-10 max-w-10 h-10 w-10 object-contain rounded" />
+                        ) : (
+                            <EduSyncLogo className="h-8 w-8 text-primary-700" />
+                        )}
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-bold">{school.name}</h1>
+                        <p className="text-xs">{school.address}</p>
+                    </div>
                 </div>
             </div>
             

@@ -11,6 +11,7 @@ import PrintableReportLayout from './PrintableReportLayout';
 import { formatMonthDisplay } from '../../constants';
 import { useBranchFilter } from '../../hooks/useBranchFilter';
 import BranchPicker from '../common/BranchPicker';
+import { getTodayKarachi } from '../../utils/dates';
 
 interface DefaulterReportModalProps {
     isOpen: boolean;
@@ -315,7 +316,9 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
                 )}
             </PrintableReportLayout>
         );
-        showPrintPreview(content, "EduSync - Fee Defaulter Report");
+        const classNameStr = classId === 'all' ? 'All Classes' : (classMap.get(classId) || 'Class');
+        const dateStr = getTodayKarachi();
+        showPrintPreview(content, `EduSync-Defaulter Report-${classNameStr}-${dateStr}`);
     };
 
     const handleExport = () => {
@@ -375,7 +378,9 @@ const DefaulterReportModal: React.FC<DefaulterReportModalProps> = ({ isOpen, onC
             csvRows.push(grandTotalRow.map(escapeCsvCell).join(','));
         }
     
-        downloadCsvString(csvRows.join('\n'), 'defaulter_report');
+        const classNameStr = classId === 'all' ? 'All Classes' : (classMap.get(classId) || 'Class');
+        const dateStr = getTodayKarachi();
+        downloadCsvString(csvRows.join('\n'), `EduSync-DefaulterReport-${classNameStr}-${dateStr}`);
     };
 
     return (

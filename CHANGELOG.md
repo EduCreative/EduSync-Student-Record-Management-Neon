@@ -1,6 +1,18 @@
 
 # Changelog
 
+## [3.52.0] - 2026-11-12
+
+### Report Format, Logo Sizing, Print Preview & Filename Convention Updates
+- **Compact Corner School Logo**:
+  - Adjusted logo dimensions in `PrintableReportLayout.tsx` and `PrintableReportCard.tsx` from `h-16 w-16` to a compact, neat `h-10 w-10` corner alignment next to the school name and address.
+- **High-Contrast Print Preview Font Colors**:
+  - Enforced high-contrast dark text (`text-secondary-900`) and pristine white background on the print preview container and blob iframe body, eliminating invisible/light gray text issues.
+- **Print Preview & Print/Save Format Consistency**:
+  - Injected explicit `@media print`, `-webkit-print-color-adjust: exact`, `print-color-adjust: exact`, and table pagination print rules into the print HTML generator in `PrintPreview.tsx` so that Print/Save output formatting matches Print Preview 100%.
+- **Standardized PDF & CSV Filename Naming Convention**:
+  - Updated all reports (`FeeCollectionReportModal.tsx`, `DefaulterReportModal.tsx`, `AttendanceReportModal.tsx`, `ClassListReportModal.tsx`, `DiscountReportModal.tsx`, `MissingDataReportModal.tsx`, `BulkChallanReportModal.tsx`, `ReportCardModal.tsx`) to follow the requested naming convention: `EduSync-[Report Name]-[Class(s)]-[dates/month].pdf` (and corresponding `.csv` filenames).
+
 ## [3.51.0] - 2026-11-12
 
 ### Fine-Grained Permissions for Database Backup & Recovery

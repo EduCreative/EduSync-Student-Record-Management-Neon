@@ -300,7 +300,7 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
                 )}
             </PrintableReportLayout>
         );
-        showPrintPreview(content, "EduSync - Fee Collection Report");
+        showPrintPreview(content, `EduSync-Fee Collection Report-${selectedBranchName}-${startDate} to ${endDate}`);
     };
 
     const handleExport = () => {
@@ -359,7 +359,7 @@ const FeeCollectionReportModal: React.FC<FeeCollectionReportModalProps> = ({ isO
             csvRows.push(grandTotalRow.join(','));
         }
 
-        downloadCsvString(csvRows.join('\n'), 'fee_collection_report');
+        downloadCsvString(csvRows.join('\n'), `EduSync-FeeCollectionReport-${selectedBranchName}-${startDate}-to-${endDate}`);
     };
 
     return (
