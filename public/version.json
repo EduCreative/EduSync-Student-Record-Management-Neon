@@ -1,9 +1,7 @@
 {
-  "version": "3.58.0",
+  "version": "3.59.0",
   "releaseDate": "2026-11-12",
   "changelog": [
-    "Removed Firebase & Google Drive Backup: Replaced Google Drive backup with the scheduled encrypted GitHub Actions backup workflow.",
-    "GitHub Backup Card Sync: Updated schedule (Sunday 21:30 UTC / Monday 02:30 PKT), 30-day retention, required 16+ char passphrase, private repository notice, and openssl+gunzip decrypt command.",
-    "Git Ignore Update: Added *.dump alongside backups/, .env, .env.local, and .aistudio/."
+    "Unified Modern Brand Logo: Replaced the legacy SVG icon across browser tabs, PWA precache, loading splash screen, UI navigation, auth screens, About modal, and print headers with the modern favicon.png logo."
   ]
 }

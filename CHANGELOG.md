@@ -1,6 +1,12 @@
 
 # Changelog
 
+## [3.59.0] - 2026-11-12
+
+### Modern Brand Logo Rollout (`favicon.png`)
+- **Browser Tab & Splash Screen (`index.html`, `public/sw.js`)**: Updated primary favicon link and pre-boot loading screen icon to use `/favicon.png`, and updated the Service Worker precache list to cache `/favicon.png`.
+- **Unified In-App & Printable Logo (`src/constants.tsx`, `PrintPreview.tsx`)**: Updated `EduSyncLogo` to render `/favicon.png` across the sidebar, header, authentication pages, About modal, and printable reports, and added `<base href>` to `PrintPreview` so relative logo assets resolve reliably in print/PDF output.
+
 ## [3.58.0] - 2026-11-12
 
 ### Backup Cleanup & Workflow Alignment

@@ -50,6 +50,7 @@ const PrintPreview: React.FC = () => {
             <html lang="en">
                 <head>
                     <meta charset="UTF-8" />
+                    <base href="${window.location.origin}/" />
                     <title>${printTitle}</title>
                     ${headHTML}
                     <style>

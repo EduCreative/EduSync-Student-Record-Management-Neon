@@ -1,4 +1,4 @@
-# EduSync: Comprehensive User Manual (v3.58.0)
+# EduSync: Comprehensive User Manual (v3.59.0)
 
 Welcome to **EduSync**, the school administration and student record management platform. This manual provides role-by-role guidance, financial operating procedures, academic tracking, and operational instructions.
 

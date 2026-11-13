@@ -25,7 +25,7 @@ self.addEventListener('install', (event) => {
         await cache.addAll([
           '/',
           '/index.html',
-          '/favicon.svg',
+          '/favicon.png',
           '/apple-touch-icon.png',
           '/icons/icon-192.png',
           '/icons/icon-512.png',
