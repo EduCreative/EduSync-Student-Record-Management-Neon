@@ -1,8 +1,9 @@
 {
-  "version": "3.57.0",
+  "version": "3.58.0",
   "releaseDate": "2026-11-12",
   "changelog": [
-    "GitHub Actions Automated Backup: Added weekly scheduled database backup workflow with optional AES-256 passphrase encryption and 90-day private artifact retention.",
-    "Settings & User Manual Integration: Created GitHubBackupCard settings component and documented setup, secrets configuration, decryption, and 60-day GitHub inactivity rules."
+    "Removed Firebase & Google Drive Backup: Replaced Google Drive backup with the scheduled encrypted GitHub Actions backup workflow.",
+    "GitHub Backup Card Sync: Updated schedule (Sunday 21:30 UTC / Monday 02:30 PKT), 30-day retention, required 16+ char passphrase, private repository notice, and openssl+gunzip decrypt command.",
+    "Git Ignore Update: Added *.dump alongside backups/, .env, .env.local, and .aistudio/."
   ]
 }

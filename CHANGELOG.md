@@ -1,6 +1,13 @@
 
 # Changelog
 
+## [3.58.0] - 2026-11-12
+
+### Backup Cleanup & Workflow Alignment
+- Replaced the Drive backup and Firebase dependency with the GitHub scheduled encrypted backup workflow.
+- **GitHub Backup Settings & Documentation (`GitHubBackupCard.tsx`, `UserManual.md`)**: Aligned UI and manual with the workflow schedule (Sunday 21:30 UTC / Monday 02:30 PKT), 30-day artifact retention, required 16+ character `BACKUP_PASSPHRASE`, private repository requirement, and `openssl` + `gunzip` decryption commands.
+- **Git Ignore (`.gitignore`)**: Ensured `backups/`, `.env`, `.env.local`, `*.dump`, and `.aistudio/` are ignored.
+
 ## [3.57.0] - 2026-11-12
 
 ### GitHub Actions Scheduled Backup Workflow & Encrypted Private Artifacts

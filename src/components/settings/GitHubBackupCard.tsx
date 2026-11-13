@@ -16,7 +16,7 @@ export const GitHubBackupCard: React.FC = () => {
         setTimeout(() => setCopiedSec(null), 2000);
     };
 
-    const decryptCmd = `openssl enc -d -aes-256-cbc -pbkdf2 -in edusync-20261112.json.enc -out backup.json -pass pass:YOUR_PASSPHRASE`;
+    const decryptCmd = `openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in edusync-YYYYMMDD-HHmmss.json.gz.enc -out backup.json.gz\ngunzip backup.json.gz`;
 
     return (
         <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-md p-6 mt-6">
@@ -27,7 +27,10 @@ export const GitHubBackupCard: React.FC = () => {
                 <div>
                     <h2 className="text-xl font-bold text-secondary-900 dark:text-white leading-tight">Automated GitHub Actions Backup</h2>
                     <p className="text-sm text-secondary-500 mt-1 max-w-lg">
-                        Schedule automated weekly database backups stored as encrypted private build artifacts inside your GitHub repository.
+                        Schedule automated weekly database backups compressed and encrypted with AES-256, stored as private build artifacts inside your GitHub repository.
+                    </p>
+                    <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mt-1">
+                        Important: Your GitHub repository must be PRIVATE.
                     </p>
                 </div>
             </div>
@@ -40,27 +43,27 @@ export const GitHubBackupCard: React.FC = () => {
                             Automated Weekly Schedule
                         </div>
                         <p className="text-xs text-secondary-600 dark:text-secondary-300">
-                            Runs automatically every Sunday at 00:00 UTC (<code className="font-mono bg-secondary-100 dark:bg-secondary-900 px-1 py-0.5 rounded text-[11px]">0 0 * * 0</code>).
+                            Runs automatically every Sunday at 21:30 UTC (Monday 02:30 Pakistan time, <code className="font-mono bg-secondary-100 dark:bg-secondary-900 px-1 py-0.5 rounded text-[11px]">30 21 * * 0</code>).
                         </p>
                     </div>
 
                     <div className="p-4 bg-white dark:bg-secondary-800 rounded-lg border dark:border-secondary-700">
                         <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm mb-1">
                             <Lock className="w-4 h-4" />
-                            AES-256 Passphrase Encryption
+                            Compressed &amp; Encrypted
                         </div>
                         <p className="text-xs text-secondary-600 dark:text-secondary-300">
-                            Optional passphrase encryption ensures backup files are secured before stored as repository artifacts.
+                            Every backup is gzip-compressed, AES-256 encrypted with your required passphrase, and verified before upload.
                         </p>
                     </div>
 
                     <div className="p-4 bg-white dark:bg-secondary-800 rounded-lg border dark:border-secondary-700">
                         <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold text-sm mb-1">
                             <ShieldCheck className="w-4 h-4" />
-                            90-Day Private Retention
+                            30-Day Private Retention
                         </div>
                         <p className="text-xs text-secondary-600 dark:text-secondary-300">
-                            Artifacts are retained securely in your private repository for 90 days and can be downloaded anytime.
+                            Encrypted artifacts are retained securely in your private repository for 30 days and can be downloaded anytime.
                         </p>
                     </div>
                 </div>
@@ -71,7 +74,7 @@ export const GitHubBackupCard: React.FC = () => {
                         Required GitHub Repository Secrets
                     </h3>
                     <p className="text-xs text-secondary-600 dark:text-secondary-300">
-                        Open your repository on GitHub and go to <strong>Settings &gt; Secrets and variables &gt; Actions &gt; New repository secret</strong>:
+                        Open your private repository on GitHub and go to <strong>Settings &gt; Secrets and variables &gt; Actions &gt; New repository secret</strong>:
                     </p>
 
                     <div className="space-y-2 text-xs">
@@ -92,11 +95,13 @@ export const GitHubBackupCard: React.FC = () => {
                         <div className="flex items-center justify-between p-2.5 bg-secondary-50 dark:bg-secondary-900/60 rounded border dark:border-secondary-700 font-mono">
                             <div>
                                 <span className="font-bold text-emerald-600 dark:text-emerald-400">BACKUP_PASSPHRASE</span>
-                                <span className="text-secondary-400 text-[11px] block font-sans">Optional. Secret key used to encrypt the backup JSON file with OpenSSL AES-256.</span>
+                                <span className="text-secondary-400 text-[11px] block font-sans">
+                                    Required (minimum 16 characters — the workflow refuses to run without it). Store this passphrase somewhere safe outside GitHub, because without it a backup cannot be opened and nobody can recover it for you.
+                                </span>
                             </div>
                             <button
                                 onClick={() => handleCopy('BACKUP_PASSPHRASE', 'passphrase')}
-                                className="p-1.5 hover:bg-secondary-200 dark:hover:bg-secondary-800 rounded transition-colors text-secondary-500"
+                                className="p-1.5 hover:bg-secondary-200 dark:hover:bg-secondary-800 rounded transition-colors text-secondary-500 shrink-0 ml-2"
                                 title="Copy secret name"
                             >
                                 {copiedSec === 'passphrase' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
@@ -108,17 +113,17 @@ export const GitHubBackupCard: React.FC = () => {
                 <div className="bg-white dark:bg-secondary-800 p-4 rounded-lg border dark:border-secondary-700 space-y-2">
                     <h3 className="text-xs font-bold text-secondary-400 uppercase tracking-widest flex items-center gap-1.5">
                         <FileCode className="w-4 h-4 text-secondary-500" />
-                        Decrypting Encrypted Backup Artifacts
+                        Decrypting &amp; Extracting Backup Artifacts
                     </h3>
                     <p className="text-xs text-secondary-600 dark:text-secondary-300">
-                        If <code className="font-mono bg-secondary-100 dark:bg-secondary-900 px-1 py-0.5 rounded">BACKUP_PASSPHRASE</code> is set, download the <code className="font-mono">.json.enc</code> artifact and run this command in terminal:
+                        Download the encrypted artifact (e.g., <code className="font-mono bg-secondary-100 dark:bg-secondary-900 px-1 py-0.5 rounded">edusync-20261112-215800.json.gz.enc</code>) from GitHub Actions and run these commands in your terminal:
                     </p>
-                    <div className="flex items-center justify-between p-2.5 bg-secondary-900 text-emerald-400 rounded font-mono text-xs overflow-x-auto">
-                        <code>{decryptCmd}</code>
+                    <div className="flex items-start justify-between p-2.5 bg-secondary-900 text-emerald-400 rounded font-mono text-xs overflow-x-auto">
+                        <pre className="whitespace-pre">{decryptCmd}</pre>
                         <button
                             onClick={() => handleCopy(decryptCmd, 'decrypt_cmd')}
                             className="ml-2 p-1.5 hover:bg-secondary-800 rounded transition-colors text-secondary-400 shrink-0"
-                            title="Copy decryption command"
+                            title="Copy decryption commands"
                         >
                             {copiedSec === 'decrypt_cmd' ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
                         </button>

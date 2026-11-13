@@ -1,51 +1,88 @@
+# Weekly encrypted backup of the EduSync database.
+# Free on a PRIVATE repository (GitHub Free includes 2,000 Actions minutes per month; this uses about 2 minutes per run).
+#
+# One-time setup (Repository > Settings > Secrets and variables > Actions > New repository secret):
+#   DATABASE_URL       the Neon connection string (the same value you use for the app)
+#   BACKUP_PASSPHRASE  a long passphrase you choose and also store somewhere safe OUTSIDE GitHub.
+#                      Without it a backup cannot be opened. Nobody can recover it for you.
+#
+# Run it once by hand: Actions tab > "Scheduled Database Backup" > Run workflow.
+# Download a backup: open a finished run > Artifacts at the bottom.
+# Open a backup on your PC:
+#   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in edusync-YYYYMMDD-HHmmss.json.gz.enc -out backup.json.gz
+#   gunzip backup.json.gz        (then: npm run restore -- backup.json  into an EMPTY database)
+
 name: Scheduled Database Backup
 
 on:
   schedule:
-    # Run every Sunday at midnight (00:00 UTC)
-    - cron: '0 0 * * 0'
+    - cron: '30 21 * * 0'     # every Sunday 21:30 UTC (Monday 02:30 in Pakistan)
   workflow_dispatch:
-    # Allows manual triggering from the GitHub Actions UI
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edusync-backup
+  cancel-in-progress: false
 
 jobs:
   backup:
-    name: Run & Store Encrypted Database Backup
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Check that the secrets are set
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Add the repository secrets DATABASE_URL and BACKUP_PASSPHRASE first (see the comments at the top of this file)."
+            exit 1
+          fi
+          if [ "${#BACKUP_PASSPHRASE}" -lt 16 ]; then
+            echo "::error::BACKUP_PASSPHRASE must be at least 16 characters."
+            exit 1
+          fi
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run CLI Database Backup
+      - name: Dump the database
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run backup
 
-      - name: Encrypt Backup File (Optional Passphrase)
-        if: ${{ secrets.BACKUP_PASSPHRASE != '' }}
+      - name: Compress, encrypt and verify
         env:
-          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
-          for f in backups/*.json; do
-            if [ -f "$f" ]; then
-              echo "Encrypting $f..."
-              openssl enc -aes-256-cbc -salt -pbkdf2 -in "$f" -out "${f}.enc" -pass pass:"$PASSPHRASE"
-              rm "$f"
-            fi
-          done
+          set -euo pipefail
+          shopt -s nullglob
+          files=(backups/*.json)
+          if [ "${#files[@]}" -ne 1 ]; then echo "::error::Expected exactly one backup file, found ${#files[@]}"; exit 1; fi
+          f="${files[0]}"
+          gzip -9 "$f"
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_PASSPHRASE -in "$f.gz" -out "$f.gz.enc"
+          # Prove the encrypted file can be opened again and the JSON is complete
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_PASSPHRASE -in "$f.gz.enc" | gunzip | node -e "
+            let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const b=JSON.parse(s);
+            const t=Object.keys(b.tables||b.data||{}).length; if(!t){console.error('Backup has no tables');process.exit(1);} console.log('Verified: '+t+' tables readable after decryption');});"
+          # Never upload the readable copies
+          rm -f "$f" "$f.gz"
+          ls -l backups
 
-      - name: Upload Backup Artifact
+      - name: Keep the encrypted backup (30 days)
         uses: actions/upload-artifact@v4
         with:
-          name: edusync-database-backup-${{ github.run_id }}
-          path: backups/
-          retention-days: 90
+          name: edusync-backup-${{ github.run_number }}
+          path: backups/*.enc
+          retention-days: 30
+          if-no-files-found: error

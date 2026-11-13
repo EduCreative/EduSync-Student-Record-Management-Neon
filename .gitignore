@@ -36,6 +36,7 @@ dist-ssr
 cookies.txt
 *.zip
 backups/
+*.dump
 bun.lock
 public/assets/aistudio/
 .aistudio/
