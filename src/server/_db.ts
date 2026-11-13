@@ -178,7 +178,9 @@ export function clearSessionCookie(res: any) {
 
 export function toCamelCase(obj: any): any {
     if (!obj || typeof obj !== 'object') return obj;
+    if (obj instanceof Date) return obj;
     if (Array.isArray(obj)) return obj.map(toCamelCase);
+    if (obj.constructor && obj.constructor !== Object) return obj;
     const newObj: any = {};
     for (const key of Object.keys(obj)) {
         const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
