@@ -6,6 +6,7 @@ export interface DbUsageTable {
 export interface DbUsageResponse {
     sizeBytes: number;
     tables: DbUsageTable[];
+    lastBackupAt: string | null;
 }
 
 export function formatStorageBytes(bytes: number): string {
@@ -39,7 +40,11 @@ export async function fetchDbUsage(): Promise<DbUsageResponse> {
         throw new Error(`HTTP ${res.status}`);
     }
     const data = await res.json();
-    if (typeof data?.sizeBytes !== 'number' || !Array.isArray(data?.tables)) {
+    if (
+        typeof data?.sizeBytes !== 'number' ||
+        !Array.isArray(data?.tables) ||
+        (data.lastBackupAt !== null && typeof data.lastBackupAt !== 'string')
+    ) {
         throw new Error('Invalid response');
     }
     return {
@@ -47,6 +52,7 @@ export async function fetchDbUsage(): Promise<DbUsageResponse> {
         tables: data.tables.map((t: any) => ({
             name: String(t.name),
             bytes: Number(t.bytes)
-        }))
+        })),
+        lastBackupAt: data.lastBackupAt
     };
 }

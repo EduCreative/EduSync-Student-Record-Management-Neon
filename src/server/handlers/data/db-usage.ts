@@ -15,10 +15,11 @@ export default async function handler(req: any, res: any) {
         }
 
         const sql = getDb();
-        const [sizeRows, tableRows] = await sql.transaction(
+        const [sizeRows, tableRows, backupRows] = await sql.transaction(
             [
                 sql`SELECT pg_database_size(current_database())::bigint AS bytes`,
-                sql`SELECT relname, pg_total_relation_size(c.oid)::bigint AS bytes FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY bytes DESC LIMIT 5`
+                sql`SELECT relname, pg_total_relation_size(c.oid)::bigint AS bytes FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY bytes DESC LIMIT 5`,
+                sql`SELECT max(timestamp) AS last_backup FROM activity_logs WHERE action = 'Full backup downloaded'`
             ],
             { readOnly: true }
         );
@@ -29,7 +30,16 @@ export default async function handler(req: any, res: any) {
             bytes: Number(row.bytes ?? 0)
         }));
 
-        return res.status(200).json({ sizeBytes, tables });
+        const rawLastBackup = backupRows?.[0]?.last_backup ?? null;
+        let lastBackupAt: string | null = null;
+        if (rawLastBackup instanceof Date) {
+            lastBackupAt = isNaN(rawLastBackup.getTime()) ? null : rawLastBackup.toISOString();
+        } else if (typeof rawLastBackup === 'string' && rawLastBackup.trim() !== '') {
+            const parsed = new Date(rawLastBackup);
+            lastBackupAt = isNaN(parsed.getTime()) ? rawLastBackup : parsed.toISOString();
+        }
+
+        return res.status(200).json({ sizeBytes, tables, lastBackupAt });
     } catch (err: any) {
         console.error('Database usage endpoint error:', err);
         return res.status(500).json({ error: 'Failed to read database usage.' });

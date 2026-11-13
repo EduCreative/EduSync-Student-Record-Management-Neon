@@ -45,10 +45,11 @@ function writeLocalDismissed(key: string, value: string): void {
 
 export const OwnerRemindersBanner: React.FC<OwnerRemindersBannerProps> = ({ setActiveView }) => {
     const { user } = useAuth();
-    const { logs, loading } = useData();
+    const { loading } = useData();
     const isEligibleOwner = Boolean(user && user.role === UserRole.Owner && !user.branchId);
 
     const [usage, setUsage] = useState<DbUsageResponse | null>(null);
+    const [usageSettled, setUsageSettled] = useState(false);
     const [sessionDismissed, setSessionDismissed] = useState<Partial<Record<ReminderType, boolean>>>({});
 
     useEffect(() => {
@@ -60,6 +61,9 @@ export const OwnerRemindersBanner: React.FC<OwnerRemindersBannerProps> = ({ setA
             })
             .catch(() => {
                 // Ignore usage errors on dashboard banner
+            })
+            .finally(() => {
+                if (active) setUsageSettled(true);
             });
         return () => {
             active = false;
@@ -98,26 +102,24 @@ export const OwnerRemindersBanner: React.FC<OwnerRemindersBannerProps> = ({ setA
     );
 
     const backupStatus = useMemo(() => {
-        let newestMs: number | null = null;
-        for (const entry of logs) {
-            if (entry.action === 'Full backup downloaded' && entry.timestamp) {
-                const ms = new Date(entry.timestamp).getTime();
-                if (Number.isFinite(ms) && (newestMs === null || ms > newestMs)) {
-                    newestMs = ms;
-                }
-            }
+        if (!usageSettled || !usage) {
+            return { overdue: false, daysAgo: null as number | null };
         }
-        if (newestMs === null) {
+        if (usage.lastBackupAt === null) {
             return { overdue: true, daysAgo: null as number | null };
         }
-        const elapsed = Date.now() - newestMs;
+        const ms = new Date(usage.lastBackupAt).getTime();
+        if (!Number.isFinite(ms)) {
+            return { overdue: false, daysAgo: null as number | null };
+        }
+        const elapsed = Date.now() - ms;
         return {
             overdue: elapsed > THIRTY_DAYS_MS,
             daysAgo: Math.floor(elapsed / ONE_DAY_MS)
         };
-    }, [logs]);
+    }, [usage, usageSettled]);
 
-    if (!isEligibleOwner || loading) {
+    if (!isEligibleOwner || loading || !usageSettled) {
         return null;
     }
 
