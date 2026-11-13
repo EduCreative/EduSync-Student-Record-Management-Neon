@@ -16,6 +16,7 @@ import DivergingBarChart, { DivergingBarChartData } from '../charts/DivergingBar
 import { getTodayKarachi } from '../../utils/dates';
 import { useBranchFilter } from '../../hooks/useBranchFilter';
 import BranchPicker from '../common/BranchPicker';
+import { OwnerRemindersBanner } from './OwnerRemindersBanner';
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -524,6 +525,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setActiveView }) => {
                 </div>
             </Modal>
             <div className="space-y-8">
+                {user.role === UserRole.Owner && !user.branchId && (
+                    <OwnerRemindersBanner setActiveView={setActiveView} />
+                )}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Admin Dashboard</h1>

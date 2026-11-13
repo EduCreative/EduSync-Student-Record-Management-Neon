@@ -223,6 +223,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const effectiveSchoolId = user.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user.schoolId;
         try {
             await apiWrite('/api/write/users', { action: 'add-log', actionName: action, details, schoolId: effectiveSchoolId });
+            const newLog: ActivityLog = {
+                id: crypto.randomUUID ? crypto.randomUUID() : `local-${Date.now()}`,
+                userId: user.id,
+                userName: user.name,
+                userAvatar: user.avatarUrl || '',
+                schoolId: effectiveSchoolId || '',
+                action,
+                details,
+                timestamp: new Date().toISOString()
+            };
+            setLogs(prev => [newLog, ...prev]);
         } catch (e) {
             console.warn('Could not record client log:', e);
         }
@@ -881,7 +892,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         const backupPayload = {
-            version: '3.59.0',
+            version: '3.60.0',
             createdAt: new Date().toISOString(),
             tables: tablesData,
             counts: countsData
@@ -912,7 +923,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            localStorage.setItem('edusync_last_backup_download', now.toISOString());
+            try {
+                localStorage.setItem('edusync_last_backup_download', now.toISOString());
+            } catch {
+                // ignore when localStorage is unavailable
+            }
+            if (user?.role === UserRole.Owner && !user?.branchId) {
+                await addLog('Full backup downloaded', 'Downloaded full database JSON backup archive.');
+            }
             setOperationProgress({ percentage: 100, status: 'Backup downloaded successfully!' });
             showToast('Success', 'Full database backup successfully downloaded to your device.', 'success');
 
@@ -922,7 +940,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             showToast('Backup Error', err.message || 'Failed to download database backup.', 'error');
             setOperationProgress({ percentage: 0, status: '' });
         }
-    }, [generateFullBackupPayload, showToast]);
+    }, [generateFullBackupPayload, showToast, user, addLog]);
 
     const sendFeeReminders = async (challanIds: string[]) => {
         showToast('Success', `Broadcasted ${challanIds.length} reminders to parent dashboard.`, 'success');

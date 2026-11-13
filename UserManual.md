@@ -1,4 +1,4 @@
-# EduSync: Comprehensive User Manual (v3.59.0)
+# EduSync: Comprehensive User Manual (v3.60.0)
 
 Welcome to **EduSync**, the school administration and student record management platform. This manual provides role-by-role guidance, financial operating procedures, academic tracking, and operational instructions.
 
@@ -126,6 +126,11 @@ For headless or server environments, administrators can also run the CLI restore
 npm run restore -- backups/edusync-YYYYMMDD-HHmmss.json
 ```
 The script verifies topological foreign-key dependencies, prompts for confirmation if data exists, and commits inside an atomic transaction.
+
+### 6.5 Storage & Usage and reminders
+Institutional Owners (without a branch lock) can monitor database storage and operational reminders:
+- **Storage & Usage (Settings)**: Under **Database Backup & Recovery**, the **Storage & Usage** card displays approximate database size against the 1 GB plan limit, a colour-coded progress bar (green under 70%, amber at 70–89%, red at 90%+), and the five largest database tables. Click **Refresh** to check the latest size; check the Neon and Vercel usage pages monthly for compute hours and bandwidth.
+- **Owner Reminders (Dashboard)**: A dismissible banner at the top of the Owner Dashboard shows the highest-priority reminder one at a time: storage reaching 70%+ or 90%+, no in-app **Download Full Backup** recorded in the last 30 days, or the monthly Neon/Vercel/GitHub backup check during the first 7 days of each month. Storage and backup reminders return after 24 hours if dismissed; the monthly check stays dismissed for that calendar month.
 
 ---
 

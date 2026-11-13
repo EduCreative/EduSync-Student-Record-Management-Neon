@@ -12,6 +12,7 @@ import IncreaseTuitionFeeModal from './IncreaseTuitionFeeModal';
 import RestoreModal from './RestoreModal';
 import { UploadCloud } from 'lucide-react';
 import { GitHubBackupCard } from './GitHubBackupCard';
+import { StorageUsageCard } from './StorageUsageCard';
 import { Permission } from '../../permissions';
 
 const SettingsPage: React.FC = () => {
@@ -245,6 +246,10 @@ const SettingsPage: React.FC = () => {
                             </p>
                         </div>
                     </div>
+                )}
+
+                {user?.role === UserRole.Owner && !user?.branchId && (
+                    <StorageUsageCard />
                 )}
 
                 {user?.role === UserRole.Owner && (

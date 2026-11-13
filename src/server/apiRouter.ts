@@ -21,6 +21,7 @@ import restoreWriteHandler from './handlers/write/restore';
 import notificationsHandler from './handlers/notifications/index';
 import photoHandler from './handlers/photo';
 import backupHandler from './handlers/data/backup';
+import dbUsageHandler from './handlers/data/db-usage';
 
 export const apiRouter = Router();
 
@@ -42,6 +43,7 @@ apiRouter.all('/data/users', (req, res) => usersHandler(req, res));
 apiRouter.all('/data/schools', (req, res) => schoolsHandler(req, res));
 apiRouter.all('/photo', (req, res) => photoHandler(req, res));
 apiRouter.all('/backup', (req, res) => backupHandler(req, res));
+apiRouter.all('/db-usage', (req, res) => dbUsageHandler(req, res));
 
 apiRouter.all('/write/payments', (req, res) => paymentsWriteHandler(req, res));
 apiRouter.all('/write/challans', (req, res) => challansWriteHandler(req, res));

@@ -1,6 +1,10 @@
 
 # Changelog
 
+## [3.60.0] - 2026-11-13
+
+- Added Owner-only `GET /api/db-usage` endpoint, **Storage & Usage** meter card in Settings, dismissible Dashboard reminders (storage threshold, 30-day full backup log check, and monthly Neon/Vercel/GitHub check), and `UserManual.md` documentation.
+
 ## [3.59.0] - 2026-11-12
 
 ### Modern Brand Logo Rollout (`favicon.png`)

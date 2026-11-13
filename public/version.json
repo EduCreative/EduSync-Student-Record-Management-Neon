@@ -1,7 +1,7 @@
 {
-  "version": "3.59.0",
-  "releaseDate": "2026-11-12",
+  "version": "3.60.0",
+  "releaseDate": "2026-11-13",
   "changelog": [
-    "Unified Modern Brand Logo: Replaced the legacy SVG icon across browser tabs, PWA precache, loading splash screen, UI navigation, auth screens, About modal, and print headers with the modern favicon.png logo."
+    "Owner Storage & Usage Meter and Reminders: Added a database storage meter with top-5 table sizes in Settings and dismissible Owner-only storage, backup, and monthly check reminders on the Dashboard."
   ]
 }

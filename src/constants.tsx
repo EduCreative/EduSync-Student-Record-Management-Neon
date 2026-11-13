@@ -177,3 +177,7 @@ export const formatDateTime = (isoString?: string): string => {
         return 'Invalid Date';
     }
 };
+
+// Neon free plan; change if the database is upgraded
+export const PLAN_STORAGE_LIMIT_BYTES = 1024 * 1024 * 1024;
+
