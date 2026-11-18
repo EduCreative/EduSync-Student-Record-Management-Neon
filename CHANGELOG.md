@@ -1,6 +1,14 @@
 
 # Changelog
 
+## [3.61.0] - 2026-11-18
+
+- **BISP Support Tracking & Class-Wise Report**:
+  - Added informational `receive_bisp_support` (`receiveBispSupport`, default `false`) flag to student records (`schema.sql`, `migrations/005_bisp_support.sql`), Student Add/Edit form (`Yes`/`No`), Student Profile Details, Student Management CSV import/export, and list badges — with zero impact on fee challans or ledgers.
+  - Added **BISP Support Report** in Reports Center (`BispSupportReportModal.tsx`) grouping BISP recipients class-wise with Branch/Class/Status/Sort filters, on-screen class preview, Print Preview, and CSV export.
+- **Student Account Linking Foreign Key Fix**:
+  - Added `migrations/004_fix_students_user_id_fkey.sql` and automatic runtime constraint repair (`_studentSchema.ts`) to repoint legacy `students_user_id_fkey` constraints from `auth.users(id)` to `profiles(id) ON DELETE SET NULL`, resolving foreign-key errors when linking Student accounts to student records.
+
 ## [3.60.0] - 2026-11-13
 
 - Added Owner-only `GET /api/db-usage` endpoint, **Storage & Usage** meter card in Settings, dismissible Dashboard reminders (storage threshold, 30-day full backup log check, and monthly Neon/Vercel/GitHub check), and `UserManual.md` documentation.

@@ -259,6 +259,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                     lastSchoolAttended: item.last_school_attended || item.lastSchoolAttended,
                     openingBalance: parsedOpeningBalance,
                     userId: item.user_id || item.userId || null,
+                    receiveBispSupport: ['true', 'yes', 'y', '1'].includes(String(item.receive_bisp_support ?? item.receiveBispSupport ?? '').trim().toLowerCase()),
                 };
                 
                 const feeStructure: { feeHeadId: string; amount: number }[] = [];
@@ -317,6 +318,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
         caste: "Arain",
         last_school_attended: "Previous Public School",
         opening_balance: 0,
+        receive_bisp_support: "No", // Optional: Yes or No
         user_id: "", // Optional: Link to a Student user's ID
         tuition_fee: 5000, // Optional: Sets custom tuition fee. If not provided, school default is used.
     }];
@@ -345,6 +347,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
             caste: s.caste,
             lastSchoolAttended: s.lastSchoolAttended,
             openingBalance: s.openingBalance,
+            receiveBispSupport: s.receiveBispSupport ? 'Yes' : 'No',
             userId: s.userId,
         }));
         exportToCsv(dataToExport, 'students_export');
@@ -496,9 +499,14 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                                                         <div className="flex items-center space-x-3">
                                                             <Avatar student={student} className="h-10 w-10" />
                                                             <div>
-                                                                <button onClick={() => setActiveView({ view: 'studentProfile', payload: { studentId: student.id } })} className="font-semibold text-secondary-900 dark:text-white hover:underline text-left">
-                                                                    {student.name}
-                                                                </button>
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <button onClick={() => setActiveView({ view: 'studentProfile', payload: { studentId: student.id } })} className="font-semibold text-secondary-900 dark:text-white hover:underline text-left">
+                                                                        {student.name}
+                                                                    </button>
+                                                                    {student.receiveBispSupport && (
+                                                                        <Badge color="blue">BISP</Badge>
+                                                                    )}
+                                                                </div>
                                                                 <div className="text-xs text-secondary-500">
                                                                     <span className="font-bold text-primary-700 dark:text-primary-400">ID: {student.rollNumber}</span> | {student.fatherName}
                                                                 </div>

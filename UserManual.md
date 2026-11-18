@@ -1,4 +1,4 @@
-# EduSync: Comprehensive User Manual (v3.60.0)
+# EduSync: Comprehensive User Manual (v3.61.0)
 
 Welcome to **EduSync**, the school administration and student record management platform. This manual provides role-by-role guidance, financial operating procedures, academic tracking, and operational instructions.
 
@@ -39,7 +39,8 @@ If your school operates across multiple campuses, you can organize classes by br
 ### 3.1 Enrollment & ID Assignment
 - Register students using **Student Management > "+ Add Student"** or bulk import records via CSV.
 - Student IDs (`rollNumber`) are auto-generated or manually specified.
-- Optional family link: Associate registered parent accounts with student profiles.
+- Optional family link: Associate registered parent accounts and student login accounts with student profiles.
+- **Receive BISP Support (Yes/No)**: Informational record on each student profile (no effect on fee challans). View class-wise recipient lists under **Reports > BISP Support Report**.
 
 ### 3.2 Student Profile Actions
 - **View Report Card**: Directly opens the student's pre-filled report card modal for any exam term.

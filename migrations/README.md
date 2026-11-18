@@ -11,3 +11,5 @@ Every subsequent database schema change is added as a new sequentially numbered 
 4. **Execution**: Applied migrations are tracked automatically in the `schema_migrations` table by running `npm run migrate`.
 
 - `003_user_branch.sql`: Adds `branch_id` foreign key column and index to `profiles` for branch-locked staff.
+- `004_fix_students_user_id_fkey.sql`: Repoints `students_user_id_fkey` on `students(user_id)` to `profiles(id)` with `ON DELETE SET NULL`.
+- `005_bisp_support.sql`: Adds informational `receive_bisp_support` boolean column (default `FALSE`) to `students`.

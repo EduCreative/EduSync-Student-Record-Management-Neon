@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS exams (
 -- Students table
 CREATE TABLE IF NOT EXISTS students (
     id UUID PRIMARY KEY,
-    user_id UUID REFERENCES profiles(id),
+    user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     class_id UUID REFERENCES classes(id) NOT NULL,
     school_id UUID REFERENCES schools(id) NOT NULL,
@@ -91,7 +91,8 @@ CREATE TABLE IF NOT EXISTS students (
     fee_structure JSONB DEFAULT '[]',
     admitted_class TEXT,
     caste TEXT,
-    last_school_attended TEXT
+    last_school_attended TEXT,
+    receive_bisp_support BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- Attendance table

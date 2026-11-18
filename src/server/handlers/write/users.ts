@@ -1,4 +1,5 @@
 import { verifySession, isAuthorized, writeServerAuditLog, requireSameSchool, validateAvatarDataUrl, isBranchLocked, canAccessStudent } from './_helpers';
+import { isStudentsUserFkError, repairStudentsUserFkIfLegacy } from './_studentSchema';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
@@ -193,7 +194,7 @@ export default async function handler(req: any, res: any) {
                 ? JSON.stringify(body.permissionsOverrides) 
                 : '{}';
 
-            try {
+            const executeAddUser = async () => {
                 const insertProfileQuery = sql`
                     INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url, branch_id, child_student_ids, disabled_nav_links, permissions_overrides)
                     VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, ${userStatus}, ${avatarUrlToInsert}, ${finalBranchId}, ${childStudentIdsToInsert}::uuid[], ${userDisabledLinks}, ${userPermissions}::jsonb)
@@ -209,11 +210,25 @@ export default async function handler(req: any, res: any) {
                 } else {
                     await insertProfileQuery;
                 }
+            };
+
+            try {
+                await executeAddUser();
             } catch (err: any) {
-                if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('profiles_email_key')) {
+                if (linkedStudentId && isStudentsUserFkError(err) && (await repairStudentsUserFkIfLegacy(sql))) {
+                    try {
+                        await executeAddUser();
+                    } catch (retryErr: any) {
+                        if (retryErr?.code === '23505' || retryErr?.message?.includes('23505') || retryErr?.message?.includes('profiles_email_key')) {
+                            return res.status(409).json({ error: 'Email already exists', message: `A user with email "${email}" already exists.` });
+                        }
+                        throw retryErr;
+                    }
+                } else if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('profiles_email_key')) {
                     return res.status(409).json({ error: 'Email already exists', message: `A user with email "${email}" already exists.` });
+                } else {
+                    throw err;
                 }
-                throw err;
             }
 
             await writeServerAuditLog(
@@ -340,48 +355,60 @@ export default async function handler(req: any, res: any) {
 
             const newStatus = status || targetUser.status || 'Active';
 
-            const updateProfileQuery = sql`
-                UPDATE profiles 
-                SET name = COALESCE(${name}, name), 
-                    avatar_url = CASE 
-                        WHEN ${Boolean(avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('/api/photo'))} THEN avatar_url
-                        WHEN ${Boolean(avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('data:'))} THEN ${avatarUrl}
-                        WHEN ${avatarUrl === null || avatarUrl === ''} THEN NULL
-                        ELSE avatar_url
-                    END,
-                    status = ${newStatus},
-                    role = ${newRole},
-                    school_id = COALESCE(school_id, ${targetSchoolId}),
-                    branch_id = ${newBranchId},
-                    child_student_ids = ${safeChildStudentIds}::uuid[],
-                    disabled_nav_links = ${safeDisabledNavLinks},
-                    permissions_overrides = ${safePermissionsOverrides}::jsonb
-                WHERE id = ${id}
-            `;
+            const executeUpdateUser = async () => {
+                const updateProfileQuery = sql`
+                    UPDATE profiles 
+                    SET name = COALESCE(${name}, name), 
+                        avatar_url = CASE 
+                            WHEN ${Boolean(avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('/api/photo'))} THEN avatar_url
+                            WHEN ${Boolean(avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('data:'))} THEN ${avatarUrl}
+                            WHEN ${avatarUrl === null || avatarUrl === ''} THEN NULL
+                            ELSE avatar_url
+                        END,
+                        status = ${newStatus},
+                        role = ${newRole},
+                        school_id = COALESCE(school_id, ${targetSchoolId}),
+                        branch_id = ${newBranchId},
+                        child_student_ids = ${safeChildStudentIds}::uuid[],
+                        disabled_nav_links = ${safeDisabledNavLinks},
+                        permissions_overrides = ${safePermissionsOverrides}::jsonb
+                    WHERE id = ${id}
+                `;
 
-            if (shouldUpdateStudentLink) {
-                const queries: any[] = [updateProfileQuery];
-                if (nextLinkedStudentId) {
-                    queries.push(sql`
-                        UPDATE students 
-                        SET user_id = NULL 
-                        WHERE user_id = ${id} AND id <> ${nextLinkedStudentId}
-                    `);
-                    queries.push(sql`
-                        UPDATE students 
-                        SET user_id = ${id} 
-                        WHERE id = ${nextLinkedStudentId}
-                    `);
+                if (shouldUpdateStudentLink) {
+                    const queries: any[] = [updateProfileQuery];
+                    if (nextLinkedStudentId) {
+                        queries.push(sql`
+                            UPDATE students 
+                            SET user_id = NULL 
+                            WHERE user_id = ${id} AND id <> ${nextLinkedStudentId}
+                        `);
+                        queries.push(sql`
+                            UPDATE students 
+                            SET user_id = ${id} 
+                            WHERE id = ${nextLinkedStudentId}
+                        `);
+                    } else {
+                        queries.push(sql`
+                            UPDATE students 
+                            SET user_id = NULL 
+                            WHERE user_id = ${id}
+                        `);
+                    }
+                    await sql.transaction(queries);
                 } else {
-                    queries.push(sql`
-                        UPDATE students 
-                        SET user_id = NULL 
-                        WHERE user_id = ${id}
-                    `);
+                    await updateProfileQuery;
                 }
-                await sql.transaction(queries);
-            } else {
-                await updateProfileQuery;
+            };
+
+            try {
+                await executeUpdateUser();
+            } catch (err: any) {
+                if (nextLinkedStudentId && isStudentsUserFkError(err) && (await repairStudentsUserFkIfLegacy(sql))) {
+                    await executeUpdateUser();
+                } else {
+                    throw err;
+                }
             }
 
             // If user status transitioned to Active from Pending Approval, notify the user

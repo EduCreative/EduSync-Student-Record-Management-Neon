@@ -1,5 +1,6 @@
 import { getDb, getSessionUser, toCamelCase } from '../../_db';
 import { getCurrentKarachiYear, getKarachiDateOffset } from '../../../utils/dates';
+import { ensureBispSupportColumn } from '../write/_studentSchema';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'GET') {
@@ -148,6 +149,7 @@ export default async function handler(req: any, res: any) {
         }
 
         // 4. Determine Student ID Scope
+        await ensureBispSupportColumn(sql);
         let studentsData: any[] = [];
         let targetStudentIds: string[] = [];
 
@@ -159,7 +161,7 @@ export default async function handler(req: any, res: any) {
                                father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
                                secondary_contact_number, address, status, gender, date_of_leaving,
                                reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
-                               fee_structure, admitted_class, caste, last_school_attended,
+                               fee_structure, admitted_class, caste, last_school_attended, receive_bisp_support,
                                (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
                                length(avatar_url) AS avatar_len
                         FROM students 
@@ -172,7 +174,7 @@ export default async function handler(req: any, res: any) {
                                father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
                                secondary_contact_number, address, status, gender, date_of_leaving,
                                reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
-                               fee_structure, admitted_class, caste, last_school_attended,
+                               fee_structure, admitted_class, caste, last_school_attended, receive_bisp_support,
                                (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
                                length(avatar_url) AS avatar_len
                         FROM students 
@@ -184,7 +186,7 @@ export default async function handler(req: any, res: any) {
                            father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
                            secondary_contact_number, address, status, gender, date_of_leaving,
                            reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
-                           fee_structure, admitted_class, caste, last_school_attended,
+                           fee_structure, admitted_class, caste, last_school_attended, receive_bisp_support,
                            (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
                            length(avatar_url) AS avatar_len
                     FROM students 
@@ -219,7 +221,7 @@ export default async function handler(req: any, res: any) {
                            father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
                            secondary_contact_number, address, status, gender, date_of_leaving,
                            reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
-                           fee_structure, admitted_class, caste, last_school_attended,
+                           fee_structure, admitted_class, caste, last_school_attended, receive_bisp_support,
                            (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
                            length(avatar_url) AS avatar_len
                     FROM students 
@@ -238,7 +240,7 @@ export default async function handler(req: any, res: any) {
                        father_name, father_cnic, date_of_birth, date_of_admission, contact_number,
                        secondary_contact_number, address, status, gender, date_of_leaving,
                        reason_for_leaving, conduct, progress, place_of_birth, opening_balance,
-                       fee_structure, admitted_class, caste, last_school_attended,
+                       fee_structure, admitted_class, caste, last_school_attended, receive_bisp_support,
                        (avatar_url IS NOT NULL AND avatar_url <> '') AS has_avatar,
                        length(avatar_url) AS avatar_len
                 FROM students 
@@ -404,6 +406,7 @@ export default async function handler(req: any, res: any) {
             ...s,
             avatarUrl: s.hasAvatar ? `/api/photo?kind=student&id=${s.id}&v=${s.avatarLen || 0}` : null,
             openingBalance: Number(s.openingBalance || 0),
+            receiveBispSupport: Boolean(s.receiveBispSupport),
             feeStructure: (s.feeStructure || []).map((item: any) => ({
                 ...item,
                 amount: Number(item.amount || 0)

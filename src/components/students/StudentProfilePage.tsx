@@ -155,6 +155,7 @@ const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setA
                                         <InfoItem label="Caste" value={student.caste} />
                                         <InfoItem label="Contact Number" value={student.contactNumber} />
                                         <InfoItem label="Secondary Contact" value={student.secondaryContactNumber} />
+                                        <InfoItem label="Receive BISP Support" value={student.receiveBispSupport ? 'Yes' : 'No'} />
                                         <InfoItem label="Address" value={student.address} className="sm:col-span-2" />
                                     </dl>
                                 </div>

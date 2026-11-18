@@ -1,6 +1,17 @@
 import { verifySession, isAuthorized, writeServerAuditLog, validateAvatarDataUrl, canAccessClass, canAccessStudent } from './_helpers';
+import { ensureBispSupportColumn, isStudentsUserFkError, repairStudentsUserFkIfLegacy } from './_studentSchema';
 import { getTodayKarachi } from '../../../utils/dates';
 import crypto from 'crypto';
+
+function parseBooleanFlag(value: unknown): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        return normalized === 'true' || normalized === 'yes' || normalized === 'y' || normalized === '1';
+    }
+    return false;
+}
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -184,18 +195,22 @@ export default async function handler(req: any, res: any) {
                 }
             }
 
+            await ensureBispSupportColumn(sql);
+
             const id = crypto.randomUUID();
             const avatarUrlToInsert = (student.avatarUrl && typeof student.avatarUrl === 'string' && student.avatarUrl.startsWith('data:'))
                 ? student.avatarUrl
                 : null;
+            const receiveBispSupport = parseBooleanFlag(student.receiveBispSupport);
 
-            try {
+            const executeAddStudent = async () => {
                 const insertStudentQuery = sql`
                     INSERT INTO students (
                         id, name, roll_number, class_id, school_id, father_name, father_cnic, 
                         date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
                         address, status, gender, admitted_class, gr_number, religion, caste, 
-                        last_school_attended, opening_balance, user_id, fee_structure, avatar_url
+                        last_school_attended, opening_balance, user_id, fee_structure, avatar_url,
+                        receive_bisp_support
                     ) VALUES (
                         ${id}, ${student.name}, ${student.rollNumber}, ${student.classId || null}, 
                         ${effectiveSchoolId}, ${student.fatherName || null}, ${student.fatherCnic || null}, 
@@ -206,7 +221,7 @@ export default async function handler(req: any, res: any) {
                         ${student.religion || null}, ${student.caste || null}, 
                         ${student.lastSchoolAttended || null}, ${Number(student.openingBalance) || 0}, 
                         ${linkedUserId}, ${JSON.stringify(student.feeStructure || [])},
-                        ${avatarUrlToInsert}
+                        ${avatarUrlToInsert}, ${receiveBispSupport}
                     )
                 `;
 
@@ -222,11 +237,25 @@ export default async function handler(req: any, res: any) {
                 } else {
                     await insertStudentQuery;
                 }
+            };
+
+            try {
+                await executeAddStudent();
             } catch (err: any) {
-                if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('students_school_roll_unique')) {
+                if (linkedUserId && isStudentsUserFkError(err) && (await repairStudentsUserFkIfLegacy(sql))) {
+                    try {
+                        await executeAddStudent();
+                    } catch (retryErr: any) {
+                        if (retryErr?.code === '23505' || retryErr?.message?.includes('23505') || retryErr?.message?.includes('students_school_roll_unique')) {
+                            return res.status(409).json({ error: 'DUPLICATE_ROLL', rollNumber: student.rollNumber, message: `Roll number "${student.rollNumber}" already exists in this school.` });
+                        }
+                        throw retryErr;
+                    }
+                } else if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('students_school_roll_unique')) {
                     return res.status(409).json({ error: 'DUPLICATE_ROLL', rollNumber: student.rollNumber, message: `Roll number "${student.rollNumber}" already exists in this school.` });
+                } else {
+                    throw err;
                 }
-                throw err;
             }
 
             await writeServerAuditLog(
@@ -295,7 +324,10 @@ export default async function handler(req: any, res: any) {
                 }
             }
 
-            try {
+            await ensureBispSupportColumn(sql);
+            const receiveBispSupport = parseBooleanFlag(student.receiveBispSupport);
+
+            const executeUpdateStudent = async () => {
                 const updateStudentQuery = sql`
                     UPDATE students SET
                         name = ${student.name},
@@ -322,7 +354,8 @@ export default async function handler(req: any, res: any) {
                         caste = ${student.caste || null},
                         last_school_attended = ${student.lastSchoolAttended || null},
                         opening_balance = ${Number(student.openingBalance) || 0},
-                        user_id = ${linkedUserId}
+                        user_id = ${linkedUserId},
+                        receive_bisp_support = ${receiveBispSupport}
                     WHERE id = ${student.id}
                 `;
 
@@ -358,11 +391,25 @@ export default async function handler(req: any, res: any) {
                 } else {
                     await updateStudentQuery;
                 }
+            };
+
+            try {
+                await executeUpdateStudent();
             } catch (err: any) {
-                if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('students_school_roll_unique')) {
+                if (linkedUserId && isStudentsUserFkError(err) && (await repairStudentsUserFkIfLegacy(sql))) {
+                    try {
+                        await executeUpdateStudent();
+                    } catch (retryErr: any) {
+                        if (retryErr?.code === '23505' || retryErr?.message?.includes('23505') || retryErr?.message?.includes('students_school_roll_unique')) {
+                            return res.status(409).json({ error: 'DUPLICATE_ROLL', rollNumber: student.rollNumber, message: `Roll number "${student.rollNumber}" already exists in this school.` });
+                        }
+                        throw retryErr;
+                    }
+                } else if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('students_school_roll_unique')) {
                     return res.status(409).json({ error: 'DUPLICATE_ROLL', rollNumber: student.rollNumber, message: `Roll number "${student.rollNumber}" already exists in this school.` });
+                } else {
+                    throw err;
                 }
-                throw err;
             }
 
             await writeServerAuditLog(
@@ -444,17 +491,20 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: `Duplicate roll number(s) found in file: ${uniqueDupes.join(', ')}` });
             }
 
-            try {
+            await ensureBispSupportColumn(sql);
+
+            const executeBulkAdd = async () => {
                 // Build all INSERTs and run in one atomic sql.transaction (P10)
                 const queries = students.map((s: any) => {
                     const id = crypto.randomUUID();
                     const roll = (s.rollNumber || s.roll_number).toString().trim();
+                    const receiveBisp = parseBooleanFlag(s.receiveBispSupport ?? s.receive_bisp_support);
                     return sql`
                         INSERT INTO students (
                             id, name, roll_number, class_id, school_id, father_name, father_cnic, 
                             date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
                             address, status, gender, admitted_class, gr_number, religion, caste, 
-                            last_school_attended, opening_balance, user_id, fee_structure
+                            last_school_attended, opening_balance, user_id, fee_structure, receive_bisp_support
                         ) VALUES (
                             ${id}, ${s.name.trim()}, ${roll}, ${s.classId || s.class_id || null}, 
                             ${effectiveSchoolId}, ${s.fatherName || s.father_name || null}, ${s.fatherCnic || s.father_cnic || null}, 
@@ -463,12 +513,30 @@ export default async function handler(req: any, res: any) {
                             ${s.address || null}, 'Active', ${s.gender || 'Male'}, ${s.admittedClass || s.admitted_class || null}, 
                             ${s.grNumber || s.gr_number || null}, ${s.religion || null}, ${s.caste || null}, 
                             ${s.lastSchoolAttended || s.last_school_attended || null}, ${Number(s.openingBalance || s.opening_balance) || 0}, 
-                            ${s.userId || s.user_id || null}, ${JSON.stringify(s.feeStructure || s.fee_structure || [])}::jsonb
+                            ${s.userId || s.user_id || null}, ${JSON.stringify(s.feeStructure || s.fee_structure || [])}::jsonb,
+                            ${receiveBisp}
                         )
                     `;
                 });
 
                 await sql.transaction(queries);
+            };
+
+            try {
+                try {
+                    await executeBulkAdd();
+                } catch (err: any) {
+                    if (isStudentsUserFkError(err)) {
+                        const repaired = await repairStudentsUserFkIfLegacy(sql);
+                        if (repaired) {
+                            await executeBulkAdd();
+                        } else {
+                            return res.status(400).json({ error: 'One or more user_id values do not match an existing user profile.' });
+                        }
+                    } else {
+                        throw err;
+                    }
+                }
 
                 await writeServerAuditLog(
                     sql,

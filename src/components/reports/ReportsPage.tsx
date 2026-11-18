@@ -12,9 +12,10 @@ import StudentIdCardModal from './StudentIdCardModal';
 import AttendanceReportModal from './AttendanceReportModal';
 import MissingDataReportModal from './MissingDataReportModal';
 import DiscountReportModal from './DiscountReportModal';
+import BispSupportReportModal from './BispSupportReportModal';
 import BranchPicker from '../common/BranchPicker';
 
-type ReportType = 'feeCollection' | 'defaulter' | 'classList' | 'bulkChallan' | 'reportCard' | 'challanRange' | 'studentIdCard' | 'attendance' | 'missingData' | 'discount';
+type ReportType = 'feeCollection' | 'defaulter' | 'classList' | 'bulkChallan' | 'reportCard' | 'challanRange' | 'studentIdCard' | 'attendance' | 'missingData' | 'discount' | 'bispSupport';
 
 interface ReportsPageProps {}
 
@@ -101,6 +102,12 @@ const ReportsPage: React.FC<ReportsPageProps> = () => {
             description: "Identify students with incomplete profile information.",
             icon: <FileWarningIcon className="w-6 h-6" />,
         },
+        {
+            id: 'bispSupport' as ReportType,
+            title: "BISP Support Report",
+            description: "View and print class-wise lists of students receiving BISP support.",
+            icon: <HandHeartIcon className="w-6 h-6" />,
+        },
     ];
 
     const availableReports = allReports.filter(report => {
@@ -111,6 +118,7 @@ const ReportsPage: React.FC<ReportsPageProps> = () => {
                 return hasPermission(Permission.CAN_VIEW_FINANCIAL_REPORTS);
             case 'classList':
             case 'missingData':
+            case 'bispSupport':
                 return hasPermission(Permission.CAN_VIEW_STUDENTS);
             case 'bulkChallan':
             case 'challanRange':
@@ -137,6 +145,7 @@ const ReportsPage: React.FC<ReportsPageProps> = () => {
             <StudentIdCardModal isOpen={activeReport === 'studentIdCard'} onClose={() => setActiveReport(null)} />
             <AttendanceReportModal isOpen={activeReport === 'attendance'} onClose={() => setActiveReport(null)} />
             <MissingDataReportModal isOpen={activeReport === 'missingData'} onClose={() => setActiveReport(null)} />
+            <BispSupportReportModal isOpen={activeReport === 'bispSupport'} onClose={() => setActiveReport(null)} />
 
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -169,6 +178,7 @@ const PrinterIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xm
 const IdCardIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><circle cx="8" cy="10" r="2"/><path d="M14 14a2 2 0 0 0-2-2h-2"/><path d="M14 10h4"/><path d="M14 14h4"/></svg>;
 const CheckSquareIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
 const FileWarningIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>;
+const HandHeartIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 14h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"/><path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"/><path d="m2 15 6 6"/><path d="M19.5 8.5c.7-.7 1.5-1.6 1.5-2.7A2.73 2.73 0 0 0 16 4a2.78 2.78 0 0 0-5 1.8c0 1.2.8 2 2 3l3 2.5Z"/></svg>;
 
 
 export default ReportsPage;

@@ -95,6 +95,7 @@ export interface Student {
     admittedClass: string;
     caste?: string;
     lastSchoolAttended?: string;
+    receiveBispSupport?: boolean;
 }
 
 export interface Attendance {

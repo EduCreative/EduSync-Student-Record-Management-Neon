@@ -1,7 +1,8 @@
 {
-  "version": "3.60.0",
-  "releaseDate": "2026-11-13",
+  "version": "3.61.0",
+  "releaseDate": "2026-11-18",
   "changelog": [
-    "Owner Storage & Usage Meter and Reminders: Added a database storage meter with top-5 table sizes in Settings and dismissible Owner-only storage, backup, and monthly check reminders on the Dashboard."
+    "BISP Support Tracking & Report: Added an informational Receive BISP Support (Yes/No) field on student records, CSV import/export, and a class-wise BISP Support Report.",
+    "Student Account Linking Fix: Repointed students_user_id_fkey to profiles(id) via migration and automatic runtime repair so linking Student accounts succeeds cleanly."
   ]
 }

@@ -62,6 +62,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onClose, on
         secondaryContactNumber: '',
         openingBalance: 0,
         status: 'Active',
+        receiveBispSupport: false,
         feeStructure: [] as { feeHeadId: string; amount: number }[],
     });
 
@@ -147,6 +148,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onClose, on
                     secondaryContactNumber: studentToEdit.secondaryContactNumber || '',
                     openingBalance: studentToEdit.openingBalance || 0,
                     status: studentToEdit.status,
+                    receiveBispSupport: Boolean(studentToEdit.receiveBispSupport),
                     feeStructure: studentToEdit.feeStructure || [],
                 });
 
@@ -515,6 +517,22 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({ isOpen, onClose, on
                     <div>
                         <label htmlFor="lastSchoolAttended" className="input-label">Last School Attended</label>
                         <input type="text" name="lastSchoolAttended" id="lastSchoolAttended" value={formData.lastSchoolAttended} onChange={handleChange} className="w-full input-field" />
+                    </div>
+                    <div>
+                        <label htmlFor="receiveBispSupport" className="input-label">Receive BISP Support</label>
+                        <select
+                            name="receiveBispSupport"
+                            id="receiveBispSupport"
+                            value={formData.receiveBispSupport ? 'yes' : 'no'}
+                            onChange={e => setFormData(prev => ({ ...prev, receiveBispSupport: e.target.value === 'yes' }))}
+                            className="w-full input-field"
+                        >
+                            <option value="no">No</option>
+                            <option value="yes">Yes</option>
+                        </select>
+                        <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-1">
+                            Informational only (does not affect fee challans).
+                        </p>
                     </div>
                     <div className="md:col-span-2">
                         <label htmlFor="address" className="input-label">Address</label>
