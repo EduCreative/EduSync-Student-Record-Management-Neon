@@ -20,7 +20,7 @@ interface StudentProfilePageProps {
 }
 
 const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setActiveView }) => {
-    const { students, classes, getLedgerForStudent, updateStudent } = useData();
+    const { students, classes, users, getLedgerForStudent, updateStudent } = useData();
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState('details');
     const [challanToEdit, setChallanToEdit] = useState<FeeChallan | null>(null);
@@ -33,6 +33,21 @@ const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setA
         if (!cls) return null;
         return { ...cls, fullName: `${cls.name}${cls.section ? ` - ${cls.section}` : ''}` };
     }, [classes, student]);
+
+    const linkedStudentAccount = useMemo(() => {
+        if (!student?.userId) return null;
+        const matched = users.find(u => u.id === student.userId && u.role === 'Student');
+        return matched || null;
+    }, [student?.userId, users]);
+
+    const linkedParentAccounts = useMemo(() => {
+        if (!student) return [];
+        return users.filter(u =>
+            u.role === 'Parent' &&
+            Array.isArray(u.childStudentIds) &&
+            u.childStudentIds.includes(student.id)
+        );
+    }, [student, users]);
     
     const ledger = getLedgerForStudent(studentId);
 
@@ -151,6 +166,16 @@ const StudentProfilePage: React.FC<StudentProfilePageProps> = ({ studentId, setA
                                         <InfoItem label="Last School Attended" value={student.lastSchoolAttended} />
                                         <InfoItem label="Opening Balance" value={`Rs. ${student.openingBalance?.toLocaleString() || 0}`} />
                                         <InfoItem label="Current Fee Balance" value={`Rs. ${(ledger?.balance || 0).toLocaleString()}`} bold={true} />
+                                        <InfoItem
+                                            label="Linked Student Account"
+                                            value={linkedStudentAccount ? `${linkedStudentAccount.name} (${linkedStudentAccount.email})` : null}
+                                        />
+                                        <InfoItem
+                                            label="Linked Parent Account(s)"
+                                            value={linkedParentAccounts.length > 0
+                                                ? linkedParentAccounts.map(p => `${p.name} (${p.email})`).join(', ')
+                                                : null}
+                                        />
                                     </dl>
                                 </div>
                             </div>

@@ -34,11 +34,11 @@ interface DataContextType {
     fetchData: () => Promise<void>;
     getSchoolById: (schoolId: string) => School | undefined;
     getLedgerForStudent: (studentId: string) => StudentLedger | undefined;
-    updateUser: (updatedUser: User) => Promise<void>;
+    updateUser: (updatedUser: User & { linkedStudentId?: string | null }) => Promise<void>;
     deleteUser: (userId: string) => Promise<void>;
-    addUserByAdmin: (userData: (Omit<User, 'id'> & { password?: string })) => Promise<void>;
-    addStudent: (studentData: Omit<Student, 'id' | 'status'>) => Promise<void>;
-    updateStudent: (updatedStudent: Student) => Promise<void>;
+    addUserByAdmin: (userData: (Omit<User, 'id'> & { password?: string; linkedStudentId?: string | null })) => Promise<void>;
+    addStudent: (studentData: Omit<Student, 'id' | 'status'> & { parentIds?: string[] }) => Promise<void>;
+    updateStudent: (updatedStudent: Student & { parentIds?: string[] }) => Promise<void>;
     updateFeeStructure: (studentId: string, feeStructure: { feeHeadId: string; amount: number }[]) => Promise<void>;
     deleteStudent: (studentId: string) => Promise<void>;
     addClass: (classData: Omit<Class, 'id'>) => Promise<void>;
@@ -239,7 +239,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [user, activeSchoolId, apiWrite]);
 
-    const updateUser = async (updatedUser: User) => {
+    const updateUser = async (updatedUser: User & { linkedStudentId?: string | null }) => {
         await apiWrite('/api/write/users', { 
             action: 'update-user', 
             id: updatedUser.id, 
@@ -249,6 +249,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             role: updatedUser.role,
             schoolId: updatedUser.schoolId,
             branchId: updatedUser.branchId !== undefined ? updatedUser.branchId : null,
+            ...(Array.isArray(updatedUser.childStudentIds) ? { childStudentIds: updatedUser.childStudentIds } : {}),
+            ...(updatedUser.linkedStudentId !== undefined ? { linkedStudentId: updatedUser.linkedStudentId } : {}),
             disabledNavLinks: updatedUser.disabledNavLinks || [],
             permissionsOverrides: updatedUser.permissionsOverrides || {}
         });
@@ -271,6 +273,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             avatarUrl: userData.avatarUrl,
             status: userData.status || 'Active',
             branchId: userData.branchId !== undefined ? userData.branchId : null,
+            ...(Array.isArray(userData.childStudentIds) ? { childStudentIds: userData.childStudentIds } : {}),
+            ...(userData.linkedStudentId !== undefined ? { linkedStudentId: userData.linkedStudentId } : {}),
             disabledNavLinks: userData.disabledNavLinks || [],
             permissionsOverrides: userData.permissionsOverrides || {}
         });
@@ -278,12 +282,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const addStudent = async (data: any) => {
-        await apiWrite('/api/write/students', { action: 'add-student', student: data });
+        const { parentIds, ...studentPayload } = data;
+        await apiWrite('/api/write/students', {
+            action: 'add-student',
+            student: studentPayload,
+            ...(Array.isArray(parentIds) ? { parentIds } : {})
+        });
         await fetchData();
     };
 
-    const updateStudent = async (student: Student) => {
-        await apiWrite('/api/write/students', { action: 'update-student', student });
+    const updateStudent = async (student: Student & { parentIds?: string[] }) => {
+        const { parentIds, ...studentPayload } = student;
+        await apiWrite('/api/write/students', {
+            action: 'update-student',
+            student: studentPayload,
+            ...(Array.isArray(parentIds) ? { parentIds } : {})
+        });
         await fetchData();
     };
 

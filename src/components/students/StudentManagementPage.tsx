@@ -53,7 +53,7 @@ const parseCurrency = (value: any): number | null => {
 
 const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActiveView }) => {
     const { user, activeSchoolId, hasPermission } = useAuth();
-    const { students, classes, results, addStudent, updateStudent, deleteStudent, loading, bulkAddStudents, feeHeads, fees, reactivateGraduatedStudents, revertLastPromotion, getLedgerForStudent } = useData();
+    const { students, classes, users, results, addStudent, updateStudent, deleteStudent, loading, bulkAddStudents, feeHeads, fees, reactivateGraduatedStudents, revertLastPromotion, getLedgerForStudent } = useData();
 
     const effectiveSchoolId = user?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : user?.schoolId;
 
@@ -89,6 +89,30 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
     }, [classes, effectiveSchoolId, filterClasses]);
 
     const classMap = useMemo(() => new Map(schoolClasses.map(c => [c.id, `${c.name}${c.section ? ` - ${c.section}` : ''}`])), [schoolClasses]);
+
+    const studentLoginUserMap = useMemo(() => {
+        const map = new Map<string, string>();
+        users.forEach(u => {
+            if (u.role === UserRole.Student) {
+                map.set(u.id, u.email);
+            }
+        });
+        return map;
+    }, [users]);
+
+    const parentsByStudentId = useMemo(() => {
+        const map = new Map<string, string[]>();
+        users.forEach(u => {
+            if (u.role === UserRole.Parent && Array.isArray(u.childStudentIds)) {
+                u.childStudentIds.forEach(sid => {
+                    const list = map.get(sid) || [];
+                    list.push(u.name);
+                    map.set(sid, list);
+                });
+            }
+        });
+        return map;
+    }, [users]);
 
     const filteredStudents = useMemo(() => {
         const result = branchFilteredStudents.filter(student => {
@@ -136,7 +160,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
         setIsFormModalOpen(false);
     };
 
-    const handleSaveStudent = async (studentData: Student | Omit<Student, 'id' | 'status'>) => {
+    const handleSaveStudent = async (studentData: (Student | Omit<Student, 'id' | 'status'>) & { parentIds?: string[] }) => {
         if ('id' in studentData) {
             await updateStudent(studentData);
         } else {
@@ -293,7 +317,7 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
         caste: "Arain",
         last_school_attended: "Previous Public School",
         opening_balance: 0,
-        user_id: "", // Optional: Link to a Parent user's ID
+        user_id: "", // Optional: Link to a Student user's ID
         tuition_fee: 5000, // Optional: Sets custom tuition fee. If not provided, school default is used.
     }];
 
@@ -464,6 +488,8 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                                     <tbody>
                                         {paginatedStudents.map(student => {
                                             const balance = getLedgerForStudent(student.id)?.balance || 0;
+                                            const linkedStudentEmail = student.userId ? studentLoginUserMap.get(student.userId) : undefined;
+                                            const linkedParentNames = parentsByStudentId.get(student.id) || [];
                                             return (
                                                 <tr key={student.id} className="bg-white dark:bg-secondary-800 border-b dark:border-secondary-700 hover:bg-secondary-50 dark:hover:bg-secondary-700/50">
                                                     <td className="px-6 py-4">
@@ -476,6 +502,12 @@ const StudentManagementPage: React.FC<StudentManagementPageProps> = ({ setActive
                                                                 <div className="text-xs text-secondary-500">
                                                                     <span className="font-bold text-primary-700 dark:text-primary-400">ID: {student.rollNumber}</span> | {student.fatherName}
                                                                 </div>
+                                                                {(linkedStudentEmail || linkedParentNames.length > 0) && (
+                                                                    <div className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5 flex flex-wrap gap-x-2">
+                                                                        {linkedStudentEmail && <span>Student: {linkedStudentEmail}</span>}
+                                                                        {linkedParentNames.length > 0 && <span>Parent: {linkedParentNames.join(', ')}</span>}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </td>

@@ -33,6 +33,14 @@ const AttendanceViewer: React.FC = () => {
 
     const [selectedChildId, setSelectedChildId] = useState<string>(myChildren[0]?.id || '');
 
+    useEffect(() => {
+        if (myChildren.length > 0 && !myChildren.some(c => c.id === selectedChildId)) {
+            setSelectedChildId(myChildren[0].id);
+        } else if (myChildren.length === 0 && selectedChildId !== '') {
+            setSelectedChildId('');
+        }
+    }, [myChildren, selectedChildId]);
+
     const eventsByDate = useMemo(() => {
         if (!selectedChildId) return {};
         return attendance.reduce((acc, att) => {

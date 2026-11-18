@@ -35,7 +35,7 @@ const EyeOffIcon = (props: React.SVGProps<SVGSVGElement>) => (
 interface UserFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (user: User | (Omit<User, 'id' | 'lastLogin' | 'disabledNavLinks' | 'permissionsOverrides'> & { disabledNavLinks?: string[], password?: string, permissionsOverrides?: Partial<Record<Permission, boolean>> })) => Promise<void>;
+    onSave: (user: (User & { linkedStudentId?: string | null }) | (Omit<User, 'id' | 'lastLogin' | 'disabledNavLinks' | 'permissionsOverrides'> & { disabledNavLinks?: string[], password?: string, permissionsOverrides?: Partial<Record<Permission, boolean>>, linkedStudentId?: string | null })) => Promise<void>;
     userToEdit?: User | null;
     defaultRole?: UserRole;
     lockRole?: boolean;
@@ -101,7 +101,7 @@ const PERMISSION_GROUPS = [
 
 const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, userToEdit, defaultRole, lockRole = false }) => {
     const { user: currentUser, activeSchoolId } = useAuth();
-    const { schools, branches } = useData();
+    const { schools, branches, students, classes, users } = useData();
     const { showToast } = useToast();
 
     const isBranchLockedUser = Boolean(currentUser && currentUser.role !== UserRole.Owner && currentUser.branchId);
@@ -123,6 +123,9 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
     const [isSendingReset, setIsSendingReset] = useState(false);
     const [disabledLinks, setDisabledLinks] = useState<Record<string, boolean>>({});
     const [permissionsOverrides, setPermissionsOverrides] = useState<Partial<Record<Permission, boolean>>>({});
+    const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
+    const [linkedStudentId, setLinkedStudentId] = useState<string>('');
+    const [studentLinkSearchTerm, setStudentLinkSearchTerm] = useState('');
     const [errors, setErrors] = useState<{ name?: string; email?: string; role?: string; schoolId?: string; password?: string; confirmPassword?: string; }>({});
     
     // Direct admin reset state
@@ -132,9 +135,39 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
 
     const isOwnerGlobalView = currentUser?.role === UserRole.Owner && !activeSchoolId;
     const effectiveSchoolId = currentUser?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : currentUser?.schoolId;
+    const targetLinkSchoolId = formData.schoolId || effectiveSchoolId || null;
+    const canManageAccountLinks = currentUser?.role === UserRole.Owner || currentUser?.role === UserRole.Admin;
     
     // Ensure links are consistently ordered as per NAV_LINKS definition
     const linksForRole = NAV_LINKS[formData.role] || [];
+
+    const classLabelMap = useMemo(() => {
+        return new Map(classes.map(c => [c.id, `${c.name}${c.section ? ` - ${c.section}` : ''}`]));
+    }, [classes]);
+
+    const userMap = useMemo(() => {
+        return new Map(users.map(u => [u.id, u]));
+    }, [users]);
+
+    const schoolStudentsForLinking = useMemo(() => {
+        return students
+            .filter(s => s.status !== 'Deleted' && (!targetLinkSchoolId || s.schoolId === targetLinkSchoolId))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [students, targetLinkSchoolId]);
+
+    const filteredStudentsForLinking = useMemo(() => {
+        const term = studentLinkSearchTerm.trim().toLowerCase();
+        if (!term) return schoolStudentsForLinking;
+        return schoolStudentsForLinking.filter(s => {
+            const clsLabel = (classLabelMap.get(s.classId) || '').toLowerCase();
+            return (
+                s.name.toLowerCase().includes(term) ||
+                s.rollNumber.toLowerCase().includes(term) ||
+                (s.fatherName || '').toLowerCase().includes(term) ||
+                clsLabel.includes(term)
+            );
+        });
+    }, [schoolStudentsForLinking, studentLinkSearchTerm, classLabelMap]);
 
     useEffect(() => {
         if (isOpen) {
@@ -156,6 +189,9 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 }
                 setDisabledLinks(initialDisabled);
                 setPermissionsOverrides(userToEdit.permissionsOverrides || {});
+                setSelectedChildIds(Array.isArray(userToEdit.childStudentIds) ? userToEdit.childStudentIds : []);
+                const currentlyLinkedStudent = students.find(s => s.userId === userToEdit.id && s.status !== 'Deleted');
+                setLinkedStudentId(currentlyLinkedStudent?.id || '');
             } else {
                 setFormData({
                     name: '',
@@ -168,7 +204,10 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 });
                 setDisabledLinks({});
                 setPermissionsOverrides({});
+                setSelectedChildIds([]);
+                setLinkedStudentId('');
             }
+            setStudentLinkSearchTerm('');
             setPassword('');
             setConfirmPassword('');
             setAdminNewPassword('');
@@ -176,7 +215,8 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
             setAdminResetSuccess(null);
             setErrors({});
         }
-    }, [userToEdit, isOpen, currentUser, schools, defaultRole, effectiveSchoolId, isBranchLockedUser]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userToEdit?.id, isOpen, defaultRole, effectiveSchoolId, isBranchLockedUser]);
 
     const validate = () => {
         const newErrors: { name?: string; email?: string; role?: string; schoolId?: string; password?: string; confirmPassword?: string; } = {};
@@ -216,6 +256,10 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'schoolId') {
+            setSelectedChildIds([]);
+            setLinkedStudentId('');
+        }
         if (errors[name as keyof typeof errors]) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -223,6 +267,14 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 return newErrors;
             });
         }
+    };
+
+    const toggleChildSelection = (studentId: string) => {
+        setSelectedChildIds(prev =>
+            prev.includes(studentId)
+                ? prev.filter(id => id !== studentId)
+                : [...prev, studentId]
+        );
     };
 
     const handleLinkToggle = (path: string) => {
@@ -292,9 +344,19 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 ? null
                 : (isBranchLockedUser ? currentUser?.branchId : (formData.branchId || null));
 
+            const validSchoolStudentIds = new Set(schoolStudentsForLinking.map(s => s.id));
+            const filteredChildIds = formData.role === UserRole.Parent
+                ? selectedChildIds.filter(id => validSchoolStudentIds.has(id))
+                : [];
+            const finalLinkedStudentId = formData.role === UserRole.Student && linkedStudentId && validSchoolStudentIds.has(linkedStudentId)
+                ? linkedStudentId
+                : null;
+
             const submissionPayload = {
                 ...formData,
                 branchId: finalBranchId,
+                childStudentIds: filteredChildIds,
+                linkedStudentId: finalLinkedStudentId,
                 disabledNavLinks,
                 permissionsOverrides
             };
@@ -305,8 +367,9 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 await onSave({ ...submissionPayload, password });
             }
             onClose();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to save user:", error);
+            showToast('Error', error?.message || 'Failed to save user.', 'error');
         } finally {
             setIsSaving(false);
         }
@@ -481,6 +544,144 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                             <option value="Pending Approval">Pending Approval</option>
                             <option value="Suspended">Suspended</option>
                         </select>
+                    </div>
+                )}
+
+                {canManageAccountLinks && formData.role === UserRole.Student && (
+                    <div className="p-4 rounded-lg bg-secondary-50 dark:bg-secondary-700/40 border border-secondary-200 dark:border-secondary-600 space-y-3">
+                        <div>
+                            <label htmlFor="linkedStudentId" className="input-label font-semibold mb-0.5">Linked Student Record</label>
+                            <p className="text-xs text-secondary-500 dark:text-secondary-400">
+                                Connect this Student login account to a student profile so they can view their own dashboard, attendance, results, and fees.
+                            </p>
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Search student by name, roll #, father's name, or class..."
+                            value={studentLinkSearchTerm}
+                            onChange={e => setStudentLinkSearchTerm(e.target.value)}
+                            className="input-field text-sm py-1.5"
+                        />
+                        <select
+                            id="linkedStudentId"
+                            value={linkedStudentId}
+                            onChange={e => setLinkedStudentId(e.target.value)}
+                            className="input-field"
+                        >
+                            <option value="">No Student Record Linked</option>
+                            {schoolStudentsForLinking
+                                .filter(s => s.id === linkedStudentId || filteredStudentsForLinking.some(fs => fs.id === s.id))
+                                .map(s => {
+                                    const clsLabel = classLabelMap.get(s.classId) || 'No Class';
+                                    const existingLinkedUser = s.userId && s.userId !== userToEdit?.id ? userMap.get(s.userId) : null;
+                                    const isTakenByStudent = Boolean(existingLinkedUser && existingLinkedUser.role === UserRole.Student);
+                                    return (
+                                        <option key={s.id} value={s.id} disabled={isTakenByStudent}>
+                                            {s.name} (Roll #{s.rollNumber} • {clsLabel}){isTakenByStudent ? ` — Linked to ${existingLinkedUser!.email}` : ''}
+                                        </option>
+                                    );
+                                })}
+                        </select>
+                        {schoolStudentsForLinking.length === 0 && (
+                            <p className="text-xs text-secondary-500 dark:text-secondary-400">
+                                No student records available in this school yet.
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {canManageAccountLinks && formData.role === UserRole.Parent && (
+                    <div className="p-4 rounded-lg bg-secondary-50 dark:bg-secondary-700/40 border border-secondary-200 dark:border-secondary-600 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <label className="input-label font-semibold mb-0.5">Linked Children (Students)</label>
+                                <p className="text-xs text-secondary-500 dark:text-secondary-400">
+                                    Select one or more students that this parent account can monitor.
+                                </p>
+                            </div>
+                            <span className="text-xs font-medium text-secondary-600 dark:text-secondary-300 shrink-0">
+                                {selectedChildIds.length} selected
+                            </span>
+                        </div>
+
+                        {selectedChildIds.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                                {selectedChildIds.map(sid => {
+                                    const child = students.find(s => s.id === sid);
+                                    if (!child) return null;
+                                    const clsLabel = classLabelMap.get(child.classId) || '';
+                                    return (
+                                        <span
+                                            key={sid}
+                                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900/50 dark:text-primary-200 border border-primary-200 dark:border-primary-800"
+                                        >
+                                            <span>{child.name} (#{child.rollNumber}{clsLabel ? ` • ${clsLabel}` : ''})</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleChildSelection(sid)}
+                                                className="text-primary-600 hover:text-primary-900 dark:text-primary-300 dark:hover:text-white font-bold leading-none"
+                                                aria-label={`Remove ${child.name}`}
+                                            >
+                                                &times;
+                                            </button>
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {schoolStudentsForLinking.length > 0 ? (
+                            <>
+                                <input
+                                    type="text"
+                                    placeholder="Search students by name, roll #, father's name, or class..."
+                                    value={studentLinkSearchTerm}
+                                    onChange={e => setStudentLinkSearchTerm(e.target.value)}
+                                    className="input-field text-sm py-1.5"
+                                />
+                                <div className="max-h-48 overflow-y-auto border border-secondary-200 dark:border-secondary-600 rounded-md bg-white dark:bg-secondary-800 divide-y divide-secondary-100 dark:divide-secondary-700">
+                                    {filteredStudentsForLinking.length > 0 ? filteredStudentsForLinking.map(s => {
+                                        const isChecked = selectedChildIds.includes(s.id);
+                                        const clsLabel = classLabelMap.get(s.classId) || 'N/A';
+                                        return (
+                                            <label
+                                                key={s.id}
+                                                className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer hover:bg-secondary-50 dark:hover:bg-secondary-700/60 text-sm"
+                                            >
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => toggleChildSelection(s.id)}
+                                                        className="h-4 w-4 rounded border-secondary-300 text-primary-600 focus:ring-primary-500 shrink-0"
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <div className="font-medium text-secondary-900 dark:text-white truncate">
+                                                            {s.name}
+                                                            <span className="ml-1.5 text-xs font-semibold text-primary-600 dark:text-primary-400">
+                                                                #{s.rollNumber}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-xs text-secondary-500 dark:text-secondary-400 truncate">
+                                                            {clsLabel}{s.fatherName ? ` • Father: ${s.fatherName}` : ''}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {s.status !== 'Active' && (
+                                                    <span className="text-xs text-secondary-400 shrink-0">{s.status}</span>
+                                                )}
+                                            </label>
+                                        );
+                                    }) : (
+                                        <div className="p-3 text-xs text-secondary-500 text-center">No matching students found.</div>
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            <p className="text-xs text-secondary-500 dark:text-secondary-400">
+                                No student records available in this school yet.
+                            </p>
+                        )}
                     </div>
                 )}
                  {currentUser?.role === UserRole.Owner && userToEdit && (

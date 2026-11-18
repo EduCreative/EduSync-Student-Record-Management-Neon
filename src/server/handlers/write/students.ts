@@ -2,6 +2,121 @@ import { verifySession, isAuthorized, writeServerAuditLog, validateAvatarDataUrl
 import { getTodayKarachi } from '../../../utils/dates';
 import crypto from 'crypto';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: unknown): value is string {
+    return typeof value === 'string' && UUID_REGEX.test(value.trim());
+}
+
+function normalizeUuidArray(values: unknown): { valid: boolean; ids: string[]; invalid?: string } {
+    if (!Array.isArray(values)) return { valid: true, ids: [] };
+    const seen = new Set<string>();
+    for (const raw of values) {
+        if (typeof raw !== 'string' || !UUID_REGEX.test(raw.trim())) {
+            return { valid: false, ids: [], invalid: String(raw) };
+        }
+        seen.add(raw.trim());
+    }
+    return { valid: true, ids: Array.from(seen) };
+}
+
+async function validateStudentAccountLink(
+    sql: any,
+    session: any,
+    userId: string,
+    targetSchoolId: string | null | undefined,
+    excludeStudentId?: string
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+    if (!isValidUuid(userId)) {
+        return { ok: false, status: 400, error: 'Invalid Student account ID format.' };
+    }
+
+    const userRows = await sql`
+        SELECT id, name, role, school_id, branch_id 
+        FROM profiles 
+        WHERE id = ${userId} 
+        LIMIT 1
+    `;
+    if (!userRows || userRows.length === 0) {
+        return { ok: false, status: 400, error: 'Selected Student login account was not found.' };
+    }
+
+    const targetUser = userRows[0];
+    if (targetUser.role !== 'Student') {
+        return {
+            ok: false,
+            status: 400,
+            error: `Account "${targetUser.name}" has role "${targetUser.role}". Only Student accounts can be linked as the student login; use Parent Account(s) for parents.`
+        };
+    }
+
+    if (targetSchoolId && targetUser.school_id && targetUser.school_id !== targetSchoolId) {
+        return { ok: false, status: 403, error: 'Cannot link a Student account from another school.' };
+    }
+
+    if (session.role !== 'Owner' && session.branchId && targetUser.branch_id !== session.branchId) {
+        return { ok: false, status: 403, error: 'Outside your branch' };
+    }
+
+    const existingLinks = excludeStudentId
+        ? await sql`
+            SELECT id, name, roll_number 
+            FROM students 
+            WHERE user_id = ${userId} AND id <> ${excludeStudentId} AND status <> 'Deleted' 
+            LIMIT 1
+          `
+        : await sql`
+            SELECT id, name, roll_number 
+            FROM students 
+            WHERE user_id = ${userId} AND status <> 'Deleted' 
+            LIMIT 1
+          `;
+
+    if (existingLinks && existingLinks.length > 0) {
+        const other = existingLinks[0];
+        return {
+            ok: false,
+            status: 409,
+            error: `This Student login account is already linked to ${other.name} (Roll #${other.roll_number}).`
+        };
+    }
+
+    return { ok: true };
+}
+
+async function validateParentLinks(
+    sql: any,
+    session: any,
+    parentIds: string[],
+    targetSchoolId: string | null | undefined
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+    if (parentIds.length === 0) return { ok: true };
+
+    const rows = await sql`
+        SELECT id, name, role, school_id, branch_id 
+        FROM profiles 
+        WHERE id = ANY(${parentIds}::uuid[])
+    `;
+
+    if (!rows || rows.length !== parentIds.length) {
+        return { ok: false, status: 400, error: 'One or more selected Parent accounts were not found.' };
+    }
+
+    for (const p of rows) {
+        if (p.role !== 'Parent') {
+            return { ok: false, status: 400, error: `Account "${p.name}" is not a Parent account.` };
+        }
+        if (targetSchoolId && p.school_id && p.school_id !== targetSchoolId) {
+            return { ok: false, status: 403, error: 'Cannot link a Parent account from another school.' };
+        }
+        if (session.role !== 'Owner' && session.branchId && p.branch_id !== session.branchId) {
+            return { ok: false, status: 403, error: 'Outside your branch' };
+        }
+    }
+
+    return { ok: true };
+}
+
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST') {
         res.setHeader('Allow', ['POST']);
@@ -45,13 +160,37 @@ export default async function handler(req: any, res: any) {
             }
 
             const effectiveSchoolId = session.role === 'Owner' && student.schoolId ? student.schoolId : session.schoolId;
+
+            const linkedUserId = student.userId ? String(student.userId).trim() : null;
+            if (linkedUserId) {
+                const userCheck = await validateStudentAccountLink(sql, session, linkedUserId, effectiveSchoolId);
+                if (!userCheck.ok) {
+                    return res.status(userCheck.status).json({ error: userCheck.error });
+                }
+            }
+
+            const rawParentIds = body.parentIds !== undefined ? body.parentIds : student.parentIds;
+            const hasParentIdsPayload = Array.isArray(rawParentIds);
+            let validParentIds: string[] = [];
+            if (hasParentIdsPayload) {
+                const parsed = normalizeUuidArray(rawParentIds);
+                if (!parsed.valid) {
+                    return res.status(400).json({ error: 'Invalid parent account ID format.' });
+                }
+                validParentIds = parsed.ids;
+                const parentCheck = await validateParentLinks(sql, session, validParentIds, effectiveSchoolId);
+                if (!parentCheck.ok) {
+                    return res.status(parentCheck.status).json({ error: parentCheck.error });
+                }
+            }
+
             const id = crypto.randomUUID();
             const avatarUrlToInsert = (student.avatarUrl && typeof student.avatarUrl === 'string' && student.avatarUrl.startsWith('data:'))
                 ? student.avatarUrl
                 : null;
 
             try {
-                await sql`
+                const insertStudentQuery = sql`
                     INSERT INTO students (
                         id, name, roll_number, class_id, school_id, father_name, father_cnic, 
                         date_of_birth, date_of_admission, contact_number, secondary_contact_number, 
@@ -66,10 +205,23 @@ export default async function handler(req: any, res: any) {
                         ${student.admittedClass || null}, ${student.grNumber || null}, 
                         ${student.religion || null}, ${student.caste || null}, 
                         ${student.lastSchoolAttended || null}, ${Number(student.openingBalance) || 0}, 
-                        ${student.userId || null}, ${JSON.stringify(student.feeStructure || [])},
+                        ${linkedUserId}, ${JSON.stringify(student.feeStructure || [])},
                         ${avatarUrlToInsert}
                     )
                 `;
+
+                if (hasParentIdsPayload && validParentIds.length > 0) {
+                    const linkParentsQuery = sql`
+                        UPDATE profiles
+                        SET child_student_ids = array_append(COALESCE(child_student_ids, '{}'::uuid[]), ${id}::uuid)
+                        WHERE id = ANY(${validParentIds}::uuid[])
+                          AND role = 'Parent'
+                          AND NOT (${id}::uuid = ANY(COALESCE(child_student_ids, '{}'::uuid[])))
+                    `;
+                    await sql.transaction([insertStudentQuery, linkParentsQuery]);
+                } else {
+                    await insertStudentQuery;
+                }
             } catch (err: any) {
                 if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('students_school_roll_unique')) {
                     return res.status(409).json({ error: 'DUPLICATE_ROLL', rollNumber: student.rollNumber, message: `Roll number "${student.rollNumber}" already exists in this school.` });
@@ -120,8 +272,31 @@ export default async function handler(req: any, res: any) {
                 }
             }
 
+            const linkedUserId = student.userId ? String(student.userId).trim() : null;
+            if (linkedUserId) {
+                const userCheck = await validateStudentAccountLink(sql, session, linkedUserId, existing.school_id, student.id);
+                if (!userCheck.ok) {
+                    return res.status(userCheck.status).json({ error: userCheck.error });
+                }
+            }
+
+            const rawParentIds = body.parentIds !== undefined ? body.parentIds : student.parentIds;
+            const hasParentIdsPayload = Array.isArray(rawParentIds);
+            let validParentIds: string[] = [];
+            if (hasParentIdsPayload) {
+                const parsed = normalizeUuidArray(rawParentIds);
+                if (!parsed.valid) {
+                    return res.status(400).json({ error: 'Invalid parent account ID format.' });
+                }
+                validParentIds = parsed.ids;
+                const parentCheck = await validateParentLinks(sql, session, validParentIds, existing.school_id);
+                if (!parentCheck.ok) {
+                    return res.status(parentCheck.status).json({ error: parentCheck.error });
+                }
+            }
+
             try {
-                await sql`
+                const updateStudentQuery = sql`
                     UPDATE students SET
                         name = ${student.name},
                         roll_number = ${student.rollNumber},
@@ -147,9 +322,42 @@ export default async function handler(req: any, res: any) {
                         caste = ${student.caste || null},
                         last_school_attended = ${student.lastSchoolAttended || null},
                         opening_balance = ${Number(student.openingBalance) || 0},
-                        user_id = ${student.userId || null}
+                        user_id = ${linkedUserId}
                     WHERE id = ${student.id}
                 `;
+
+                if (hasParentIdsPayload) {
+                    const queries: any[] = [updateStudentQuery];
+                    if (validParentIds.length === 0) {
+                        queries.push(sql`
+                            UPDATE profiles
+                            SET child_student_ids = array_remove(child_student_ids, ${student.id}::uuid)
+                            WHERE role = 'Parent'
+                              AND (school_id = ${existing.school_id} OR school_id IS NULL)
+                              AND ${student.id}::uuid = ANY(COALESCE(child_student_ids, '{}'::uuid[]))
+                        `);
+                    } else {
+                        queries.push(sql`
+                            UPDATE profiles
+                            SET child_student_ids = array_remove(child_student_ids, ${student.id}::uuid)
+                            WHERE role = 'Parent'
+                              AND (school_id = ${existing.school_id} OR school_id IS NULL)
+                              AND ${student.id}::uuid = ANY(COALESCE(child_student_ids, '{}'::uuid[]))
+                              AND NOT (id = ANY(${validParentIds}::uuid[]))
+                        `);
+                        queries.push(sql`
+                            UPDATE profiles
+                            SET child_student_ids = array_append(COALESCE(child_student_ids, '{}'::uuid[]), ${student.id}::uuid)
+                            WHERE id = ANY(${validParentIds}::uuid[])
+                              AND role = 'Parent'
+                              AND (school_id = ${existing.school_id} OR school_id IS NULL)
+                              AND NOT (${student.id}::uuid = ANY(COALESCE(child_student_ids, '{}'::uuid[])))
+                        `);
+                    }
+                    await sql.transaction(queries);
+                } else {
+                    await updateStudentQuery;
+                }
             } catch (err: any) {
                 if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('students_school_roll_unique')) {
                     return res.status(409).json({ error: 'DUPLICATE_ROLL', rollNumber: student.rollNumber, message: `Roll number "${student.rollNumber}" already exists in this school.` });

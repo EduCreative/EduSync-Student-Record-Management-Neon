@@ -1,6 +1,97 @@
-import { verifySession, isAuthorized, writeServerAuditLog, requireSameSchool, validateAvatarDataUrl, isBranchLocked } from './_helpers';
+import { verifySession, isAuthorized, writeServerAuditLog, requireSameSchool, validateAvatarDataUrl, isBranchLocked, canAccessStudent } from './_helpers';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: unknown): value is string {
+    return typeof value === 'string' && UUID_REGEX.test(value.trim());
+}
+
+function normalizeUuidArray(values: unknown): { valid: boolean; ids: string[] } {
+    if (!Array.isArray(values)) return { valid: true, ids: [] };
+    const seen = new Set<string>();
+    for (const raw of values) {
+        if (typeof raw !== 'string' || !UUID_REGEX.test(raw.trim())) {
+            return { valid: false, ids: [] };
+        }
+        seen.add(raw.trim());
+    }
+    return { valid: true, ids: Array.from(seen) };
+}
+
+async function validateChildStudents(
+    sql: any,
+    session: any,
+    studentIds: string[],
+    targetSchoolId: string | null | undefined
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+    if (studentIds.length === 0) return { ok: true };
+
+    const rows = await sql`
+        SELECT id, name, school_id, status 
+        FROM students 
+        WHERE id = ANY(${studentIds}::uuid[]) AND status <> 'Deleted'
+    `;
+    if (!rows || rows.length !== studentIds.length) {
+        return { ok: false, status: 400, error: 'One or more selected student records were not found.' };
+    }
+
+    for (const s of rows) {
+        if (targetSchoolId && s.school_id && s.school_id !== targetSchoolId) {
+            return { ok: false, status: 403, error: `Student "${s.name}" belongs to another school.` };
+        }
+        const allowed = await canAccessStudent(sql, session, s.id);
+        if (!allowed) {
+            return { ok: false, status: 403, error: 'Outside your branch' };
+        }
+    }
+
+    return { ok: true };
+}
+
+async function validateSingleStudentForUser(
+    sql: any,
+    session: any,
+    studentId: string,
+    targetSchoolId: string | null | undefined,
+    currentUserId?: string
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+    if (!isValidUuid(studentId)) {
+        return { ok: false, status: 400, error: 'Invalid student record ID format.' };
+    }
+
+    const rows = await sql`
+        SELECT s.id, s.name, s.roll_number, s.school_id, s.user_id, p.role AS linked_role, p.email AS linked_email
+        FROM students s
+        LEFT JOIN profiles p ON p.id = s.user_id
+        WHERE s.id = ${studentId} AND s.status <> 'Deleted'
+        LIMIT 1
+    `;
+    if (!rows || rows.length === 0) {
+        return { ok: false, status: 400, error: 'Selected student record was not found.' };
+    }
+
+    const s = rows[0];
+    if (targetSchoolId && s.school_id && s.school_id !== targetSchoolId) {
+        return { ok: false, status: 403, error: 'Cannot link a student record from another school.' };
+    }
+
+    const allowed = await canAccessStudent(sql, session, s.id);
+    if (!allowed) {
+        return { ok: false, status: 403, error: 'Outside your branch' };
+    }
+
+    if (s.user_id && s.user_id !== currentUserId && s.linked_role === 'Student') {
+        return {
+            ok: false,
+            status: 409,
+            error: `Student "${s.name}" (Roll #${s.roll_number}) is already linked to another Student account (${s.linked_email}).`
+        };
+    }
+
+    return { ok: true };
+}
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST') {
@@ -64,6 +155,30 @@ export default async function handler(req: any, res: any) {
                 finalBranchId = branchId;
             }
 
+            // Validate linking payloads
+            let childStudentIdsToInsert: string[] = [];
+            if (role === 'Parent' && Array.isArray(body.childStudentIds)) {
+                const parsed = normalizeUuidArray(body.childStudentIds);
+                if (!parsed.valid) {
+                    return res.status(400).json({ error: 'Invalid student ID in childStudentIds.' });
+                }
+                const check = await validateChildStudents(sql, session, parsed.ids, effectiveSchoolId);
+                if (!check.ok) {
+                    return res.status(check.status).json({ error: check.error });
+                }
+                childStudentIdsToInsert = parsed.ids;
+            }
+
+            const linkedStudentId = role === 'Student' && body.linkedStudentId
+                ? String(body.linkedStudentId).trim()
+                : null;
+            if (linkedStudentId) {
+                const check = await validateSingleStudentForUser(sql, session, linkedStudentId, effectiveSchoolId);
+                if (!check.ok) {
+                    return res.status(check.status).json({ error: check.error });
+                }
+            }
+
             // Security fix: Hash password with bcrypt before inserting
             const saltRounds = 10;
             const hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -79,10 +194,21 @@ export default async function handler(req: any, res: any) {
                 : '{}';
 
             try {
-                await sql`
-                    INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url, branch_id, disabled_nav_links, permissions_overrides)
-                    VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, ${userStatus}, ${avatarUrlToInsert}, ${finalBranchId}, ${userDisabledLinks}, ${userPermissions}::jsonb)
+                const insertProfileQuery = sql`
+                    INSERT INTO profiles (id, name, email, password, role, school_id, status, avatar_url, branch_id, child_student_ids, disabled_nav_links, permissions_overrides)
+                    VALUES (${id}, ${name}, ${email.toLowerCase().trim()}, ${hashedPassword}, ${role}, ${effectiveSchoolId}, ${userStatus}, ${avatarUrlToInsert}, ${finalBranchId}, ${childStudentIdsToInsert}::uuid[], ${userDisabledLinks}, ${userPermissions}::jsonb)
                 `;
+
+                if (linkedStudentId) {
+                    const linkStudentQuery = sql`
+                        UPDATE students
+                        SET user_id = ${id}
+                        WHERE id = ${linkedStudentId}
+                    `;
+                    await sql.transaction([insertProfileQuery, linkStudentQuery]);
+                } else {
+                    await insertProfileQuery;
+                }
             } catch (err: any) {
                 if (err?.code === '23505' || err?.message?.includes('23505') || err?.message?.includes('profiles_email_key')) {
                     return res.status(409).json({ error: 'Email already exists', message: `A user with email "${email}" already exists.` });
@@ -110,7 +236,7 @@ export default async function handler(req: any, res: any) {
                 return res.status(400).json({ error: 'User ID is required.' });
             }
 
-            const targetUsers = await sql`SELECT id, name, role, school_id, branch_id, status, disabled_nav_links, permissions_overrides FROM profiles WHERE id = ${id} LIMIT 1`;
+            const targetUsers = await sql`SELECT id, name, role, school_id, branch_id, status, child_student_ids, disabled_nav_links, permissions_overrides FROM profiles WHERE id = ${id} LIMIT 1`;
             if (!targetUsers || targetUsers.length === 0) {
                 return res.status(404).json({ error: 'User not found.' });
             }
@@ -174,6 +300,36 @@ export default async function handler(req: any, res: any) {
                 }
             }
 
+            // Validate & prepare Parent -> child_student_ids link
+            let safeChildStudentIds: string[] = Array.isArray(targetUser.child_student_ids) ? targetUser.child_student_ids : [];
+            if (newRole !== 'Parent') {
+                safeChildStudentIds = [];
+            } else if (Array.isArray(body.childStudentIds)) {
+                const parsed = normalizeUuidArray(body.childStudentIds);
+                if (!parsed.valid) {
+                    return res.status(400).json({ error: 'Invalid student ID in childStudentIds.' });
+                }
+                const check = await validateChildStudents(sql, session, parsed.ids, targetSchoolId);
+                if (!check.ok) {
+                    return res.status(check.status).json({ error: check.error });
+                }
+                safeChildStudentIds = parsed.ids;
+            }
+
+            // Validate & prepare Student -> students.user_id link
+            const shouldUpdateStudentLink = (targetUser.role === 'Student' && newRole !== 'Student') ||
+                (newRole === 'Student' && body.linkedStudentId !== undefined);
+            const nextLinkedStudentId = newRole === 'Student' && body.linkedStudentId
+                ? String(body.linkedStudentId).trim()
+                : null;
+
+            if (newRole === 'Student' && nextLinkedStudentId) {
+                const check = await validateSingleStudentForUser(sql, session, nextLinkedStudentId, targetSchoolId, id);
+                if (!check.ok) {
+                    return res.status(check.status).json({ error: check.error });
+                }
+            }
+
             const safeDisabledNavLinks = disabledNavLinks !== undefined
                 ? (Array.isArray(disabledNavLinks) ? disabledNavLinks : [])
                 : (targetUser.disabled_nav_links || []);
@@ -184,7 +340,7 @@ export default async function handler(req: any, res: any) {
 
             const newStatus = status || targetUser.status || 'Active';
 
-            await sql`
+            const updateProfileQuery = sql`
                 UPDATE profiles 
                 SET name = COALESCE(${name}, name), 
                     avatar_url = CASE 
@@ -197,10 +353,36 @@ export default async function handler(req: any, res: any) {
                     role = ${newRole},
                     school_id = COALESCE(school_id, ${targetSchoolId}),
                     branch_id = ${newBranchId},
+                    child_student_ids = ${safeChildStudentIds}::uuid[],
                     disabled_nav_links = ${safeDisabledNavLinks},
                     permissions_overrides = ${safePermissionsOverrides}::jsonb
                 WHERE id = ${id}
             `;
+
+            if (shouldUpdateStudentLink) {
+                const queries: any[] = [updateProfileQuery];
+                if (nextLinkedStudentId) {
+                    queries.push(sql`
+                        UPDATE students 
+                        SET user_id = NULL 
+                        WHERE user_id = ${id} AND id <> ${nextLinkedStudentId}
+                    `);
+                    queries.push(sql`
+                        UPDATE students 
+                        SET user_id = ${id} 
+                        WHERE id = ${nextLinkedStudentId}
+                    `);
+                } else {
+                    queries.push(sql`
+                        UPDATE students 
+                        SET user_id = NULL 
+                        WHERE user_id = ${id}
+                    `);
+                }
+                await sql.transaction(queries);
+            } else {
+                await updateProfileQuery;
+            }
 
             // If user status transitioned to Active from Pending Approval, notify the user
             if (targetUser.status === 'Pending Approval' && newStatus === 'Active') {

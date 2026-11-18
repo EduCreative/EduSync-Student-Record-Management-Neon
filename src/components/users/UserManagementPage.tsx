@@ -25,7 +25,7 @@ interface UserManagementPageProps {
 
 const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
     const { user: currentUser, activeSchoolId, hasPermission } = useAuth();
-    const { users, schools, branches, getSchoolById, bulkAddUsers, updateUser, deleteUser, loading, addUserByAdmin } = useData();
+    const { users, schools, branches, students, getSchoolById, bulkAddUsers, updateUser, deleteUser, loading, addUserByAdmin } = useData();
     const { showToast } = useToast();
     
     const effectiveSchoolId = currentUser?.role === UserRole.Owner && activeSchoolId ? activeSchoolId : currentUser?.schoolId;
@@ -105,9 +105,9 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
         setIsModalOpen(false);
     };
 
-    const handleSaveUser = async (userData: User | (Omit<User, 'id' | 'lastLogin' | 'disabledNavLinks'> & { disabledNavLinks?: string[], password?: string })) => {
+    const handleSaveUser = async (userData: (User & { linkedStudentId?: string | null }) | (Omit<User, 'id' | 'lastLogin' | 'disabledNavLinks'> & { disabledNavLinks?: string[], password?: string, linkedStudentId?: string | null })) => {
         if ('id' in userData) {
-            await updateUser(userData as User);
+            await updateUser(userData as User & { linkedStudentId?: string | null });
         } else {
             const singleUserData = { ...userData, schoolId: userData.schoolId || effectiveSchoolId || ''};
             await addUserByAdmin(singleUserData);
@@ -360,6 +360,12 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
                                             })();
 
                                             const userBranch = user.branchId ? branches.find(b => b.id === user.branchId) : null;
+                                            const linkedStudentRecord = user.role === UserRole.Student
+                                                ? students.find(s => s.userId === user.id && s.status !== 'Deleted')
+                                                : null;
+                                            const linkedChildren = user.role === UserRole.Parent && Array.isArray(user.childStudentIds)
+                                                ? students.filter(s => user.childStudentIds!.includes(s.id) && s.status !== 'Deleted')
+                                                : [];
 
                                             return (
                                                 <tr key={user.id} className="bg-white dark:bg-secondary-800 border-b dark:border-secondary-700 hover:bg-secondary-50 dark:hover:bg-secondary-700/50">
@@ -372,7 +378,38 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ payload }) => {
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4"><Badge>{user.role}</Badge></td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="space-y-1">
+                                                            <Badge>{user.role}</Badge>
+                                                            {user.role === UserRole.Student && (
+                                                                <div className="text-xs">
+                                                                    {linkedStudentRecord ? (
+                                                                        <span className="text-emerald-700 dark:text-emerald-400 font-medium">
+                                                                            {linkedStudentRecord.name} (#{linkedStudentRecord.rollNumber})
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-amber-600 dark:text-amber-400">Not linked</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            {user.role === UserRole.Parent && (
+                                                                <div className="text-xs">
+                                                                    {linkedChildren.length > 0 ? (
+                                                                        <span
+                                                                            className="text-emerald-700 dark:text-emerald-400 font-medium"
+                                                                            title={linkedChildren.map(c => `${c.name} (#${c.rollNumber})`).join(', ')}
+                                                                        >
+                                                                            {linkedChildren.length === 1
+                                                                                ? `${linkedChildren[0].name} (#${linkedChildren[0].rollNumber})`
+                                                                                : `${linkedChildren.length} children linked`}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-amber-600 dark:text-amber-400">No children linked</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </td>
                                                     {branches.length > 0 && (
                                                         <td className="px-6 py-4">
                                                             {user.role === UserRole.Owner ? (

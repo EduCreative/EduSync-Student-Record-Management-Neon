@@ -108,7 +108,21 @@ const StudentDashboard: React.FC = () => {
         )
     }
 
-    if (!user || !studentProfile) return null;
+    if (!user) return null;
+
+    if (!studentProfile) {
+        return (
+            <div>
+                <h1 className="text-3xl font-bold text-secondary-900 dark:text-white">Student&apos;s Dashboard</h1>
+                <div className="mt-8 bg-white dark:bg-secondary-800 p-8 text-center rounded-lg shadow-md">
+                    <h2 className="text-xl font-semibold text-secondary-900 dark:text-white">No Student Profile Linked</h2>
+                    <p className="text-secondary-500 dark:text-secondary-400 mt-2">
+                        Your account is not yet linked to a student record. Please contact the school administration to link your profile.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8">

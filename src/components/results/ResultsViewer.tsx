@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 // FIX: Import UserRole to resolve 'Cannot find name' error.
@@ -22,6 +22,14 @@ const ResultsViewer: React.FC = () => {
     }, [user, students]);
 
     const [selectedChildId, setSelectedChildId] = useState<string>(myChildren[0]?.id || '');
+
+    useEffect(() => {
+        if (myChildren.length > 0 && !myChildren.some(c => c.id === selectedChildId)) {
+            setSelectedChildId(myChildren[0].id);
+        } else if (myChildren.length === 0 && selectedChildId !== '') {
+            setSelectedChildId('');
+        }
+    }, [myChildren, selectedChildId]);
 
     // FIX: Explicitly type `groupedResults` as `Record<string, Result[]>` to correct type inference issues with `Object.entries`.
     const groupedResults: Record<string, Result[]> = useMemo(() => {
